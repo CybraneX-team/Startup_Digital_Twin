@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --bg-absolute: #161618;
+    --bg-relative: #1B1B1D;
+    --text-primary: #FFFFFF;
+    --text-secondary: #5E5E5E;
+    --cta-from: #F9C6FF;
+    --cta-to: #C1AEFF;
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: #161618;
+    color: #FFFFFF;
+    margin: 0;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #2a2a2c transparent;
+  }
+}
+
+@layer components {
+  /* Foreground cards — no stroke, relative bg */
+  .glass-card {
+    background: #1B1B1D;
+    border-radius: 1rem;
+  }
+
+  .metric-card {
+    background: #1B1B1D;
+    border-radius: 0.75rem;
+    padding: 1.25rem;
+    transition: background 0.2s ease;
+  }
+
+  .metric-card:hover {
+    background: #202024;
+  }
+
+  .status-pulse {
+    animation: pulse-anim 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse-anim {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* CTA gradient text */
+  .gradient-text {
+    background: linear-gradient(135deg, #F9C6FF, #C1AEFF);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* CTA gradient button */
+  .cta-gradient {
+    background: linear-gradient(135deg, #F9C6FF, #C1AEFF);
+    color: #161618;
+    font-weight: 600;
+  }
+
+  .cta-gradient:hover {
+    opacity: 0.9;
+  }
+
+  /* App background */
+  .cosmos-bg {
+    background: #161618;
+  }
+}
