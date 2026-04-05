@@ -1,8 +1,10 @@
-import { useRef, useMemo, createContext, useContext, useState, useCallback } from 'react';
+import { useRef, useMemo, useEffect, createContext, useContext, useState, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Stars, Html, Line } from '@react-three/drei';
 import * as THREE from 'three';
 import type { TwinNode, TwinEdge } from '../types';
+import { GRAPH_LAYOUT } from '../db';
+import { EMERGE_PARENT } from '../data/twinGraph';
 
 /* ------------------------------------------------------------------ */
 /*  Props                                                              */
@@ -15,6 +17,8 @@ export interface Graph3DProps {
   onSelect: (id: string | null) => void;
   onHover: (id: string | null) => void;
   onNavigate?: (route: string) => void;
+  myCompanyId?: string | null;
+  emergeParentMap?: Record<string, string>;
 }
 
 /* ------------------------------------------------------------------ */
@@ -22,17 +26,19 @@ export interface Graph3DProps {
 /* ------------------------------------------------------------------ */
 
 interface ScopeState {
+  level: ScopeLevel;
   distance: number;
   cameraPos: THREE.Vector3;
-  focusedCluster: string | null;
-  clusterFocus: number;
-  focusedCompany: string | null;
-  companyFocus: number;
+  focusedCluster: string | null;   // which industry cluster camera is inside
+  clusterFocus: number;            // smooth 0-1
+  focusedCompany: string | null;   // which company is open
+  companyFocus: number;            // smooth 0-1
   clusterFilter: ClusterFilter;
 }
 
 type ScopeLevel = 'galaxy' | 'cluster' | 'company';
 type ClusterFilter = 'all' | 'competitors' | 'allies';
+type GalaxyViewMode = 'relational' | 'carousel';
 
 const ScopeCtx = createContext<React.RefObject<ScopeState>>(null!);
 function useScope() { return useContext(ScopeCtx); }
@@ -42,171 +48,19 @@ function smoothstep(e0: number, e1: number, x: number): number {
   return t * t * (3 - 2 * t);
 }
 
-function getScopeLevel(clF: number, cf: number): ScopeLevel {
-  if (cf > 0.15) return 'company';
-  if (clF > 0.15) return 'cluster';
-  return 'galaxy';
-}
-
 /* ------------------------------------------------------------------ */
-/*  Layout — Constellation clusters                                    */
+/*  Layout — derived from DB                                           */
 /* ------------------------------------------------------------------ */
 
-const CLUSTER_CENTER: Record<string, [number, number, number]> = {
-  'ind-saas':       [0,    0,    0],
-  'ind-fintech':    [-70, -10, -55],
-  'ind-healthtech': [70,  -10, -55],
-  'ind-edtech':     [-60,  20,  60],
-  'ind-ecommerce':  [60,   20,  60],
-  'ind-aiml':       [0,   -35, -75],
-  'ind-cleantech':  [0,    35,  75],
-};
-
-const BUBBLE_RADIUS: Record<string, number> = {
-  'ind-saas': 13, 'ind-fintech': 10, 'ind-healthtech': 9,
-  'ind-edtech': 9, 'ind-ecommerce': 10, 'ind-aiml': 10, 'ind-cleantech': 8,
-};
-
-const INDUSTRY_CLR: Record<string, string> = {
-  'ind-saas': '#0ea5e9', 'ind-fintech': '#22d3ee', 'ind-healthtech': '#34d399',
-  'ind-edtech': '#f59e0b', 'ind-ecommerce': '#ec4899', 'ind-aiml': '#38bdf8',
-  'ind-cleantech': '#10b981',
-};
-
-/* Every node gets a 3D position */
-const POS3D: Record<string, [number, number, number]> = {
-  /* industries */
-  ...CLUSTER_CENTER,
-
-  /* SaaS companies (8) — within ~10u of [0,0,0] */
-  'comp-you':    [2,   1,   2],
-  'comp-rival1': [-7,  4,  -5],
-  'comp-rival2': [7,  -3,  -6],
-  'comp-rival3': [4,   7,  -8],
-  'comp-saas4':  [-5, -6,   5],
-  'comp-saas5':  [6,   5,   4],
-  'comp-saas6':  [-4,  8,  -3],
-  'comp-saas7':  [5,  -7,  -1],
-
-  /* FinTech (5) — near [-70,-10,-55] */
-  'comp-fin1': [-67, -7, -52],
-  'comp-fin2': [-73,-13, -58],
-  'comp-fin3': [-65,-10, -50],
-  'comp-fin4': [-70, -5, -55],
-  'comp-fin5': [-75,-10, -60],
-
-  /* HealthTech (4) — near [70,-10,-55] */
-  'comp-ht1': [73, -7, -52],
-  'comp-ht2': [67,-13, -58],
-  'comp-ht3': [70, -5, -50],
-  'comp-ht4': [75,-10, -57],
-
-  /* EdTech (4) — near [-60,20,60] */
-  'comp-ed1': [-57, 23, 63],
-  'comp-ed2': [-63, 17, 57],
-  'comp-ed3': [-60, 25, 60],
-  'comp-ed4': [-55, 18, 56],
-
-  /* E-Commerce (5) — near [60,20,60] */
-  'comp-ec1': [57, 23, 63],
-  'comp-ec2': [63, 17, 57],
-  'comp-ec3': [60, 25, 60],
-  'comp-ec4': [65, 18, 56],
-  'comp-ec5': [55, 15, 62],
-
-  /* AI / ML (5) — near [0,-35,-75] */
-  'comp-ai1': [-3,-32, -72],
-  'comp-ai2': [3, -38, -78],
-  'comp-ai3': [-5,-37, -73],
-  'comp-ai4': [5, -32, -77],
-  'comp-ai5': [0, -30, -71],
-
-  /* CleanTech (3) — near [0,35,75] */
-  'comp-ct1': [-3, 38, 78],
-  'comp-ct2': [3,  32, 72],
-  'comp-ct3': [0,  35, 70],
-
-  /* YOUR departments — compact ~7-8u from comp-you [2,1,2] */
-  'dept-product': [8,  7,  6],
-  'dept-growth':  [9, -5, -3],
-  'dept-eng':     [-5, -5, -2],
-  'dept-support': [-5,  7,  6],
-
-  /* Feature nodes — compact ~9-12u from comp-you */
-  'feat-strategy':   [2,  11,  8],
-  'feat-data':       [-9,  1,  2],
-  'feat-benchmarks': [2,  -9, -4],
-  'feat-team':       [12,  1,  2],
-  'feat-analytics':  [9,  -7, -3],
-
-  /* KPI nodes — ~3u from parent department */
-  'kpi-prod-velocity': [10, 9,  7],
-  'kpi-prod-nps':      [9,  6,  8],
-  'kpi-prod-bugs':     [10, 5,  6],
-  'kpi-growth-cac':        [11,-4, -2],
-  'kpi-growth-ltv':        [10,-7, -4],
-  'kpi-growth-activation': [11,-6, -1],
-  'kpi-eng-velocity': [-7, -4, -1],
-  'kpi-eng-uptime':   [-6, -7, -3],
-  'kpi-eng-debt':     [-7, -6,  0],
-  'kpi-sup-response': [-7,  9,  7],
-  'kpi-sup-csat':     [-6,  6,  8],
-  'kpi-sup-tickets':  [-7,  5,  6],
-
-  /* Rival departments — close to their company */
-  'dept-r1-prod':  [-9,  6, -7],
-  'dept-r1-sales': [-5,  6, -7],
-  'dept-r2-eng':   [5,  -5, -8],
-  'dept-r2-mkt':   [9,  -5, -8],
-  'dept-r3-ai':    [2,   9,-10],
-  'dept-r3-ops':   [6,   9,-10],
-
-  /* Signals — far periphery */
-  'sig-market':        [40,  22,  28],
-  'sig-regulation':    [-40, 22,  28],
-  'sig-sentiment':     [40, -22, -28],
-  'sig-macro':         [-40,-22, -28],
-  'sig-talent':        [28,  25, -22],
-  'sig-funding':       [-28,-25,  22],
-  'sig-tech-trend':    [35, -10,  35],
-  'sig-geopolitics':   [-35, 10, -35],
-  'sig-climate':       [25,  30,  30],
-  'sig-ai-regulation': [-25,-30, -30],
-};
-
-/* Maps company → parent industry (for cluster-based reveal) */
-const COMPANY_INDUSTRY: Record<string, string> = {
-  'comp-you': 'ind-saas', 'comp-rival1': 'ind-saas', 'comp-rival2': 'ind-saas',
-  'comp-rival3': 'ind-saas', 'comp-saas4': 'ind-saas', 'comp-saas5': 'ind-saas',
-  'comp-saas6': 'ind-saas', 'comp-saas7': 'ind-saas',
-  'comp-fin1': 'ind-fintech', 'comp-fin2': 'ind-fintech', 'comp-fin3': 'ind-fintech',
-  'comp-fin4': 'ind-fintech', 'comp-fin5': 'ind-fintech',
-  'comp-ht1': 'ind-healthtech', 'comp-ht2': 'ind-healthtech',
-  'comp-ht3': 'ind-healthtech', 'comp-ht4': 'ind-healthtech',
-  'comp-ed1': 'ind-edtech', 'comp-ed2': 'ind-edtech',
-  'comp-ed3': 'ind-edtech', 'comp-ed4': 'ind-edtech',
-  'comp-ec1': 'ind-ecommerce', 'comp-ec2': 'ind-ecommerce', 'comp-ec3': 'ind-ecommerce',
-  'comp-ec4': 'ind-ecommerce', 'comp-ec5': 'ind-ecommerce',
-  'comp-ai1': 'ind-aiml', 'comp-ai2': 'ind-aiml', 'comp-ai3': 'ind-aiml',
-  'comp-ai4': 'ind-aiml', 'comp-ai5': 'ind-aiml',
-  'comp-ct1': 'ind-cleantech', 'comp-ct2': 'ind-cleantech', 'comp-ct3': 'ind-cleantech',
-};
-
-/* Maps every internal node → parent COMPANY (for emergence + ownership) */
-const EMERGE_PARENT: Record<string, string> = {
-  'dept-product': 'comp-you', 'dept-growth': 'comp-you',
-  'dept-eng': 'comp-you', 'dept-support': 'comp-you',
-  'feat-strategy': 'comp-you', 'feat-data': 'comp-you',
-  'feat-benchmarks': 'comp-you', 'feat-team': 'comp-you',
-  'feat-analytics': 'comp-you',
-  'kpi-prod-velocity': 'comp-you', 'kpi-prod-nps': 'comp-you', 'kpi-prod-bugs': 'comp-you',
-  'kpi-growth-cac': 'comp-you', 'kpi-growth-ltv': 'comp-you', 'kpi-growth-activation': 'comp-you',
-  'kpi-eng-velocity': 'comp-you', 'kpi-eng-uptime': 'comp-you', 'kpi-eng-debt': 'comp-you',
-  'kpi-sup-response': 'comp-you', 'kpi-sup-csat': 'comp-you', 'kpi-sup-tickets': 'comp-you',
-  'dept-r1-prod': 'comp-rival1', 'dept-r1-sales': 'comp-rival1',
-  'dept-r2-eng': 'comp-rival2', 'dept-r2-mkt': 'comp-rival2',
-  'dept-r3-ai': 'comp-rival3', 'dept-r3-ops': 'comp-rival3',
-};
+/* Layout constants — all derived from DB (src/db/index.ts) */
+const {
+  CLUSTER_CENTER,
+  BUBBLE_RADIUS,
+  INDUSTRY_CLR,
+  POS3D,
+  COMPANY_INDUSTRY,
+} = GRAPH_LAYOUT;
+/* EMERGE_PARENT imported from src/data/twinGraph.ts */
 
 /* ------------------------------------------------------------------ */
 /*  Company View — flat 2D layout                                      */
@@ -215,8 +69,9 @@ const EMERGE_PARENT: Record<string, string> = {
 function computeFlatLayout(
   companyId: string,
   companyPos: [number, number, number],
+  ep: Record<string, string> = EMERGE_PARENT,
 ): Record<string, [number, number, number]> {
-  const children = Object.entries(EMERGE_PARENT)
+  const children = Object.entries(ep)
     .filter(([_, parent]) => parent === companyId)
     .map(([id]) => id);
 
@@ -296,12 +151,12 @@ const SCALE: Record<string, number> = {
 };
 const COLORS: Record<string, string> = {
   industry: '#0ea5e9', company: '#38bdf8', department: '#2dd4bf',
-  you: '#22d3ee', 'sig-ok': '#34d399', 'sig-warn': '#fbbf24',
+  you: '#F9C6FF', 'sig-ok': '#34d399', 'sig-warn': '#fbbf24',
   kpi: '#f472b6', feature: '#64748b',
 };
 
-function nodeColor(n: TwinNode): string {
-  if (n.id === 'comp-you') return COLORS.you;
+function nodeColor(n: TwinNode, myCompanyId?: string | null): string {
+  if (n.id === 'comp-you' || (myCompanyId && n.id === myCompanyId)) return COLORS.you;
   if (n.type === 'signal') return n.status === 'warning' ? COLORS['sig-warn'] : COLORS['sig-ok'];
   if (n.type === 'kpi') return n.status === 'warning' ? '#fbbf24' : COLORS.kpi;
   if (n.type === 'feature') return COLORS.feature;
@@ -321,6 +176,9 @@ interface ScopeResult {
 
 function getNodeScope(
   camToNode: number, nodeType: string, nodeId: string, st: ScopeState,
+  myCompanyId?: string | null,
+  industryOf?: (id: string) => string | undefined,
+  parentOf?: (id: string) => string | undefined,
 ): ScopeResult {
   const ZERO: ScopeResult = { opacity: 0, scaleMult: 0, emergeFactor: 0, revealFactor: 0 };
   const { focusedCluster: fCl, clusterFocus: clF,
@@ -339,7 +197,7 @@ function getNodeScope(
     }
 
     case 'company': {
-      const belongsToCluster = COMPANY_INDUSTRY[nodeId] === fCl;
+      const belongsToCluster = (industryOf ? industryOf(nodeId) : COMPANY_INDUSTRY[nodeId]) === fCl;
 
       if (inCompany) {
         if (nodeId === fc) {
@@ -352,7 +210,7 @@ function getNodeScope(
       if (inCluster) {
         if (!belongsToCluster) return ZERO;
         if (!passesClusterFilter(nodeId, st.clusterFilter)) return ZERO;
-        const isYou = nodeId === 'comp-you';
+        const isYou = nodeId === 'comp-you' || (!!myCompanyId && nodeId === myCompanyId);
         return {
           opacity: clF,
           scaleMult: clF,
@@ -361,15 +219,16 @@ function getNodeScope(
         };
       }
 
-      if (nodeId === 'comp-you') {
-        return { opacity: 0.6, scaleMult: 0.35, emergeFactor: 1, revealFactor: 1 };
+      if (nodeId === 'comp-you' || (myCompanyId && nodeId === myCompanyId)) {
+        return { opacity: 1.0, scaleMult: 1.0, emergeFactor: 1, revealFactor: 1 };
       }
       return ZERO;
     }
 
     case 'department':
     case 'feature': {
-      if (!inCompany || EMERGE_PARENT[nodeId] !== fc) return ZERO;
+      const myParent = parentOf ? parentOf(nodeId) : EMERGE_PARENT[nodeId];
+      if (!inCompany || myParent !== fc) return ZERO;
       const emerge = smoothstep(0.1, 0.5, cf);
       return { opacity: emerge, scaleMult: Math.max(0.3, emerge), emergeFactor: emerge, revealFactor: 1 };
     }
@@ -388,10 +247,7 @@ function getNodeScope(
   }
 }
 
-/* pre-computed company vectors for CameraWatcher */
-const COMPANY_VECS = Object.entries(POS3D)
-  .filter(([id]) => id.startsWith('comp-'))
-  .map(([id, pos]) => ({ id, vec: new THREE.Vector3(...pos) }));
+/* companyVecs built dynamically in Scene to include live companies */
 
 const CLUSTER_VECS = Object.entries(CLUSTER_CENTER)
   .map(([id, pos]) => ({ id, vec: new THREE.Vector3(...pos) }));
@@ -406,155 +262,161 @@ const _c2 = new THREE.Color();
 /*  CameraWatcher — drives scope state each frame                      */
 /* ------------------------------------------------------------------ */
 
+// Imperative camera API — drives navigation between levels
+interface CameraHandle {
+  enterIndustry(id: string, center: [number,number,number]): void;
+  exitToGalaxy(): void;
+  enterCompany(id: string, pos: [number,number,number]): void;
+  exitToCluster(): void;
+}
+
 function CameraWatcher({
-  scopeRef, onScopeChange, controlsRef,
+  scopeRef, onScopeChange, controlsRef, cameraHandleRef,
+  companyEntriesRef, onIndustryEnter, onEnterCompany, onExitCompany,
 }: {
   scopeRef: React.RefObject<ScopeState>;
   onScopeChange: (s: ScopeLevel) => void;
   controlsRef: React.RefObject<any>;
+  cameraHandleRef: React.MutableRefObject<CameraHandle | null>;
+  onIndustryEnter?: (id: string) => void;
+  onEnterCompany?: (id: string) => void;
+  onExitCompany?: () => void;
 }) {
   const { camera } = useThree();
-  const last = useRef<ScopeLevel>('galaxy');
+  const lastLevel = useRef<ScopeLevel>('galaxy');
 
-  /* animation state */
-  const animating = useRef(false);
-  const animProgress = useRef(0);
-  const animStartPos = useRef(new THREE.Vector3());
-  const animGoalPos = useRef(new THREE.Vector3());
-  const animStartTarget = useRef(new THREE.Vector3());
-  const animGoalTarget = useRef(new THREE.Vector3());
-  const _tmpTarget = useRef(new THREE.Vector3());
+  /* Lerp targets — camera smoothly moves toward these each frame */
+  const targetPos    = useRef(new THREE.Vector3(0, 20, 120));
+  const targetTarget = useRef(new THREE.Vector3(0,  0,   0));
 
-  /* company view lock */
-  const lockedCompany = useRef<string | null>(null);
+  /* Smooth 0-1 targets for node visibility transitions */
+  const targetClF = useRef(0);   // cluster focus target
+  const targetCpF = useRef(0);   // company focus target
+
+  /* ── Events from UI outside Canvas (carousel, back buttons) ── */
+  useEffect(() => {
+    const onEnterInd = (e: Event) => {
+      const { id, center } = (e as CustomEvent).detail;
+      cameraHandleRef.current?.enterIndustry(id, center);
+    };
+    const onExitGal = () => cameraHandleRef.current?.exitToGalaxy();
+    const onExitCl  = () => cameraHandleRef.current?.exitToCluster();
+    window.addEventListener('founderos:enterIndustry', onEnterInd);
+    window.addEventListener('founderos:exitToGalaxy',  onExitGal);
+    window.addEventListener('founderos:exitToCluster', onExitCl);
+    return () => {
+      window.removeEventListener('founderos:enterIndustry', onEnterInd);
+      window.removeEventListener('founderos:exitToGalaxy',  onExitGal);
+      window.removeEventListener('founderos:exitToCluster', onExitCl);
+    };
+  }, []);
+
+  /* ── Imperative camera API ── */
+  useEffect(() => {
+    cameraHandleRef.current = {
+      enterIndustry(id, center) {
+        const controls = controlsRef.current;
+        const p = new THREE.Vector3(...center);
+        targetTarget.current.copy(p);
+        targetPos.current.copy(p).add(new THREE.Vector3(0, 10, 28));
+        targetClF.current = 1; targetCpF.current = 0;
+        const s = scopeRef.current!;
+        s.level = 'cluster'; s.focusedCluster = id;
+        if (controls) { controls.enabled = false; controls.autoRotate = false; controls.enableZoom = false; }
+        onIndustryEnter?.(id);
+      },
+      exitToGalaxy() {
+        const controls = controlsRef.current;
+        targetTarget.current.set(0, 0, 0);
+        targetPos.current.set(0, 20, 120);
+        targetClF.current = 0; targetCpF.current = 0;
+        const s = scopeRef.current!;
+        s.level = 'galaxy';
+        // focusedCluster/Company cleared lazily in useFrame once focus reaches 0
+        if (controls) { controls.enabled = false; controls.autoRotate = false; controls.enableZoom = true; }
+        onExitCompany?.();
+      },
+      enterCompany(id, pos) {
+        const controls = controlsRef.current;
+        const p = new THREE.Vector3(...pos);
+        targetTarget.current.copy(p);
+        targetPos.current.copy(p).add(new THREE.Vector3(0, 18, 15));
+        targetClF.current = 1; targetCpF.current = 1;
+        const s = scopeRef.current!;
+        s.level = 'company'; s.focusedCompany = id;
+        if (controls) controls.enabled = false;
+        onEnterCompany?.(id);
+      },
+      exitToCluster() {
+        const controls = controlsRef.current;
+        const s = scopeRef.current!;
+        const cp = CLUSTER_VECS.find(c => c.id === s.focusedCluster)?.vec ?? new THREE.Vector3();
+        targetTarget.current.copy(cp);
+        targetPos.current.copy(cp).add(new THREE.Vector3(0, 10, 28));
+        targetClF.current = 1; targetCpF.current = 0;
+        s.level = 'cluster';
+        // focusedCompany cleared lazily
+        if (controls) controls.enabled = false;
+        onExitCompany?.();
+      },
+    };
+  });
 
   useFrame(() => {
     if (!scopeRef.current) return;
     const controls = controlsRef.current;
-    const dist = camera.position.length();
-    scopeRef.current.distance = dist;
-    scopeRef.current.cameraPos.copy(camera.position);
+    const s = scopeRef.current;
 
-    /* nearest cluster */
-    let nearClId: string | null = null;
-    let nearClDist = Infinity;
-    for (const { id, vec } of CLUSTER_VECS) {
-      const d = camera.position.distanceTo(vec);
-      if (d < nearClDist) { nearClDist = d; nearClId = id; }
+    s.cameraPos.copy(camera.position);
+    s.distance = camera.position.length();
+
+    /* Smooth visual focus transitions (always running) */
+    s.clusterFocus = THREE.MathUtils.lerp(s.clusterFocus, targetClF.current, 0.06);
+    s.companyFocus = THREE.MathUtils.lerp(s.companyFocus, targetCpF.current, 0.06);
+
+    /* Lazy cleanup — clear focused IDs once fully faded out */
+    if (s.level === 'galaxy' && s.clusterFocus < 0.03) {
+      s.focusedCluster = null; s.focusedCompany = null;
     }
-    scopeRef.current.focusedCluster = nearClDist < 55 ? nearClId : null;
-    scopeRef.current.clusterFocus = 1 - smoothstep(18, 55, nearClDist);
-
-    /* nearest company — use camera look direction so the user lands on
-       the company they're actually aiming at, not just the closest one */
-    let nearCoId: string | null = null;
-    let nearCoDist = Infinity;
-    _v3.set(0, 0, -1).applyQuaternion(camera.quaternion); // camera forward
-    let bestAimScore = Infinity;
-    for (const { id, vec } of COMPANY_VECS) {
-      const dx = vec.x - camera.position.x;
-      const dy = vec.y - camera.position.y;
-      const dz = vec.z - camera.position.z;
-      const actualDist = Math.sqrt(dx * dx + dy * dy + dz * dz);
-      const proj = dx * _v3.x + dy * _v3.y + dz * _v3.z;
-      if (proj <= 0) {
-        // behind camera — fallback only if nothing in front
-        if (bestAimScore === Infinity && actualDist < nearCoDist) {
-          nearCoDist = actualDist; nearCoId = id;
-        }
-        continue;
-      }
-      // perpendicular distance² from the look ray
-      const perpSq = dx * dx + dy * dy + dz * dz - proj * proj;
-      // score: strongly prefer companies on the aim line
-      const score = perpSq * 5 + actualDist;
-      if (score < bestAimScore) {
-        bestAimScore = score; nearCoId = id; nearCoDist = actualDist;
-      }
+    if (s.level === 'cluster' && s.companyFocus < 0.03) {
+      s.focusedCompany = null;
     }
 
-    /* natural scope values */
-    scopeRef.current.focusedCompany = nearCoDist < 14 ? nearCoId : null;
-    scopeRef.current.companyFocus = 1 - smoothstep(4, 14, nearCoDist);
-
-    /* ── Locked company view override ── */
-    if (lockedCompany.current) {
-      const compVec = COMPANY_VECS.find(c => c.id === lockedCompany.current)?.vec;
-      if (compVec) {
-        const d = camera.position.distanceTo(compVec);
-        if (d > 35 && !animating.current) {
-          /* user scrolled far enough — release lock, restore constraints */
-          lockedCompany.current = null;
-          if (controls) {
-            controls.minPolarAngle = Math.PI * 0.15;
-            controls.maxPolarAngle = Math.PI * 0.85;
-          }
-        } else {
-          /* force company scope — always 1 when locked.
-             Node emergence is already smoothed by lerps in NodeSphere,
-             so there's no visual pop. This prevents the flicker loop where
-             a low ramping value drops lvl back to 'cluster' mid-animation. */
-          scopeRef.current.focusedCompany = lockedCompany.current;
-          scopeRef.current.companyFocus = 1;
-        }
-      }
-    }
-
-    /* auto-rotate */
-    if (controls && !animating.current) {
-      controls.autoRotateSpeed = lockedCompany.current ? 0 : dist > 80 ? 0.1 : dist > 40 ? 0.03 : 0;
-    }
-
-    const lvl = getScopeLevel(scopeRef.current.clusterFocus, scopeRef.current.companyFocus);
-
-    /* ── Trigger camera transition on scope change ── */
-    if (lvl !== last.current) {
-      if (lvl === 'company' && nearCoId && POS3D[nearCoId] && controls) {
-        const compPos = new THREE.Vector3(...POS3D[nearCoId]);
-
-        /* save current positions */
-        animStartPos.current.copy(camera.position);
-        animStartTarget.current.copy(controls.target);
-
-        /* goal: angled top-down view of the wider flat layout */
-        animGoalTarget.current.copy(compPos);
-        animGoalPos.current.copy(compPos).add(new THREE.Vector3(0, 28, 20));
-
-        animProgress.current = 0;
-        animating.current = true;
-        lockedCompany.current = nearCoId;
-
-        /* disable controls so they don't fight the animation */
-        controls.enabled = false;
-        controls.autoRotate = false;
-
-        /* relax polar constraints for top-down-ish view */
-        controls.minPolarAngle = 0.05;
-        controls.maxPolarAngle = Math.PI * 0.95;
-      }
-      last.current = lvl;
-      onScopeChange(lvl);
-    }
-
-    /* ── Deterministic camera animation ── */
-    if (animating.current && controls) {
-      animProgress.current = Math.min(1, animProgress.current + 0.025);
-      const t = smoothstep(0, 1, animProgress.current);
-
-      /* direct interpolation — no incremental drift */
-      camera.position.lerpVectors(animStartPos.current, animGoalPos.current, t);
-      _tmpTarget.current.lerpVectors(animStartTarget.current, animGoalTarget.current, t);
-      controls.target.copy(_tmpTarget.current);
+    /* Camera lerp — only while controls are disabled (transitioning) */
+    if (controls && !controls.enabled) {
+      camera.position.lerp(targetPos.current, 0.065);
+      controls.target.lerp(targetTarget.current, 0.065);
       controls.update();
 
-      if (animProgress.current >= 1) {
-        animating.current = false;
-        controls.enabled = true;
-        controls.autoRotate = false;
+      const arrived = camera.position.distanceTo(targetPos.current)   < 0.8
+                   && controls.target.distanceTo(targetTarget.current) < 0.5;
+      if (arrived) {
+        camera.position.copy(targetPos.current);
+        controls.target.copy(targetTarget.current);
         controls.update();
+        controls.enabled = true;
+        if (s.level === 'galaxy') {
+          controls.enableZoom = true;
+          controls.minDistance = 60; controls.maxDistance = 260;
+          controls.autoRotate = true; controls.autoRotateSpeed = 0.08;
+        } else if (s.level === 'cluster') {
+          controls.enableZoom = false;  // scroll disabled — click to enter company
+          controls.autoRotate = false;
+        } else if (s.level === 'company') {
+          controls.enableZoom = false;
+          controls.minDistance = 6; controls.maxDistance = 32;
+          controls.autoRotate = false;
+        }
       }
     }
+
+    /* Level change notification */
+    if (s.level !== lastLevel.current) {
+      lastLevel.current = s.level;
+      onScopeChange(s.level);
+    }
   });
+
   return null;
 }
 
@@ -563,11 +425,13 @@ function CameraWatcher({
 /* ------------------------------------------------------------------ */
 
 function IndustryBubble({
-  node, position, radius,
+  node, position, radius, onClick,
 }: {
   node: TwinNode; position: [number, number, number]; radius: number;
+  onClick?: () => void;
 }) {
   const groupRef = useRef<THREE.Group>(null);
+  const bubbleMeshRef = useRef<THREE.Mesh>(null);
   const solidMatRef = useRef<THREE.MeshStandardMaterial>(null);
   const wireMatRef = useRef<THREE.MeshBasicMaterial>(null);
   const labelRef = useRef<HTMLDivElement>(null);
@@ -582,6 +446,16 @@ function IndustryBubble({
 
     const clF = s.clusterFocus;
     const isFocusedCluster = s.focusedCluster === node.id;
+
+    // Disable raycasting on bubble when inside cluster/company view so
+    // company nodes behind the bubble can receive click events
+    if (bubbleMeshRef.current) {
+      if (clF > 0.3) {
+        (bubbleMeshRef.current as any).raycast = () => {};
+      } else {
+        (bubbleMeshRef.current as any).raycast = (THREE.Mesh as any).prototype.raycast;
+      }
+    }
 
     let alpha: number;
     if (s.companyFocus > 0.1) {
@@ -606,7 +480,7 @@ function IndustryBubble({
 
   return (
     <group ref={groupRef} position={position}>
-      <mesh>
+      <mesh ref={bubbleMeshRef} onClick={(e) => { e.stopPropagation(); onClick?.(); }}>
         <icosahedronGeometry args={[radius, 2]} />
         <meshStandardMaterial
           ref={solidMatRef}
@@ -647,7 +521,7 @@ function IndustryBubble({
 /* ------------------------------------------------------------------ */
 
 function NodeSphere({
-  node, position, parentPosition, isSelected, isHovered, onClick, onPointerEnter, onPointerLeave,
+  node, position, parentPosition, isSelected, isHovered, onClick, onPointerEnter, onPointerLeave, myCompanyId, industryOf, parentOf, flatPosOf,
 }: {
   node: TwinNode;
   position: [number, number, number];
@@ -657,6 +531,10 @@ function NodeSphere({
   onClick: () => void;
   onPointerEnter: () => void;
   onPointerLeave: () => void;
+  myCompanyId?: string | null;
+  industryOf?: (id: string) => string | undefined;
+  parentOf?: (id: string) => string | undefined;
+  flatPosOf?: (id: string) => [number, number, number] | undefined;
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
   const wireRef = useRef<THREE.Mesh>(null);
@@ -670,8 +548,8 @@ function NodeSphere({
   const labelRef = useRef<HTMLDivElement>(null);
 
   const baseScale = SCALE[node.type] ?? 1;
-  const color = nodeColor(node);
-  const isYou = node.id === 'comp-you';
+  const color = nodeColor(node, myCompanyId);
+  const isYou = node.id === 'comp-you' || (!!myCompanyId && node.id === myCompanyId);
   const isCompany = node.type === 'company';
   const isFeature = node.type === 'feature';
   const isDept = node.type === 'department';
@@ -688,7 +566,7 @@ function NodeSphere({
     () => parentPosition ? new THREE.Vector3(...parentPosition) : null,
     [parentPosition],
   );
-  const flatPos = FLAT_POS[node.id];
+  const flatPos = flatPosOf ? flatPosOf(node.id) : FLAT_POS[node.id];
   const flatVec = useMemo(
     () => flatPos ? new THREE.Vector3(...flatPos) : null,
     [flatPos],
@@ -701,7 +579,7 @@ function NodeSphere({
     if (!s?.cameraPos) return;
 
     const camToNode = _v3.copy(s.cameraPos).distanceTo(posVec);
-    const scope = getNodeScope(camToNode, node.type, node.id, s);
+    const scope = getNodeScope(camToNode, node.type, node.id, s, myCompanyId, industryOf, parentOf);
 
     /* smooth animated values */
     animOp.current = THREE.MathUtils.lerp(animOp.current, scope.opacity, 0.25);
@@ -729,7 +607,8 @@ function NodeSphere({
     }
 
     /* flat 2D layout transition in company view */
-    if (flatVec && s.focusedCompany && EMERGE_PARENT[node.id] === s.focusedCompany && s.companyFocus > 0.2) {
+    const myParentId = parentOf ? parentOf(node.id) : EMERGE_PARENT[node.id];
+    if (flatVec && s.focusedCompany && myParentId === s.focusedCompany && s.companyFocus > 0.2) {
       const flatT = smoothstep(0.2, 0.7, s.companyFocus);
       groupRef.current.position.lerp(flatVec, flatT);
     }
@@ -860,7 +739,7 @@ function NodeSphere({
       {isYou && (
         <mesh rotation={[Math.PI / 2, 0, 0]}>
           <ringGeometry args={[baseScale * 1.6, baseScale * 1.75, 64]} />
-          <meshBasicMaterial ref={ringMatRef} color="#22d3ee" transparent opacity={0.25} side={THREE.DoubleSide} />
+          <meshBasicMaterial ref={ringMatRef} color="#F9C6FF" transparent opacity={0.5} side={THREE.DoubleSide} />
         </mesh>
       )}
 
@@ -900,12 +779,11 @@ function NodeSphere({
                   ? 'text-[10px] text-teal-300 bg-teal-950/70 border border-teal-500/20'
                   : node.type === 'kpi'
                     ? 'text-[9px] text-pink-300 bg-pink-950/50'
-                    : isYou
-                      ? 'text-[11px] text-cyan-300 font-bold bg-cyan-950/60 ring-1 ring-cyan-400/40'
-                      : isSelected || isHovered
-                        ? 'text-[11px] text-white bg-white/10'
-                        : 'text-[11px] text-gray-500'
+                    : isSelected || isHovered
+                      ? 'text-[11px] text-white bg-white/10'
+                      : 'text-[11px] text-gray-500'
             }`}
+            style={isYou ? { color: '#F9C6FF', background: 'rgba(249,198,255,0.12)', outline: '1px solid rgba(249,198,255,0.4)' } : undefined}
           >
             {isFeature
               ? node.label
@@ -1032,7 +910,33 @@ function CompanyViewLink({
 /*  CompanyViewLinks — all connections for the flat company view        */
 /* ------------------------------------------------------------------ */
 
-function CompanyViewLinks() {
+function CompanyViewLinks({
+  posMap, ep,
+}: {
+  posMap: Record<string, [number, number, number]>;
+  ep: Record<string, string>;
+}) {
+  // Build COMPANY_CHILDREN dynamically from emergeParent map
+  const companyChildren = useMemo(() => {
+    const map: Record<string, string[]> = {};
+    for (const [childId, parentId] of Object.entries(ep)) {
+      if (!map[parentId]) map[parentId] = [];
+      map[parentId].push(childId);
+    }
+    return map;
+  }, [ep]);
+
+  // Build flat layout positions for all companies with children
+  const flatPos = useMemo(() => {
+    const result: Record<string, [number, number, number]> = {};
+    for (const compId of Object.keys(companyChildren)) {
+      const pos = posMap[compId];
+      if (!pos) continue;
+      Object.assign(result, computeFlatLayout(compId, pos, ep));
+    }
+    return result;
+  }, [companyChildren, posMap, ep]);
+
   const links = useMemo(() => {
     const result: Array<{
       key: string;
@@ -1044,33 +948,26 @@ function CompanyViewLinks() {
       dashed?: boolean;
     }> = [];
 
-    for (const compId of Object.keys(COMPANY_CHILDREN)) {
-      const compPos = POS3D[compId];
+    for (const compId of Object.keys(companyChildren)) {
+      const compPos = posMap[compId];
       if (!compPos) continue;
-      const children = COMPANY_CHILDREN[compId];
-
-      for (const childId of children) {
-        const flatPos = FLAT_POS[childId];
-        if (!flatPos) continue;
+      for (const childId of companyChildren[compId]) {
+        const fp = flatPos[childId];
+        if (!fp) continue;
         const isDept = childId.startsWith('dept-');
         const isFeat = childId.startsWith('feat-');
         if (!isDept && !isFeat) continue;
-
-        // Line from company center to child
         result.push({
           key: `cv-${compId}-${childId}`,
-          from: compPos,
-          to: flatPos,
-          companyId: compId,
+          from: compPos, to: fp, companyId: compId,
           color: isDept ? '#2dd4bf' : '#64748b',
           lineWidth: isDept ? 1.5 : 1,
           dashed: isFeat,
         });
       }
     }
-
     return result;
-  }, []);
+  }, [companyChildren, posMap, flatPos]);
 
   return (
     <>
@@ -1084,9 +981,19 @@ function CompanyViewLinks() {
 /* ------------------------------------------------------------------ */
 
 function Scene({
-  nodes, edges, selectedNode, hoveredNode, onSelect, onHover, onScopeChange, onNavigate, clusterFilter,
-}: Graph3DProps & { onScopeChange: (s: ScopeLevel) => void; clusterFilter: ClusterFilter }) {
+  nodes, edges, selectedNode, hoveredNode, onSelect, onHover, onScopeChange, onNavigate,
+  clusterFilter, myCompanyId, emergeParentMap,
+  onIndustryEnter, onEnterCompany, onExitCompany,
+}: Graph3DProps & {
+  onScopeChange: (s: ScopeLevel) => void;
+  clusterFilter: ClusterFilter;
+  onIndustryEnter?: (id: string) => void;
+  onEnterCompany?: (id: string) => void;
+  onExitCompany?: () => void;
+}) {
+  const EP = emergeParentMap ?? EMERGE_PARENT;
   const scopeRef = useRef<ScopeState>({
+    level: 'galaxy',
     distance: 120,
     cameraPos: new THREE.Vector3(0, 20, 120),
     focusedCluster: null,
@@ -1098,20 +1005,70 @@ function Scene({
   // Sync filter from React state into the scope ref (read by useFrame callbacks)
   scopeRef.current.clusterFilter = clusterFilter;
   const controlsRef = useRef<any>(null);
+  const cameraHandleRef = useRef<CameraHandle | null>(null);
 
   const industryNodes = useMemo(() => nodes.filter(n => n.type === 'industry'), [nodes]);
   const otherNodes = useMemo(() => nodes.filter(n => n.type !== 'industry' && n.type !== 'kpi'), [nodes]);
+
+  // Merge static POS3D with live company positions from node._pos3D
+  const mergedPos = useMemo(() => {
+    const result: Record<string, [number, number, number]> = { ...POS3D };
+    // Add live company positions
+    for (const n of nodes) {
+      if (!POS3D[n.id] && n._pos3D) {
+        result[n.id] = [n._pos3D.x, n._pos3D.y, n._pos3D.z];
+      }
+    }
+    // Shift internal nodes (dept/feat/kpi) to follow the live company position.
+    // POS3D has them near comp-you (SaaS cluster origin). If the live company
+    // is elsewhere, we offset them by (livePos - compYouPos).
+    if (myCompanyId && result[myCompanyId] && POS3D['comp-you']) {
+      const [lx, ly, lz] = result[myCompanyId];
+      const [cx, cy, cz] = POS3D['comp-you'];
+      for (const [childId, parentId] of Object.entries(EP)) {
+        if (parentId !== myCompanyId) continue;
+        const p = POS3D[childId];
+        if (!p) continue;
+        result[childId] = [p[0] + lx - cx, p[1] + ly - cy, p[2] + lz - cz];
+      }
+    }
+    return result;
+  }, [nodes, myCompanyId, EP]);
+
+  // Flat layout positions for company view — recomputed dynamically from live positions
+  const flatPosMap = useMemo(() => {
+    const result: Record<string, [number, number, number]> = {};
+    const seen = new Set<string>();
+    for (const parentId of Object.values(EP)) {
+      if (seen.has(parentId)) continue;
+      seen.add(parentId);
+      const pos = mergedPos[parentId];
+      if (pos) Object.assign(result, computeFlatLayout(parentId, pos, EP));
+    }
+    return result;
+  }, [EP, mergedPos]);
+
+  // Merge static COMPANY_INDUSTRY with live company industry IDs
+  const mergedIndustry = useMemo(() => {
+    const extra: Record<string, string> = {};
+    for (const n of nodes) {
+      if (!COMPANY_INDUSTRY[n.id] && n._industryId) {
+        extra[n.id] = n._industryId;
+      }
+    }
+    return Object.keys(extra).length > 0 ? { ...COMPANY_INDUSTRY, ...extra } : COMPANY_INDUSTRY;
+  }, [nodes]);
 
   const processed = useMemo(() => {
     return edges
       .map((e) => {
         const fn = nodes.find((n) => n.id === e.from);
         const tn = nodes.find((n) => n.id === e.to);
-        if (!fn || !tn || !POS3D[e.from] || !POS3D[e.to]) return null;
+        if (!fn || !tn || !mergedPos[e.from] || !mergedPos[e.to]) return null;
         if (fn.type === 'kpi' || tn.type === 'kpi') return null;
         return {
           fromId: e.from, toId: e.to,
-          fromPos: POS3D[e.from], toPos: POS3D[e.to],
+          fromPos: mergedPos[e.from], toPos: mergedPos[e.to],
           fromType: fn.type, toType: tn.type,
           isActive: selectedNode === e.from || selectedNode === e.to ||
                     hoveredNode === e.from || hoveredNode === e.to,
@@ -1132,16 +1089,38 @@ function Scene({
   }, [edges, nodes, selectedNode, hoveredNode]);
 
   const handleNodeClick = useCallback((node: TwinNode) => {
+    if (node.type === 'industry') {
+      const center = CLUSTER_CENTER[node.id];
+      if (center) cameraHandleRef.current?.enterIndustry(node.id, center);
+      return;
+    }
     if (node.type === 'feature' && node.route && onNavigate) {
       onNavigate(node.route);
       return;
     }
+    if (node.type === 'company') {
+      const pos = mergedPos[node.id];
+      if (pos && cameraHandleRef.current) {
+        if (scopeRef.current?.level === 'company' && scopeRef.current?.focusedCompany === node.id) {
+          cameraHandleRef.current.exitToCluster();
+        } else {
+          cameraHandleRef.current.enterCompany(node.id, pos);
+        }
+      }
+      return;
+    }
     onSelect(selectedNode === node.id ? null : node.id);
-  }, [selectedNode, onSelect, onNavigate]);
+  }, [selectedNode, onSelect, onNavigate, mergedPos]);
 
   return (
     <ScopeCtx.Provider value={scopeRef}>
-      <CameraWatcher scopeRef={scopeRef} onScopeChange={onScopeChange} controlsRef={controlsRef} />
+      <CameraWatcher
+        scopeRef={scopeRef} onScopeChange={onScopeChange}
+        controlsRef={controlsRef} cameraHandleRef={cameraHandleRef}
+        onIndustryEnter={onIndustryEnter}
+        onEnterCompany={onEnterCompany}
+        onExitCompany={onExitCompany}
+      />
 
       <ambientLight intensity={0.1} />
       <pointLight position={[40, 25, 50]} intensity={0.8} color="#0ea5e9" />
@@ -1154,12 +1133,10 @@ function Scene({
       <OrbitControls
         ref={controlsRef}
         enableDamping
-        dampingFactor={0.04}
-        maxDistance={200}
-        minDistance={8}
+        dampingFactor={0.09}
         autoRotate
         autoRotateSpeed={0.1}
-        enablePan
+        enablePan={false}
         maxPolarAngle={Math.PI * 0.85}
         minPolarAngle={Math.PI * 0.15}
       />
@@ -1174,6 +1151,7 @@ function Scene({
             node={node}
             position={pos}
             radius={BUBBLE_RADIUS[node.id] ?? 10}
+            onClick={() => handleNodeClick(node)}
           />
         );
       })}
@@ -1182,14 +1160,14 @@ function Scene({
       {processed.map((e, i) => <ScopedEdgeLine key={i} {...e} />)}
 
       {/* flat layout connections for company view */}
-      <CompanyViewLinks />
+      <CompanyViewLinks posMap={mergedPos} ep={EP} />
 
       {/* nodes (non-industry) */}
       {otherNodes.map((node) => {
-        const pos = POS3D[node.id];
+        const pos = mergedPos[node.id];
         if (!pos) return null;
-        const parentId = EMERGE_PARENT[node.id];
-        const parentPos = parentId ? POS3D[parentId] ?? null : null;
+        const parentId = EP[node.id];
+        const parentPos = parentId ? mergedPos[parentId] ?? null : null;
         return (
           <NodeSphere
             key={node.id}
@@ -1201,6 +1179,10 @@ function Scene({
             onClick={() => handleNodeClick(node)}
             onPointerEnter={() => onHover(node.id)}
             onPointerLeave={() => onHover(null)}
+            myCompanyId={myCompanyId}
+            industryOf={(id) => mergedIndustry[id]}
+            parentOf={(id) => EP[id]}
+            flatPosOf={(id) => flatPosMap[id]}
           />
         );
       })}
@@ -1222,20 +1204,60 @@ const SCOPE_HUD: Record<ScopeLevel, { label: string; desc: string; color: string
 /*  Exported wrapper                                                   */
 /* ------------------------------------------------------------------ */
 
-const FILTER_OPTIONS: { value: ClusterFilter; label: string; color: string }[] = [
-  { value: 'all',         label: 'All',         color: '#818cf8' },
-  { value: 'competitors', label: 'Competitors',  color: '#ef4444' },
-  { value: 'allies',      label: 'Allies',       color: '#34d399' },
-];
-
 export default function Graph3D(props: Graph3DProps) {
   const [scope, setScope] = useState<ScopeLevel>('galaxy');
   const [clusterFilter, setClusterFilter] = useState<ClusterFilter>('all');
+  const [galaxyViewMode, setGalaxyViewMode] = useState<GalaxyViewMode>('relational');
+  const [carouselIdx, setCarouselIdx] = useState(0);
+  const [lockedCompanyId, setLockedCompanyId] = useState<string | null>(null);
+  const [focusedIndustryId, setFocusedIndustryId] = useState<string | null>(null);
+
   const handleScopeChange = useCallback((s: ScopeLevel) => {
     setScope(s);
-    if (s !== 'cluster') setClusterFilter('all'); // reset on scope change
+    if (s === 'galaxy') {
+      setClusterFilter('all');
+      setGalaxyViewMode('relational');
+      setCarouselIdx(0);
+      setFocusedIndustryId(null);
+      setLockedCompanyId(null);
+    }
+    if (s === 'cluster') setLockedCompanyId(null);
   }, []);
+
   const hud = SCOPE_HUD[scope];
+
+  /* Industry nodes for galaxy carousel */
+  const industryNodes = useMemo(() =>
+    props.nodes.filter(n => n.type === 'industry'),
+  [props.nodes]);
+
+  /* Companies-per-industry count for carousel cards */
+  const companiesPerIndustry = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const n of props.nodes) {
+      if (n.type !== 'company') continue;
+      const ind = n._industryId ?? COMPANY_INDUSTRY[n.id];
+      if (ind) counts[ind] = (counts[ind] ?? 0) + 1;
+    }
+    return counts;
+  }, [props.nodes]);
+
+  const carouselIndustry = industryNodes[carouselIdx] ?? null;
+
+  /* Wheel scroll on carousel */
+  const carouselRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = carouselRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      setCarouselIdx(i =>
+        e.deltaY > 0 ? Math.min(industryNodes.length - 1, i + 1) : Math.max(0, i - 1)
+      );
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, [industryNodes.length]);
 
   return (
     <div className="w-full h-full overflow-hidden relative">
@@ -1244,63 +1266,203 @@ export default function Graph3D(props: Graph3DProps) {
         style={{ background: 'transparent' }}
         gl={{ antialias: true, alpha: true }}
       >
-        <Scene {...props} onScopeChange={handleScopeChange} clusterFilter={clusterFilter} />
+        <Scene
+          {...props}
+          onScopeChange={handleScopeChange}
+          clusterFilter={clusterFilter}
+          onIndustryEnter={(id) => { setFocusedIndustryId(id); setLockedCompanyId(null); }}
+          onEnterCompany={(id) => setLockedCompanyId(id)}
+          onExitCompany={() => setLockedCompanyId(null)}
+        />
       </Canvas>
 
-      {/* Scope HUD */}
+      {/* ── Scope HUD — top left ── */}
       <div
-        className="absolute top-[4.5rem] left-4 px-3 py-2 rounded-lg border backdrop-blur-md transition-all duration-500"
-        style={{
-          background: 'rgba(6, 6, 26, 0.7)',
-          borderColor: `${hud.color}33`,
-          boxShadow: `0 0 20px ${hud.color}15`,
-        }}
+        className="absolute top-[4.5rem] left-4 px-3 py-2 rounded-xl backdrop-blur-md"
+        style={{ background: 'rgba(27,27,29,0.85)' }}
       >
         <div className="flex items-center gap-2">
-          <div className="w-2 h-2 rounded-full" style={{ backgroundColor: hud.color, boxShadow: `0 0 6px ${hud.color}` }} />
+          <div className="w-1.5 h-1.5 rounded-full" style={{ background: hud.color, boxShadow: `0 0 6px ${hud.color}` }} />
           <span className="text-xs font-medium" style={{ color: hud.color }}>{hud.label}</span>
         </div>
-        <p className="text-[10px] text-gray-500 mt-0.5 ml-4">{hud.desc}</p>
+        <p className="text-[10px] mt-0.5 ml-3.5" style={{ color: '#5E5E5E' }}>{hud.desc}</p>
       </div>
 
-      {/* Cluster filter toggle — visible only in cluster view */}
-      {scope === 'cluster' && (
-        <div
-          className="absolute top-[4.5rem] right-4 flex gap-1 p-1 rounded-lg border backdrop-blur-md transition-all duration-300"
-          style={{ background: 'rgba(6, 6, 26, 0.8)', borderColor: 'rgba(129, 140, 248, 0.2)' }}
-        >
-          {FILTER_OPTIONS.map(({ value, label, color }) => (
-            <button
-              key={value}
-              onClick={() => setClusterFilter(value)}
-              className="px-3 py-1.5 rounded-md text-[11px] font-medium transition-all duration-200"
-              style={{
-                background: clusterFilter === value ? `${color}20` : 'transparent',
-                color: clusterFilter === value ? color : '#6b7280',
-                boxShadow: clusterFilter === value ? `0 0 8px ${color}15` : 'none',
-                border: clusterFilter === value ? `1px solid ${color}40` : '1px solid transparent',
-              }}
-            >
-              {label}
-            </button>
-          ))}
+      {/* ── Galaxy controls — Relational / Browse toggle ── */}
+      {scope === 'galaxy' && (
+        <div className="absolute top-[4.5rem] right-4 flex items-center gap-2">
+          <div className="flex rounded-xl overflow-hidden p-0.5" style={{ background: '#1B1B1D' }}>
+            {(['relational', 'carousel'] as GalaxyViewMode[]).map(m => (
+              <button
+                key={m}
+                onClick={() => { setGalaxyViewMode(m); setCarouselIdx(0); }}
+                className="px-3 py-1.5 rounded-lg text-[11px] font-medium transition-all duration-200"
+                style={{
+                  background: galaxyViewMode === m ? 'linear-gradient(135deg, #F9C6FF, #C1AEFF)' : 'transparent',
+                  color: galaxyViewMode === m ? '#161618' : '#5E5E5E',
+                }}
+              >
+                {m === 'relational' ? 'Relational' : 'Browse'}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Zoom hint */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[10px] text-gray-600 flex items-center gap-3">
-        <span>Scroll to explore</span>
-        <span className="text-gray-700">|</span>
-        <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-sky-500/50" /> Galaxy
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-sky-500/50" /> Cluster
-        </span>
-        <span className="flex items-center gap-1">
-          <span className="w-1.5 h-1.5 rounded-full bg-teal-500/50" /> Company
-        </span>
-      </div>
+      {/* ── Cluster controls — filter + back ── */}
+      {scope === 'cluster' && (
+        <div className="absolute top-[4.5rem] right-4 flex items-center gap-2">
+          <div className="flex rounded-xl overflow-hidden p-0.5" style={{ background: '#1B1B1D' }}>
+            {(['all', 'competitors', 'allies'] as ClusterFilter[]).map(f => (
+              <button
+                key={f}
+                onClick={() => setClusterFilter(f)}
+                className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all"
+                style={{
+                  background: clusterFilter === f ? 'rgba(249,198,255,0.15)' : 'transparent',
+                  color: clusterFilter === f ? '#F9C6FF' : '#5E5E5E',
+                }}
+              >
+                {f.charAt(0).toUpperCase() + f.slice(1)}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('founderos:exitToGalaxy'))}
+            className="px-3 py-1.5 rounded-xl text-xs font-medium"
+            style={{ background: '#1B1B1D', color: '#C1AEFF' }}
+          >
+            ← Galaxy
+          </button>
+        </div>
+      )}
+
+      {/* ── Company controls — back to cluster ── */}
+      {scope === 'company' && (
+        <div className="absolute top-[4.5rem] right-4 flex items-center gap-3">
+          {lockedCompanyId && (
+            <span className="text-xs" style={{ color: '#5E5E5E' }}>
+              {props.nodes.find(n => n.id === lockedCompanyId)?.label}
+            </span>
+          )}
+          <button
+            onClick={() => window.dispatchEvent(new CustomEvent('founderos:exitToCluster'))}
+            className="px-3 py-1.5 rounded-xl text-xs font-medium"
+            style={{ background: '#1B1B1D', color: '#C1AEFF' }}
+          >
+            ← Cluster
+          </button>
+        </div>
+      )}
+
+      {/* ── Galaxy Browse carousel — industries ── */}
+      {scope === 'galaxy' && galaxyViewMode === 'carousel' && (
+        <div
+          ref={carouselRef}
+          className="absolute inset-0 flex items-center justify-center"
+          style={{ background: 'rgba(22,22,24,0.92)', backdropFilter: 'blur(8px)' }}
+        >
+          <button
+            onClick={() => setCarouselIdx(i => Math.max(0, i - 1))}
+            disabled={carouselIdx === 0}
+            className="absolute left-8 w-10 h-10 rounded-full flex items-center justify-center text-xl transition-all"
+            style={{ background: carouselIdx === 0 ? 'rgba(27,27,29,0.4)' : '#1B1B1D', color: carouselIdx === 0 ? '#3a3a3e' : '#C1AEFF' }}
+          >‹</button>
+          <button
+            onClick={() => setCarouselIdx(i => Math.min(industryNodes.length - 1, i + 1))}
+            disabled={carouselIdx >= industryNodes.length - 1}
+            className="absolute right-8 w-10 h-10 rounded-full flex items-center justify-center text-xl transition-all"
+            style={{ background: carouselIdx >= industryNodes.length - 1 ? 'rgba(27,27,29,0.4)' : '#1B1B1D', color: carouselIdx >= industryNodes.length - 1 ? '#3a3a3e' : '#C1AEFF' }}
+          >›</button>
+
+          {carouselIndustry && (
+            <div
+              key={carouselIndustry.id}
+              className="flex flex-col items-center gap-6 max-w-sm w-full px-8"
+              style={{ animation: 'fadeSlideIn 0.3s ease' }}
+            >
+              {/* Industry orb */}
+              <div
+                className="w-28 h-28 rounded-full flex items-center justify-center text-4xl font-bold"
+                style={{
+                  background: `${INDUSTRY_CLR[carouselIndustry.id] ?? '#0ea5e9'}22`,
+                  color: INDUSTRY_CLR[carouselIndustry.id] ?? '#0ea5e9',
+                  boxShadow: `0 0 50px ${INDUSTRY_CLR[carouselIndustry.id] ?? '#0ea5e9'}40`,
+                  border: `1px solid ${INDUSTRY_CLR[carouselIndustry.id] ?? '#0ea5e9'}33`,
+                }}
+              >
+                {carouselIndustry.label.charAt(0)}
+              </div>
+
+              <div className="text-center">
+                <h2 className="text-white text-xl font-semibold">{carouselIndustry.label}</h2>
+                {carouselIndustry.description && (
+                  <p className="text-sm mt-1" style={{ color: '#5E5E5E' }}>{carouselIndustry.description}</p>
+                )}
+              </div>
+
+              <div className="rounded-xl p-3 text-center w-full" style={{ background: '#1B1B1D' }}>
+                <p className="text-xs mb-1" style={{ color: '#5E5E5E' }}>Companies</p>
+                <p className="text-sm font-semibold text-white">{companiesPerIndustry[carouselIndustry.id] ?? 0}</p>
+              </div>
+
+              <button
+                onClick={() => {
+                  const center = CLUSTER_CENTER[carouselIndustry.id];
+                  if (center) {
+                    window.dispatchEvent(new CustomEvent('founderos:enterIndustry', {
+                      detail: { id: carouselIndustry.id, center },
+                    }));
+                    setGalaxyViewMode('relational');
+                  }
+                }}
+                className="w-full py-3 rounded-xl text-sm font-semibold"
+                style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)', color: '#161618' }}
+              >
+                Enter {carouselIndustry.label} →
+              </button>
+
+              <div className="flex gap-1.5">
+                {industryNodes.map((_, i) => (
+                  <button
+                    key={i}
+                    onClick={() => setCarouselIdx(i)}
+                    className="rounded-full transition-all duration-200"
+                    style={{ width: i === carouselIdx ? 16 : 6, height: 6, background: i === carouselIdx ? '#C1AEFF' : '#3a3a3e' }}
+                  />
+                ))}
+              </div>
+              <p className="text-[10px]" style={{ color: '#3a3a3e' }}>
+                {carouselIdx + 1} / {industryNodes.length} · scroll or arrows
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Hints ── */}
+      {scope === 'galaxy' && galaxyViewMode === 'relational' && (
+        <div className="absolute bottom-8 right-6 text-[10px]" style={{ color: '#3a3a3e' }}>
+          Click or scroll toward an industry to enter
+        </div>
+      )}
+      {scope === 'cluster' && (
+        <div className="absolute bottom-8 right-6 text-[10px]" style={{ color: '#3a3a3e' }}>
+          Click a company to open its twin
+        </div>
+      )}
+      {scope === 'company' && (
+        <div className="absolute bottom-8 right-6 text-[10px]" style={{ color: '#3a3a3e' }}>
+          Drag to orbit · click module to open
+        </div>
+      )}
+
+      <style>{`
+        @keyframes fadeSlideIn {
+          from { opacity: 0; transform: translateX(24px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+      `}</style>
     </div>
   );
 }

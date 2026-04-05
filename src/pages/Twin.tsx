@@ -1,10 +1,13 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Graph3D from '../components/Graph3D';
-import { twinNodes, twinEdges } from '../data/mockData';
+import { useTwinGraph } from '../data/twinGraph';
+import { useAuth } from '../lib/auth';
 
 export default function Twin() {
   const navigate = useNavigate();
+  const { profile } = useAuth();
+  const { nodes: twinNodes, edges: twinEdges, myCompanyNodeId, emergeParent } = useTwinGraph(profile?.company_id);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [filters] = useState({
@@ -20,12 +23,12 @@ export default function Twin() {
       if (n.type === 'feature') return true;
       return filters[n.type as keyof typeof filters];
     }),
-    [filters],
+    [twinNodes, filters],
   );
   const visibleIds = useMemo(() => new Set(visibleNodes.map((n) => n.id)), [visibleNodes]);
   const visibleEdges = useMemo(
     () => twinEdges.filter((e) => visibleIds.has(e.from) && visibleIds.has(e.to)),
-    [visibleIds],
+    [twinEdges, visibleIds],
   );
 
   const selectedData = selectedNode ? twinNodes.find((n) => n.id === selectedNode) : null;
@@ -49,6 +52,8 @@ export default function Twin() {
           onSelect={setSelectedNode}
           onHover={setHoveredNode}
           onNavigate={handleNavigate}
+          myCompanyId={myCompanyNodeId}
+          emergeParentMap={emergeParent}
         />
       </div>
 
@@ -148,22 +153,19 @@ export default function Twin() {
       </div>
 
       {/* Legend — floating bottom center */}
-      <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-6 text-xs text-slate-500 px-4 py-2 rounded-xl border backdrop-blur-md z-10"
-        style={{ background: 'rgba(2, 6, 23, 0.7)', borderColor: 'rgba(148,163,184,0.06)' }}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 text-xs px-4 py-2 rounded-full backdrop-blur-md z-10"
+        style={{ background: 'rgba(22,22,24,0.85)', color: '#5E5E5E' }}
       >
         {[
-          { color: 'bg-sky-400', label: 'Industry' },
-          { color: 'bg-cyan-400', label: 'Company' },
-          { color: 'bg-teal-400', label: 'Department' },
-          { color: 'bg-amber-400', label: 'Signal' },
-          { color: 'bg-rose-400', label: 'KPI' },
-          { shape: true, label: 'Module' },
+          { color: '#0ea5e9', label: 'Industry' },
+          { color: '#38bdf8', label: 'Company' },
+          { color: '#2dd4bf', label: 'Department' },
+          { color: '#fbbf24', label: 'Signal' },
+          { color: '#f472b6', label: 'KPI' },
+          { color: '#64748b', label: 'Module' },
         ].map((l) => (
           <div key={l.label} className="flex items-center gap-1.5">
-            <div
-              className={`w-3 h-3 ${'shape' in l && l.shape ? 'rotate-45 bg-sky-400' : `rounded-full ${l.color}`}`}
-              style={'shape' in l && l.shape ? { borderRadius: '2px', width: '10px', height: '10px' } : undefined}
-            />
+            <span className="w-2 h-2 rounded-full" style={{ background: l.color }} />
             {l.label}
           </div>
         ))}

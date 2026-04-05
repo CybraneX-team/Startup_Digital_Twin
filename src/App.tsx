@@ -1,4 +1,6 @@
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './lib/auth';
+import AuthGuard from './components/AuthGuard';
 import TopBar from './components/TopBar';
 import LandingPage from './pages/LandingPage';
 import Overview from './pages/Overview';
@@ -11,9 +13,55 @@ import Analytics from './pages/Analytics';
 import SettingsPage from './pages/SettingsPage';
 import VCConnect from './pages/VCConnect';
 import StartupNetwork from './pages/StartupNetwork';
+import AuthPage from './pages/AuthPage';
+import Onboarding from './pages/Onboarding';
+
+function AuthPageRoute() {
+  const { user, profile, loading } = useAuth();
+  if (loading) return null;
+  if (user && profile?.onboarding_completed) return <Navigate to="/overview" replace />;
+  if (user && !profile?.onboarding_completed) return <Navigate to="/onboarding" replace />;
+  return <AuthPage />;
+}
+
+function RootRoute() {
+  const { user, profile, loading } = useAuth();
+  if (loading) return null;
+  if (user && profile?.onboarding_completed && profile?.company_id) {
+    return <Navigate to="/overview" replace />;
+  }
+  if (user && !profile?.onboarding_completed) {
+    return <Navigate to="/onboarding" replace />;
+  }
+  return <LandingPage />;
+}
 
 function AppRoutes() {
   const location = useLocation();
+  // Auth + onboarding pages are full-screen without TopBar
+  if (location.pathname === '/auth') {
+    return (
+      <Routes>
+        <Route path="/auth" element={<AuthPageRoute />} />
+      </Routes>
+    );
+  }
+
+  if (location.pathname === '/onboarding') {
+    return (
+      <Routes>
+        <Route
+          path="/onboarding"
+          element={
+            <AuthGuard>
+              <Onboarding />
+            </AuthGuard>
+          }
+        />
+      </Routes>
+    );
+  }
+
   const isTwinGraph = location.pathname === '/twin';
 
   return (
@@ -21,30 +69,71 @@ function AppRoutes() {
       <TopBar />
       {isTwinGraph ? (
         <Routes>
-          <Route path="/twin" element={<Twin />} />
+          <Route
+            path="/twin"
+            element={
+              <AuthGuard>
+                <Twin />
+              </AuthGuard>
+            }
+          />
         </Routes>
       ) : (
         <main className="pt-14 px-8 pb-8 overflow-y-auto">
           <Routes>
-            {/* Home / Landing */}
-            <Route path="/" element={<LandingPage />} />
+            {/* Root: redirect authenticated+onboarded users to dashboard */}
+            <Route path="/" element={<RootRoute />} />
 
-            {/* Dashboard (old Overview) */}
-            <Route path="/overview" element={<Overview />} />
+            {/* Authenticated app routes */}
+            <Route path="/overview" element={
+              <AuthGuard requireOnboarding>
+                <Overview />
+              </AuthGuard>
+            } />
+            <Route path="/twin/strategy" element={
+              <AuthGuard requireOnboarding>
+                <Strategy />
+              </AuthGuard>
+            } />
+            <Route path="/twin/data" element={
+              <AuthGuard requireOnboarding>
+                <DataIngestion />
+              </AuthGuard>
+            } />
+            <Route path="/twin/benchmarks" element={
+              <AuthGuard requireOnboarding>
+                <Benchmarks />
+              </AuthGuard>
+            } />
+            <Route path="/twin/team" element={
+              <AuthGuard requireOnboarding>
+                <RBAC />
+              </AuthGuard>
+            } />
+            <Route path="/twin/analytics" element={
+              <AuthGuard requireOnboarding>
+                <Analytics />
+              </AuthGuard>
+            } />
 
-            {/* Twin sub-pages */}
-            <Route path="/twin/strategy" element={<Strategy />} />
-            <Route path="/twin/data" element={<DataIngestion />} />
-            <Route path="/twin/benchmarks" element={<Benchmarks />} />
-            <Route path="/twin/team" element={<RBAC />} />
-            <Route path="/twin/analytics" element={<Analytics />} />
-
-            {/* Ecosystem (accessed through Twin, not top nav) */}
-            <Route path="/ecosystem/vc-connect" element={<VCConnect />} />
-            <Route path="/ecosystem/network" element={<StartupNetwork />} />
+            {/* Ecosystem (accessed through Twin) */}
+            <Route path="/ecosystem/vc-connect" element={
+              <AuthGuard requireOnboarding>
+                <VCConnect />
+              </AuthGuard>
+            } />
+            <Route path="/ecosystem/network" element={
+              <AuthGuard requireOnboarding>
+                <StartupNetwork />
+              </AuthGuard>
+            } />
 
             {/* Settings */}
-            <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/settings" element={
+              <AuthGuard>
+                <SettingsPage />
+              </AuthGuard>
+            } />
           </Routes>
         </main>
       )}
@@ -55,7 +144,9 @@ function AppRoutes() {
 function App() {
   return (
     <BrowserRouter>
-      <AppRoutes />
+      <AuthProvider>
+        <AppRoutes />
+      </AuthProvider>
     </BrowserRouter>
   );
 }

@@ -5,7 +5,10 @@ import {
 } from 'recharts';
 import PageHeader from '../components/PageHeader';
 import MetricCard from '../components/MetricCard';
-import { keyMetrics, revenueHistory, departmentHealth, companyInfo, environmentSignals, activeTasks } from '../data/mockData';
+import { keyMetrics, revenueHistory, departmentHealth, environmentSignals, activeTasks } from '../data/mockData';
+import { useAuth } from '../lib/auth';
+import { useCompany } from '../lib/db/companies';
+import { INDUSTRIES } from '../db/industries';
 
 const statusConfig = {
   running: { icon: Loader2, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/20', animate: 'animate-spin' },
@@ -15,11 +18,21 @@ const statusConfig = {
 };
 
 export default function Overview() {
+  const { profile } = useAuth();
+  const { company } = useCompany(profile?.company_id);
+
+  const industryLabel = company?.industry_id
+    ? INDUSTRIES.find(i => i.id === company.industry_id)?.label ?? company.industry_id
+    : 'SaaS';
+
+  const displayName = company?.name ?? 'Your Company';
+  const displayStage = company?.stage ?? 'Seed';
+
   return (
     <div>
       <PageHeader
         title="Digital Twin Overview"
-        subtitle={`${companyInfo.name} — ${companyInfo.stage} Stage ${companyInfo.industry}`}
+        subtitle={`${displayName} — ${displayStage} · ${industryLabel}`}
         icon={<LayoutDashboard className="w-6 h-6" />}
         badge="Live"
       />

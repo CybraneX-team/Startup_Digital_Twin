@@ -14,6 +14,9 @@ import {
   ChevronRight,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
+import { useCompany } from '../lib/db/companies';
+import { INDUSTRIES } from '../db/industries';
 import { companyInfo } from '../data/mockData';
 
 /* ── features list ── */
@@ -79,8 +82,8 @@ const stages = [
   { label: 'IPO Readiness', done: false },
 ];
 
-/* ── quick stats ── */
-const stats = [
+/* ── quick stats (fallback only, real data injected in component) ── */
+const fallbackStats = [
   { label: 'Stage', value: companyInfo.stage },
   { label: 'Team', value: `${companyInfo.teamSize}` },
   { label: 'MRR', value: `$${companyInfo.mrr.toLocaleString()}` },
@@ -89,6 +92,22 @@ const stats = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
+  const { user, profile } = useAuth();
+  const { company } = useCompany(profile?.company_id);
+  const isAuthed = !!user;
+  const hasCompany = !!profile?.company_id;
+
+  const industryLabel = company?.industry_id
+    ? INDUSTRIES.find(i => i.id === company.industry_id)?.label ?? ''
+    : '';
+
+  const stats = company ? [
+    { label: 'Company', value: company.name },
+    { label: 'Stage',   value: company.stage },
+    { label: 'Industry', value: industryLabel },
+    { label: 'Team',    value: company.employees ? `${company.employees} people` : '—' },
+    ...(company.mrr_usd ? [{ label: 'MRR', value: `$${Number(company.mrr_usd).toLocaleString()}` }] : []),
+  ] : fallbackStats;
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -100,30 +119,67 @@ export default function LandingPage() {
             <Hexagon className="w-5 h-5 text-white" strokeWidth={2.5} />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">FounderOS</h1>
-            <p className="text-sm text-slate-500">The operating system for your startup</p>
+            <h1 className="text-3xl font-bold text-white tracking-tight">
+              {company ? company.name : 'FounderOS'}
+            </h1>
+            <p className="text-sm" style={{ color: '#5E5E5E' }}>
+              {company
+                ? `${company.stage} · ${industryLabel} · ${company.country}`
+                : 'The operating system for your startup'}
+            </p>
           </div>
         </div>
 
-        <p className="text-lg text-slate-300 max-w-2xl leading-relaxed mb-8">
-          A digital twin of your company — connecting strategy, operations, team, and market signals
-          into a single living model. Make better decisions, faster.
+        <p className="text-lg max-w-2xl leading-relaxed mb-8" style={{ color: '#5E5E5E' }}>
+          {company
+            ? company.description ?? 'Your digital twin is live. Explore the graph, track your KPIs, and benchmark against the market.'
+            : 'A digital twin of your company — connecting strategy, operations, team, and market signals into a single living model. Make better decisions, faster.'}
         </p>
 
         <div className="flex items-center gap-4 mb-10">
-          <button
-            onClick={() => navigate('/twin')}
-            className="flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium text-white transition-all hover:opacity-90"
-            style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)' }}
-          >
-            Open Twin <ArrowRight className="w-4 h-4" />
-          </button>
-          <button
-            onClick={() => navigate('/overview')}
-            className="flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium text-slate-300 bg-slate-800/60 border border-slate-700/50 hover:border-slate-600/60 transition-all"
-          >
-            View Dashboard
-          </button>
+          {isAuthed && hasCompany ? (
+            <>
+              <button
+                onClick={() => navigate('/twin')}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
+                style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)', color: '#161618' }}
+              >
+                Open Twin <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => navigate('/overview')}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium transition-all"
+                style={{ background: '#1B1B1D', color: '#5E5E5E' }}
+              >
+                Dashboard
+              </button>
+            </>
+          ) : isAuthed ? (
+            <button
+              onClick={() => navigate('/onboarding')}
+              className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
+              style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)', color: '#161618' }}
+            >
+              Set up your company <ArrowRight className="w-4 h-4" />
+            </button>
+          ) : (
+            <>
+              <button
+                onClick={() => navigate('/auth')}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
+                style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)', color: '#161618' }}
+              >
+                Get started free <ArrowRight className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => navigate('/auth')}
+                className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium transition-all"
+                style={{ background: '#1B1B1D', color: '#5E5E5E' }}
+              >
+                Sign in
+              </button>
+            </>
+          )}
         </div>
 
         {/* Quick stats strip */}

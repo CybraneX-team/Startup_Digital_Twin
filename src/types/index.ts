@@ -65,6 +65,9 @@ export interface TwinNode {
   description?: string;
   route?: string; // for feature nodes — navigates to this route on click
   icon?: string;  // lucide icon name for feature nodes
+  // Live Supabase company fields
+  _pos3D?: { x: number; y: number; z: number } | null;
+  _industryId?: string;
 }
 
 export interface TwinEdge {
