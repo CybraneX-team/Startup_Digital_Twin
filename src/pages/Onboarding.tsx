@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, Hexagon, Check } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Hexagon, Check, Search, Users, Building2, Clock, CheckCircle } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { createCompany } from '../lib/db/companies';
 import type { CreateCompanyInput } from '../lib/db/companies';
 import { INDUSTRIES } from '../db/industries';
 import type { BusinessModel, CompanyStage } from '../lib/supabase';
+import { searchCompanyBySlug, submitJoinRequest } from '../lib/db/team';
 
 /* ──────────────────────────────────────────────────
    Step definitions
@@ -118,10 +119,40 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 export default function Onboarding() {
   const navigate = useNavigate();
   const { user, refreshProfile } = useAuth();
+
+  // 'choose' = pick create vs join, 'create' = wizard, 'join' = join flow
+  const [mode, setMode] = useState<'choose' | 'create' | 'join'>('choose');
+
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<FormData>(INITIAL);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Join workspace state
+  const [joinSearch, setJoinSearch] = useState('');
+  const [joinResults, setJoinResults] = useState<{ id: string; name: string; slug: string; stage: string }[]>([]);
+  const [joinSelected, setJoinSelected] = useState<{ id: string; name: string } | null>(null);
+  const [joinMessage, setJoinMessage] = useState('');
+  const [joinSubmitted, setJoinSubmitted] = useState(false);
+  const [joinSearching, setJoinSearching] = useState(false);
+
+  async function handleJoinSearch() {
+    if (!joinSearch.trim()) return;
+    setJoinSearching(true);
+    const results = await searchCompanyBySlug(joinSearch.trim());
+    setJoinResults(results);
+    setJoinSearching(false);
+  }
+
+  async function handleJoinSubmit() {
+    if (!joinSelected || !user) return;
+    setLoading(true);
+    setError(null);
+    const result = await submitJoinRequest(joinSelected.id, user.id, 'viewer', joinMessage || undefined);
+    setLoading(false);
+    if (!result.success) { setError(result.error ?? 'Failed to submit request'); return; }
+    setJoinSubmitted(true);
+  }
 
   function update(field: keyof FormData, value: string) {
     setForm(f => ({ ...f, [field]: value }));
@@ -196,6 +227,172 @@ export default function Onboarding() {
   }
 
   const selectedIndustry = INDUSTRIES.find(i => i.id === form.industry_id);
+
+  /* ── Mode chooser screen ── */
+  if (mode === 'choose') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: '#161618' }}>
+        <div className="w-full max-w-lg">
+          <div className="flex flex-col items-center gap-3 mb-10">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center"
+              style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)' }}>
+              <Hexagon size={22} color="#161618" fill="#161618" strokeWidth={1.5} />
+            </div>
+            <h1 className="text-white text-2xl font-semibold">Welcome to FounderOS</h1>
+            <p className="text-sm" style={{ color: '#5E5E5E' }}>How do you want to get started?</p>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <button
+              onClick={() => setMode('create')}
+              className="rounded-2xl p-6 text-left border border-gray-800 hover:border-violet-500/40 transition-all group"
+              style={{ background: '#1B1B1D' }}
+            >
+              <Building2 className="w-7 h-7 text-violet-400 mb-4 group-hover:scale-110 transition-transform" />
+              <h3 className="text-white font-semibold mb-1">Create a Workspace</h3>
+              <p className="text-xs" style={{ color: '#5E5E5E' }}>
+                You're the founder. Set up your company, add your metrics, and invite your team.
+              </p>
+            </button>
+            <button
+              onClick={() => setMode('join')}
+              className="rounded-2xl p-6 text-left border border-gray-800 hover:border-sky-500/40 transition-all group"
+              style={{ background: '#1B1B1D' }}
+            >
+              <Users className="w-7 h-7 text-sky-400 mb-4 group-hover:scale-110 transition-transform" />
+              <h3 className="text-white font-semibold mb-1">Join a Workspace</h3>
+              <p className="text-xs" style={{ color: '#5E5E5E' }}>
+                Your team already uses FounderOS. Search for the company and request to join.
+              </p>
+            </button>
+          </div>
+          <p className="text-center text-[11px] mt-6" style={{ color: '#3E3E3E' }}>
+            Have an invite link?{' '}
+            <button className="text-violet-400 underline" onClick={() => navigate('/join')}>
+              Use it here
+            </button>
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Join workspace screen ── */
+  if (mode === 'join') {
+    if (joinSubmitted) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: '#161618' }}>
+          <div className="w-full max-w-md text-center">
+            <CheckCircle className="w-14 h-14 text-emerald-400 mx-auto mb-5" />
+            <h2 className="text-white text-xl font-semibold mb-2">Request Sent!</h2>
+            <p className="text-sm mb-1" style={{ color: '#5E5E5E' }}>
+              Your request to join <span className="text-white font-medium">{joinSelected?.name}</span> has been sent.
+            </p>
+            <p className="text-sm mb-8" style={{ color: '#5E5E5E' }}>
+              The founder or admin will review it and you'll get access once approved.
+            </p>
+            <button
+              onClick={() => navigate('/')}
+              className="px-6 py-2.5 rounded-xl text-sm font-medium text-white bg-gray-800 hover:bg-gray-700 transition-all"
+            >
+              Back to Home
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4 py-12" style={{ background: '#161618' }}>
+        <div className="w-full max-w-lg">
+          <button onClick={() => setMode('choose')} className="flex items-center gap-1.5 text-xs mb-8" style={{ color: '#5E5E5E' }}>
+            <ChevronLeft className="w-4 h-4" /> Back
+          </button>
+          <h2 className="text-white text-xl font-semibold mb-1">Find your workspace</h2>
+          <p className="text-sm mb-6" style={{ color: '#5E5E5E' }}>Search by company name and request to join.</p>
+
+          <div className="rounded-2xl p-6 space-y-4" style={{ background: '#1B1B1D' }}>
+            {/* Search */}
+            <div className="flex gap-2">
+              <input
+                value={joinSearch}
+                onChange={e => setJoinSearch(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleJoinSearch()}
+                placeholder="Company name or slug..."
+                className="flex-1 px-4 py-2.5 rounded-xl text-sm text-white outline-none"
+                style={{ background: '#161618' }}
+              />
+              <button
+                onClick={handleJoinSearch}
+                disabled={joinSearching}
+                className="px-4 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition-all"
+                style={{ background: 'linear-gradient(135deg, #C1AEFF, #F9C6FF)', color: '#161618' }}
+              >
+                {joinSearching ? <div className="w-4 h-4 border-2 border-gray-800/30 border-t-gray-800 rounded-full animate-spin" /> : <Search className="w-4 h-4" />}
+              </button>
+            </div>
+
+            {/* Results */}
+            {joinResults.length > 0 && (
+              <div className="space-y-2">
+                {joinResults.map(r => (
+                  <button
+                    key={r.id}
+                    onClick={() => setJoinSelected({ id: r.id, name: r.name })}
+                    className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
+                      joinSelected?.id === r.id
+                        ? 'border-sky-500/40 bg-sky-500/10'
+                        : 'border-gray-800 hover:border-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm text-white font-medium">{r.name}</span>
+                      {joinSelected?.id === r.id && <Check className="w-4 h-4 text-sky-400" />}
+                    </div>
+                    <span className="text-[10px]" style={{ color: '#5E5E5E' }}>{r.stage} · {r.slug}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {joinResults.length === 0 && joinSearch && !joinSearching && (
+              <p className="text-sm text-center py-2" style={{ color: '#5E5E5E' }}>No workspaces found. Try a different name.</p>
+            )}
+
+            {/* Message */}
+            {joinSelected && (
+              <div>
+                <label className="text-xs mb-1.5 block" style={{ color: '#5E5E5E' }}>Note to the founder (optional)</label>
+                <textarea
+                  value={joinMessage}
+                  onChange={e => setJoinMessage(e.target.value)}
+                  placeholder="e.g. I'm the new growth hire starting Monday..."
+                  rows={3}
+                  className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none resize-none"
+                  style={{ background: '#161618' }}
+                />
+              </div>
+            )}
+
+            {error && <p className="text-red-400 text-xs">{error}</p>}
+
+            <button
+              onClick={handleJoinSubmit}
+              disabled={!joinSelected || loading}
+              className="w-full py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
+              style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)', color: '#161618' }}
+            >
+              {loading ? 'Sending...' : `Request to Join ${joinSelected?.name ?? 'Workspace'}`}
+            </button>
+
+            <div className="flex items-center gap-2 text-[10px]" style={{ color: '#3E3E3E' }}>
+              <Clock className="w-3 h-3" />
+              The founder or admin will approve your request. You'll be notified once done.
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

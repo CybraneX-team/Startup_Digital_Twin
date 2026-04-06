@@ -15,6 +15,7 @@ import VCConnect from './pages/VCConnect';
 import StartupNetwork from './pages/StartupNetwork';
 import AuthPage from './pages/AuthPage';
 import Onboarding from './pages/Onboarding';
+import JoinWorkspace from './pages/JoinWorkspace';
 
 function AuthPageRoute() {
   const { user, profile, loading } = useAuth();
@@ -58,6 +59,15 @@ function AppRoutes() {
             </AuthGuard>
           }
         />
+      </Routes>
+    );
+  }
+
+  // /join — invite link landing page (no TopBar, no layout)
+  if (location.pathname === '/join') {
+    return (
+      <Routes>
+        <Route path="/join" element={<JoinWorkspace />} />
       </Routes>
     );
   }
