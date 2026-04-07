@@ -30,8 +30,15 @@ export default function AuthGuard({ children, requireOnboarding = false }: AuthG
     return <Navigate to="/auth" state={{ from: location.pathname }} replace />;
   }
 
-  if (requireOnboarding && (!hasCompany || !onboardingCompleted)) {
-    return <Navigate to="/onboarding" replace />;
+  if (requireOnboarding) {
+    // Onboarding completed but no company = waiting for workspace approval
+    if (onboardingCompleted && !hasCompany) {
+      return <Navigate to="/pending" replace />;
+    }
+    // Not onboarded yet → go complete onboarding
+    if (!hasCompany || !onboardingCompleted) {
+      return <Navigate to="/onboarding" replace />;
+    }
   }
 
   return <>{children}</>;

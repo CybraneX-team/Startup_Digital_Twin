@@ -6,8 +6,11 @@ import { useAuth } from '../lib/auth';
 
 export default function Twin() {
   const navigate = useNavigate();
-  const { profile } = useAuth();
-  const { nodes: twinNodes, edges: twinEdges, myCompanyNodeId, emergeParent } = useTwinGraph(profile?.company_id);
+  const { user, profile } = useAuth();
+  // Pass null (not undefined) for logged-in users without a company yet —
+  // this hides the "FounderOS" placeholder regardless of load state
+  const graphCompanyId = user ? (profile?.company_id ?? null) : undefined;
+  const { nodes: twinNodes, edges: twinEdges, myCompanyNodeId, emergeParent } = useTwinGraph(graphCompanyId);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [hoveredNode, setHoveredNode] = useState<string | null>(null);
   const [filters] = useState({

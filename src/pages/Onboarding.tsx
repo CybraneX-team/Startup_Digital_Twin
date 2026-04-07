@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, Hexagon, Check, Search, Users, Building2, Clock, CheckCircle } from 'lucide-react';
 import { useAuth } from '../lib/auth';
@@ -120,6 +120,31 @@ export default function Onboarding() {
   const navigate = useNavigate();
   const { user, refreshProfile } = useAuth();
 
+  // Auto-recovery: if user already has a company (via company_members) but
+  // profile.company_id is null (broken by prior UPDATE bug), fix the profile
+  // and redirect away from onboarding.
+  useEffect(() => {
+    if (!user) return;
+    (async () => {
+      const { data: membership } = await supabase
+        .from('company_members')
+        .select('company_id, role')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle();
+      if (membership?.company_id) {
+        // Profile is stale — patch it and redirect
+        await supabase.from('user_profiles').upsert(
+          { id: user.id, company_id: membership.company_id, role: membership.role, onboarding_completed: true },
+          { onConflict: 'id' },
+        );
+        await refreshProfile();
+        navigate('/twin', { replace: true });
+      }
+    })();
+  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // 'choose' = pick create vs join, 'create' = wizard, 'join' = join flow
   const [mode, setMode] = useState<'choose' | 'create' | 'join'>('choose');
 
@@ -149,8 +174,18 @@ export default function Onboarding() {
     setLoading(true);
     setError(null);
     const result = await submitJoinRequest(joinSelected.id, user.id, 'viewer', joinMessage || undefined);
+    if (!result.success) {
+      setError(result.error ?? 'Failed to submit request');
+      setLoading(false);
+      return;
+    }
+    // Mark onboarding_completed so user doesn't loop back here
+    await supabase
+      .from('user_profiles')
+      .update({ onboarding_completed: true })
+      .eq('id', user.id);
+    await refreshProfile();
     setLoading(false);
-    if (!result.success) { setError(result.error ?? 'Failed to submit request'); return; }
     setJoinSubmitted(true);
   }
 
@@ -221,6 +256,14 @@ export default function Onboarding() {
       setLoading(false);
       return;
     }
+
+    // Safety net: ensure profile is updated even if createCompany's upsert had a hiccup
+    await supabase
+      .from('user_profiles')
+      .upsert(
+        { id: user.id, company_id: company.id, role: 'founder', onboarding_completed: true },
+        { onConflict: 'id' },
+      );
 
     await refreshProfile();
     navigate('/twin', { replace: true });

@@ -41,13 +41,18 @@ export default function AuthPage() {
       navigate(from, { replace: true });
     } else {
       if (!form.first_name.trim()) { setError('First name is required'); setLoading(false); return; }
-      const { error: err } = await signUp(form.email, form.password, {
+      const { error: err, needsEmailConfirm } = await signUp(form.email, form.password, {
         first_name: form.first_name.trim(),
         last_name: form.last_name.trim(),
       });
       if (err) { setError(err); setLoading(false); return; }
-      setSuccess('Check your email to confirm your account, then sign in.');
-      setMode('signin');
+      if (needsEmailConfirm) {
+        // Email confirmation required — prompt user then switch to sign-in
+        setSuccess('Account created! Check your email to confirm, then sign back in.');
+        setMode('signin');
+      }
+      // If no needsEmailConfirm, the user is already signed in → onAuthStateChange
+      // fires automatically and AuthPageRoute redirects to /onboarding
     }
 
     setLoading(false);

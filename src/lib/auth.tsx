@@ -17,7 +17,7 @@ interface AuthState {
 
 interface AuthContextValue extends AuthState {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, meta: { first_name: string; last_name: string }) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, meta: { first_name: string; last_name: string }) => Promise<{ error: string | null; needsEmailConfirm: boolean }>;
   signOut: () => Promise<void>;
   refreshProfile: () => Promise<void>;
   // Permission helpers
@@ -88,12 +88,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string,
     meta: { first_name: string; last_name: string },
   ) {
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: meta },
     });
-    return { error: error?.message ?? null };
+    // If session is returned, email confirmation is disabled — user is already signed in
+    return { error: error?.message ?? null, needsEmailConfirm: !data.session && !error };
   }
 
   async function signOut() {

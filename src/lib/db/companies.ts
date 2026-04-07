@@ -107,17 +107,23 @@ export async function createCompany(
   }
 
   // Add creator as founder member
-  await supabase.from('company_members').insert({
+  const { error: memberErr } = await supabase.from('company_members').insert({
     company_id: company.id,
     user_id: userId,
     role: 'founder',
+    status: 'active',
   });
+  if (memberErr) console.error('[db/companies] company_members insert', memberErr);
 
-  // Link user profile to company
-  await supabase
+  // Link user profile to company — use UPSERT so it works even if the
+  // trigger-created row is missing (email-confirmed signup edge case).
+  const { error: profileErr } = await supabase
     .from('user_profiles')
-    .update({ company_id: company.id, role: 'founder', onboarding_completed: true })
-    .eq('id', userId);
+    .upsert(
+      { id: userId, company_id: company.id, role: 'founder', onboarding_completed: true },
+      { onConflict: 'id' },
+    );
+  if (profileErr) console.error('[db/companies] profile upsert', profileErr);
 
   return company;
 }

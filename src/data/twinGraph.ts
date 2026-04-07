@@ -206,7 +206,7 @@ function toTwinNode(c: ReturnType<typeof companyToTwinNodeData>, industryId: str
   };
 }
 
-export function useTwinGraph(authCompanyId?: string | null): {
+export function useTwinGraph(authCompanyId: string | null | undefined): {
   nodes: TwinNode[];
   edges: TwinEdge[];
   myCompanyNodeId: string | null;
@@ -250,8 +250,9 @@ export function useTwinGraph(authCompanyId?: string | null): {
 
   const myCompanyNodeId = authCompanyId ? `live-${authCompanyId}` : null;
 
-  // Always remove comp-you when user is authenticated (don't wait for live load)
-  const hideCompYou = !!authCompanyId;
+  // Hide comp-you if user is authenticated (authCompanyId !== undefined),
+  // even before their company loads (null = authenticated but no company yet)
+  const hideCompYou = authCompanyId !== undefined;
 
   // Merge: deduplicate by id (myNode takes precedence)
   const allLiveNodes = useMemo(() => {
@@ -272,10 +273,31 @@ export function useTwinGraph(authCompanyId?: string | null): {
     ? [...twinNodes.filter(n => n.id !== 'comp-you'), ...allLiveNodes]
     : [...twinNodes, ...allLiveNodes];
 
+  // When hiding comp-you: remap its edges to the live company (so dept/feat
+  // connections survive) instead of deleting them.  Drop edges that point to
+  // other static companies (those are demo data).
   const finalEdges = hideCompYou
-    ? [...twinEdges.filter(e => e.from !== 'comp-you' && e.to !== 'comp-you'), ...allLiveEdges]
+    ? [
+        ...twinEdges
+          .filter(e => e.from !== 'comp-you' && e.to !== 'comp-you')  // keep non-comp-you edges
+          .concat(
+            myCompanyNodeId
+              ? twinEdges
+                  .filter(e => e.from === 'comp-you' || e.to === 'comp-you')
+                  .map(e => ({
+                    ...e,
+                    from: e.from === 'comp-you' ? myCompanyNodeId : e.from,
+                    to:   e.to   === 'comp-you' ? myCompanyNodeId : e.to,
+                  }))
+              : [],
+          ),
+        ...allLiveEdges,
+      ]
     : [...twinEdges, ...allLiveEdges];
 
+  // Remap comp-you → live company id when user has a company.
+  // If user is logged in but has no company yet (null), keep EMERGE_PARENT as-is
+  // (dept/feat nodes won't appear since comp-you is hidden and no company focused).
   const emergeParent: Record<string, string> = myCompanyNodeId
     ? Object.fromEntries(
         Object.entries(EMERGE_PARENT).map(([child, parent]) => [

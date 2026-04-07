@@ -16,11 +16,13 @@ import StartupNetwork from './pages/StartupNetwork';
 import AuthPage from './pages/AuthPage';
 import Onboarding from './pages/Onboarding';
 import JoinWorkspace from './pages/JoinWorkspace';
+import PendingApproval from './pages/PendingApproval';
 
 function AuthPageRoute() {
   const { user, profile, loading } = useAuth();
   if (loading) return null;
-  if (user && profile?.onboarding_completed) return <Navigate to="/overview" replace />;
+  if (user && profile?.onboarding_completed && profile?.company_id) return <Navigate to="/overview" replace />;
+  if (user && profile?.onboarding_completed && !profile?.company_id) return <Navigate to="/pending" replace />;
   if (user && !profile?.onboarding_completed) return <Navigate to="/onboarding" replace />;
   return <AuthPage />;
 }
@@ -28,12 +30,12 @@ function AuthPageRoute() {
 function RootRoute() {
   const { user, profile, loading } = useAuth();
   if (loading) return null;
-  if (user && profile?.onboarding_completed && profile?.company_id) {
-    return <Navigate to="/overview" replace />;
-  }
-  if (user && !profile?.onboarding_completed) {
-    return <Navigate to="/onboarding" replace />;
-  }
+  // Fully onboarded users with a company go straight to the dashboard
+  if (user && profile?.onboarding_completed && profile?.company_id) return <Navigate to="/overview" replace />;
+  // Join-request users waiting for approval
+  if (user && profile?.onboarding_completed && !profile?.company_id) return <Navigate to="/pending" replace />;
+  // Everyone else (unauthenticated OR authenticated but not yet onboarded) sees the landing page.
+  // The landing page's CTA buttons guide them to /auth → /onboarding.
   return <LandingPage />;
 }
 
@@ -68,6 +70,15 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/join" element={<JoinWorkspace />} />
+      </Routes>
+    );
+  }
+
+  // /pending — waiting for workspace approval (no TopBar)
+  if (location.pathname === '/pending') {
+    return (
+      <Routes>
+        <Route path="/pending" element={<PendingApproval />} />
       </Routes>
     );
   }

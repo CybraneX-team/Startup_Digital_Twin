@@ -12,6 +12,17 @@ dist
 dist-ssr
 *.local
 
+# Editor / AI tool configs — not for commit
+.dt
+.claude
+.cursorrules
+mcp.json
+opencode.json
+.windsurfrules
+gemini.md
+agents.md
+claude.md
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
