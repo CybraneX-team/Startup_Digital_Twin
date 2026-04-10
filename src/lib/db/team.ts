@@ -71,8 +71,7 @@ export function useTeamMembers(companyId: string | null | undefined) {
       .from('company_members')
       .select(`
         id, user_id, company_id, role, status, invited_by, approved_at, joined_at,
-        user_profiles (first_name, last_name, title, avatar_url),
-        auth_users:user_id (email)
+        user_profiles (first_name, last_name, title, avatar_url)
       `)
       .eq('company_id', companyId)
       .in('status', ['active', 'pending'])
@@ -97,7 +96,7 @@ export function useTeamMembers(companyId: string | null | undefined) {
       last_name:   row.user_profiles?.last_name ?? null,
       title:       row.user_profiles?.title ?? null,
       avatar_url:  row.user_profiles?.avatar_url ?? null,
-      email:       row.auth_users?.email ?? null,
+      email:       null,  // auth.users not accessible from client SDK
     }));
 
     setMembers(shaped);
@@ -416,12 +415,13 @@ export async function submitJoinRequest(
    searchCompanyBySlug — for join-by-name flow
 ────────────────────────────────────────────────── */
 
-export async function searchCompanyBySlug(slug: string) {
+export async function searchCompanyBySlug(query: string) {
+  // Search by name OR slug so users can type the company name naturally
   const { data } = await supabase
     .from('companies')
     .select('id, name, slug, stage, industry_id, status')
-    .ilike('slug', `%${slug}%`)
     .eq('status', 'active')
+    .or(`name.ilike.%${query}%,slug.ilike.%${query}%`)
     .limit(5);
   return data ?? [];
 }

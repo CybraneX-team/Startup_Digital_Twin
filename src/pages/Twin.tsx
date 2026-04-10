@@ -6,7 +6,7 @@ import { useAuth } from '../lib/auth';
 
 export default function Twin() {
   const navigate = useNavigate();
-  const { user, profile } = useAuth();
+  const { user, profile, canRead } = useAuth();
   // Pass null (not undefined) for logged-in users without a company yet —
   // this hides the "FounderOS" placeholder regardless of load state
   const graphCompanyId = user ? (profile?.company_id ?? null) : undefined;
@@ -135,25 +135,27 @@ export default function Twin() {
         </div>
       )}
 
-      {/* Ecosystem quick-access — floating bottom-left */}
-      <div className="absolute bottom-6 left-6 flex flex-col gap-2 z-10">
-        <button
-          onClick={() => navigate('/ecosystem/vc-connect')}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-sky-500/30"
-          style={{ background: 'rgba(2, 6, 23, 0.75)', borderColor: 'rgba(148,163,184,0.1)' }}
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-          VC &amp; Mentors
-        </button>
-        <button
-          onClick={() => navigate('/ecosystem/network')}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-teal-500/30"
-          style={{ background: 'rgba(2, 6, 23, 0.75)', borderColor: 'rgba(148,163,184,0.1)' }}
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
-          Startup Network
-        </button>
-      </div>
+      {/* Ecosystem quick-access — floating bottom-left (hidden if user lacks ecosystem read) */}
+      {canRead('ecosystem') && (
+        <div className="absolute bottom-6 left-6 flex flex-col gap-2 z-10">
+          <button
+            onClick={() => navigate('/ecosystem/vc-connect')}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-sky-500/30"
+            style={{ background: 'rgba(2, 6, 23, 0.75)', borderColor: 'rgba(148,163,184,0.1)' }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+            VC &amp; Mentors
+          </button>
+          <button
+            onClick={() => navigate('/ecosystem/network')}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-teal-500/30"
+            style={{ background: 'rgba(2, 6, 23, 0.75)', borderColor: 'rgba(148,163,184,0.1)' }}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+            Startup Network
+          </button>
+        </div>
+      )}
 
       {/* Legend — floating bottom center */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 text-xs px-4 py-2 rounded-full backdrop-blur-md z-10"

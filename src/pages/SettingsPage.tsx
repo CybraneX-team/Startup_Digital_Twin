@@ -1,6 +1,21 @@
-import { useState } from 'react';
-import { Settings, Palette, Bell, Layers, Plus, Trash2, ImagePlus } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Settings, Palette, Bell, Layers, Plus, Trash2, ImagePlus, Save, Loader2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
+import { useAuth } from '../lib/auth';
+import { useCompany } from '../lib/db/companies';
+import { supabase } from '../lib/supabase';
+import { INDUSTRIES } from '../db/industries';
+import type { CompanyStage, BusinessModel } from '../lib/supabase';
+
+const STAGES: CompanyStage[] = [
+  'Idea', 'Pre-seed', 'Seed', 'Series A', 'Series B',
+  'Series C', 'Series D+', 'Pre-IPO', 'Public', 'PSU', 'Bootstrapped',
+];
+
+const COUNTRIES = [
+  'India', 'USA', 'UK', 'Singapore', 'UAE', 'Germany', 'Canada',
+  'Australia', 'Japan', 'Brazil', 'Indonesia', 'Nigeria', 'Other',
+];
 
 interface DeptConfig {
   name: string;
@@ -9,15 +24,29 @@ interface DeptConfig {
 }
 
 export default function SettingsPage() {
+  const { user, profile, refreshProfile, canWrite, role } = useAuth();
+  const { company, loading: companyLoading } = useCompany(profile?.company_id);
+  const canEditSettings = canWrite('settings');
+
+  // Company config — populated from real data
   const [config, setConfig] = useState({
-    companyName: 'TechStartup Inc.',
-    stage: 'seed',
-    industry: 'saas',
-    geography: 'india',
+    companyName: '',
+    stage: '' as string,
+    industry_id: '',
+    country: '',
+    website: '',
+    description: '',
     aiAgents: true,
     theme: 'dark',
     notifications: true,
     logoUrl: '',
+  });
+
+  // Profile config
+  const [profileForm, setProfileForm] = useState({
+    first_name: '',
+    last_name: '',
+    title: '',
   });
 
   const [depts, setDepts] = useState<DeptConfig[]>([
@@ -28,6 +57,85 @@ export default function SettingsPage() {
   ]);
 
   const [newDept, setNewDept] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  // Load real data from company + profile
+  useEffect(() => {
+    if (company) {
+      setConfig(c => ({
+        ...c,
+        companyName: company.name ?? '',
+        stage: company.stage ?? '',
+        industry_id: company.industry_id ?? '',
+        country: company.country ?? '',
+        website: company.website ?? '',
+        description: company.description ?? '',
+      }));
+    }
+  }, [company]);
+
+  useEffect(() => {
+    if (profile) {
+      setProfileForm({
+        first_name: profile.first_name ?? '',
+        last_name: profile.last_name ?? '',
+        title: profile.title ?? '',
+      });
+    }
+  }, [profile]);
+
+  // Save company settings
+  async function handleSaveCompany() {
+    if (!company || !canEditSettings) return;
+    setSaving(true);
+    setSaveMsg(null);
+
+    const { error } = await supabase
+      .from('companies')
+      .update({
+        name: config.companyName.trim(),
+        stage: config.stage,
+        industry_id: config.industry_id,
+        country: config.country,
+        website: config.website.trim() || null,
+        description: config.description.trim() || null,
+      })
+      .eq('id', company.id);
+
+    if (error) {
+      setSaveMsg('Failed to save: ' + error.message);
+    } else {
+      setSaveMsg('Company settings saved');
+    }
+    setSaving(false);
+    setTimeout(() => setSaveMsg(null), 3000);
+  }
+
+  // Save profile settings
+  async function handleSaveProfile() {
+    if (!user) return;
+    setSaving(true);
+    setSaveMsg(null);
+
+    const { error } = await supabase
+      .from('user_profiles')
+      .update({
+        first_name: profileForm.first_name.trim() || null,
+        last_name: profileForm.last_name.trim() || null,
+        title: profileForm.title.trim() || null,
+      })
+      .eq('id', user.id);
+
+    if (error) {
+      setSaveMsg('Failed to save: ' + error.message);
+    } else {
+      await refreshProfile();
+      setSaveMsg('Profile updated');
+    }
+    setSaving(false);
+    setTimeout(() => setSaveMsg(null), 3000);
+  }
 
   const addDept = () => {
     if (!newDept.trim()) return;
@@ -93,21 +201,54 @@ export default function SettingsPage() {
     }
   };
 
+  const selectedIndustry = INDUSTRIES.find(i => i.id === config.industry_id);
+
+  if (companyLoading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div>
       <PageHeader
         title="Settings"
         subtitle="Configure your digital twin workspace and preferences"
         icon={<Settings className="w-6 h-6" />}
+        badge={role ?? undefined}
       />
 
+      {/* Save status */}
+      {saveMsg && (
+        <div className={`mb-4 px-4 py-2.5 rounded-xl text-sm ${
+          saveMsg.startsWith('Failed') ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
+        }`}>
+          {saveMsg}
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-6">
-        {/* ===== Organization Config ===== */}
+        {/* ===== Left Column: Organization + Profile ===== */}
         <div className="space-y-6">
+          {/* Organization Config */}
           <div className="glass-card p-6">
-            <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
-              <Layers className="w-4 h-4" /> Organization
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                <Layers className="w-4 h-4" /> Organization
+              </h3>
+              {canEditSettings && (
+                <button
+                  onClick={handleSaveCompany}
+                  disabled={saving}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/15 transition-all disabled:opacity-50"
+                >
+                  {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  Save
+                </button>
+              )}
+            </div>
             <div className="space-y-4">
               <div>
                 <label className="text-xs text-gray-400 mb-1.5 block">Company Name</label>
@@ -115,58 +256,137 @@ export default function SettingsPage() {
                   type="text"
                   value={config.companyName}
                   onChange={(e) => setConfig({ ...config, companyName: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors"
+                  disabled={!canEditSettings}
+                  className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors disabled:opacity-50"
                 />
               </div>
-              {[
-                { key: 'stage', label: 'Funding Stage', options: ['pre-seed', 'seed', 'series-a', 'series-b', 'growth'] },
-                { key: 'industry', label: 'Industry', options: ['saas', 'marketplace', 'd2c', 'fintech', 'healthtech', 'climatetech'] },
-                { key: 'geography', label: 'Geography', options: ['india', 'usa', 'europe', 'sea', 'latam'] },
-              ].map((f) => (
-                <div key={f.key}>
-                  <label className="text-xs text-gray-400 mb-1.5 block">{f.label}</label>
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block">Industry</label>
+                <select
+                  value={config.industry_id}
+                  onChange={(e) => setConfig({ ...config, industry_id: e.target.value })}
+                  disabled={!canEditSettings}
+                  className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors disabled:opacity-50"
+                >
+                  <option value="">Select industry</option>
+                  {INDUSTRIES.map(ind => (
+                    <option key={ind.id} value={ind.id}>{ind.label}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-400 mb-1.5 block">Funding Stage</label>
                   <select
-                    value={config[f.key as keyof typeof config] as string}
-                    onChange={(e) => setConfig({ ...config, [f.key]: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors"
+                    value={config.stage}
+                    onChange={(e) => setConfig({ ...config, stage: e.target.value })}
+                    disabled={!canEditSettings}
+                    className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors disabled:opacity-50"
                   >
-                    {f.options.map((o) => (
-                      <option key={o} value={o}>
-                        {o.replace('-', ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
-                      </option>
-                    ))}
+                    {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
                 </div>
-              ))}
+                <div>
+                  <label className="text-xs text-gray-400 mb-1.5 block">Country</label>
+                  <select
+                    value={config.country}
+                    onChange={(e) => setConfig({ ...config, country: e.target.value })}
+                    disabled={!canEditSettings}
+                    className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors disabled:opacity-50"
+                  >
+                    {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block">Website</label>
+                <input
+                  type="url"
+                  value={config.website}
+                  onChange={(e) => setConfig({ ...config, website: e.target.value })}
+                  disabled={!canEditSettings}
+                  placeholder="https://yourcompany.com"
+                  className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors disabled:opacity-50"
+                />
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block">Description</label>
+                <textarea
+                  value={config.description}
+                  onChange={(e) => setConfig({ ...config, description: e.target.value })}
+                  disabled={!canEditSettings}
+                  rows={2}
+                  className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors resize-none disabled:opacity-50"
+                />
+              </div>
+              {!canEditSettings && (
+                <p className="text-[10px] text-amber-400/70">You need Admin or Founder role to edit company settings.</p>
+              )}
             </div>
           </div>
 
-          {/* Logo Upload */}
+          {/* Profile */}
           <div className="glass-card p-6">
-            <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
-              <ImagePlus className="w-4 h-4" /> Company Logo
-            </h3>
-            <div
-              className="border-2 border-dashed border-gray-700 rounded-xl p-8 text-center hover:border-sky-500/50 transition-colors cursor-pointer"
-              onClick={() => setConfig({ ...config, logoUrl: 'logo.svg' })}
-            >
-              {config.logoUrl ? (
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                <ImagePlus className="w-4 h-4" /> Your Profile
+              </h3>
+              <button
+                onClick={handleSaveProfile}
+                disabled={saving}
+                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/15 transition-all disabled:opacity-50"
+              >
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                Save
+              </button>
+            </div>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <div className="w-16 h-16 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mx-auto mb-3">
-                    <span className="text-lg font-bold text-sky-300">
-                      {config.companyName.charAt(0)}
-                    </span>
-                  </div>
-                  <p className="text-xs text-emerald-400">{config.logoUrl} uploaded</p>
-                  <p className="text-[10px] text-gray-500 mt-1">Logo will appear in the 3D graph on your company node</p>
+                  <label className="text-xs text-gray-400 mb-1.5 block">First Name</label>
+                  <input
+                    type="text"
+                    value={profileForm.first_name}
+                    onChange={(e) => setProfileForm({ ...profileForm, first_name: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors"
+                  />
                 </div>
-              ) : (
                 <div>
-                  <ImagePlus className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                  <p className="text-sm text-gray-400">Click to upload logo</p>
-                  <p className="text-[10px] text-gray-600 mt-1">SVG or PNG, displayed on 3D graph</p>
+                  <label className="text-xs text-gray-400 mb-1.5 block">Last Name</label>
+                  <input
+                    type="text"
+                    value={profileForm.last_name}
+                    onChange={(e) => setProfileForm({ ...profileForm, last_name: e.target.value })}
+                    className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors"
+                  />
                 </div>
-              )}
+              </div>
+              <div>
+                <label className="text-xs text-gray-400 mb-1.5 block">Title / Role</label>
+                <input
+                  type="text"
+                  value={profileForm.title}
+                  onChange={(e) => setProfileForm({ ...profileForm, title: e.target.value })}
+                  placeholder="e.g. Founder & CEO"
+                  className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors"
+                />
+              </div>
+              <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-900/30">
+                <div
+                  className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
+                  style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)', color: '#161618' }}
+                >
+                  {(profileForm.first_name?.[0] ?? '?').toUpperCase()}
+                  {(profileForm.last_name?.[0] ?? '').toUpperCase()}
+                </div>
+                <div>
+                  <p className="text-sm text-white font-medium">
+                    {[profileForm.first_name, profileForm.last_name].filter(Boolean).join(' ') || 'Your Name'}
+                  </p>
+                  <p className="text-[10px] text-gray-500">{profileForm.title || 'No title set'}</p>
+                  <p className="text-[10px] text-gray-600">{user?.email}</p>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -188,14 +408,16 @@ export default function SettingsPage() {
                     type="text"
                     value={d.name}
                     onChange={(e) => updateDept(i, 'name', e.target.value)}
-                    className="flex-1 bg-transparent text-sm text-white outline-none"
+                    disabled={!canEditSettings}
+                    className="flex-1 bg-transparent text-sm text-white outline-none disabled:opacity-50"
                   />
                   <div className="flex items-center gap-1">
                     <input
                       type="number"
                       value={d.size}
                       onChange={(e) => updateDept(i, 'size', Number(e.target.value))}
-                      className="w-12 bg-gray-800 rounded px-1.5 py-0.5 text-xs text-gray-300 text-center outline-none border border-gray-700"
+                      disabled={!canEditSettings}
+                      className="w-12 bg-gray-800 rounded px-1.5 py-0.5 text-xs text-gray-300 text-center outline-none border border-gray-700 disabled:opacity-50"
                     />
                     <span className="text-[10px] text-gray-500">ppl</span>
                   </div>
@@ -203,34 +425,39 @@ export default function SettingsPage() {
                     type="text"
                     value={d.hod}
                     onChange={(e) => updateDept(i, 'hod', e.target.value)}
+                    disabled={!canEditSettings}
                     placeholder="HOD"
-                    className="w-28 bg-transparent text-xs text-gray-400 outline-none border-b border-gray-800 focus:border-sky-500"
+                    className="w-28 bg-transparent text-xs text-gray-400 outline-none border-b border-gray-800 focus:border-sky-500 disabled:opacity-50"
                   />
-                  <button
-                    onClick={() => removeDept(i)}
-                    className="text-gray-600 hover:text-red-400 transition-colors"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {canEditSettings && (
+                    <button
+                      onClick={() => removeDept(i)}
+                      className="text-gray-600 hover:text-red-400 transition-colors"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={newDept}
-                onChange={(e) => setNewDept(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && addDept()}
-                placeholder="New department name"
-                className="flex-1 px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-sky-500 transition-colors"
-              />
-              <button
-                onClick={addDept}
-                className="flex items-center gap-1 px-3 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm rounded-lg transition-colors"
-              >
-                <Plus className="w-4 h-4" /> Add
-              </button>
-            </div>
+            {canEditSettings && (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={newDept}
+                  onChange={(e) => setNewDept(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && addDept()}
+                  placeholder="New department name"
+                  className="flex-1 px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-sky-500 transition-colors"
+                />
+                <button
+                  onClick={addDept}
+                  className="flex items-center gap-1 px-3 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm rounded-lg transition-colors"
+                >
+                  <Plus className="w-4 h-4" /> Add
+                </button>
+              </div>
+            )}
             <p className="text-[10px] text-gray-600 mt-2">
               Total team: {depts.reduce((s, d) => s + d.size, 0)} across {depts.length} departments
             </p>
@@ -274,21 +501,23 @@ export default function SettingsPage() {
           </div>
 
           {/* Stage Templates */}
-          <div className="glass-card p-6">
-            <h3 className="text-sm font-medium text-gray-300 mb-3">Quick Templates</h3>
-            <p className="text-[10px] text-gray-500 mb-3">Apply a preset department structure based on your sector</p>
-            <div className="grid grid-cols-2 gap-2">
-              {['SaaS B2B', 'Marketplace', 'D2C', 'FinTech', 'HealthTech', 'ClimateTech'].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => applyTemplate(t)}
-                  className="px-3 py-2 text-xs text-gray-400 bg-gray-900/50 border border-gray-800 rounded-lg hover:border-sky-500/30 hover:text-sky-300 transition-all"
-                >
-                  {t}
-                </button>
-              ))}
+          {canEditSettings && (
+            <div className="glass-card p-6">
+              <h3 className="text-sm font-medium text-gray-300 mb-3">Quick Templates</h3>
+              <p className="text-[10px] text-gray-500 mb-3">Apply a preset department structure based on your sector</p>
+              <div className="grid grid-cols-2 gap-2">
+                {['SaaS B2B', 'Marketplace', 'D2C', 'FinTech', 'HealthTech', 'ClimateTech'].map((t) => (
+                  <button
+                    key={t}
+                    onClick={() => applyTemplate(t)}
+                    className="px-3 py-2 text-xs text-gray-400 bg-gray-900/50 border border-gray-800 rounded-lg hover:border-sky-500/30 hover:text-sky-300 transition-all"
+                  >
+                    {t}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </div>
     </div>

@@ -112,46 +112,46 @@ function AppRoutes() {
               </AuthGuard>
             } />
             <Route path="/twin/strategy" element={
-              <AuthGuard requireOnboarding>
+              <AuthGuard requireOnboarding requiredModule="strategy">
                 <Strategy />
               </AuthGuard>
             } />
             <Route path="/twin/data" element={
-              <AuthGuard requireOnboarding>
+              <AuthGuard requireOnboarding requiredModule="data">
                 <DataIngestion />
               </AuthGuard>
             } />
             <Route path="/twin/benchmarks" element={
-              <AuthGuard requireOnboarding>
+              <AuthGuard requireOnboarding requiredModule="benchmarks">
                 <Benchmarks />
               </AuthGuard>
             } />
             <Route path="/twin/team" element={
-              <AuthGuard requireOnboarding>
+              <AuthGuard requireOnboarding requiredModule="team">
                 <RBAC />
               </AuthGuard>
             } />
             <Route path="/twin/analytics" element={
-              <AuthGuard requireOnboarding>
+              <AuthGuard requireOnboarding requiredModule="analytics">
                 <Analytics />
               </AuthGuard>
             } />
 
             {/* Ecosystem (accessed through Twin) */}
             <Route path="/ecosystem/vc-connect" element={
-              <AuthGuard requireOnboarding>
+              <AuthGuard requireOnboarding requiredModule="ecosystem">
                 <VCConnect />
               </AuthGuard>
             } />
             <Route path="/ecosystem/network" element={
-              <AuthGuard requireOnboarding>
+              <AuthGuard requireOnboarding requiredModule="ecosystem">
                 <StartupNetwork />
               </AuthGuard>
             } />
 
             {/* Settings */}
             <Route path="/settings" element={
-              <AuthGuard>
+              <AuthGuard requiredModule="settings">
                 <SettingsPage />
               </AuthGuard>
             } />

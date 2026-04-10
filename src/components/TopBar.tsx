@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth';
 export default function TopBar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, signOut, loading } = useAuth();
+  const { user, profile, signOut, loading, canRead, role } = useAuth();
 
   const isTwin = location.pathname.startsWith('/twin');
   const isTwinGraph = location.pathname === '/twin';
@@ -58,8 +58,8 @@ export default function TopBar() {
             {([
               { path: '/overview', label: 'Home',      active: isOverview },
               { path: '/twin',     label: 'Twin',      active: isTwin },
-              { path: '/settings', label: 'Settings',  active: location.pathname === '/settings' },
-            ] as const).map(({ path, label, active }) => (
+              ...(canRead('settings') ? [{ path: '/settings' as const, label: 'Settings' as const, active: location.pathname === '/settings' }] : []),
+            ]).map(({ path, label, active }) => (
               <button
                 key={path}
                 onClick={() => navigate(path)}

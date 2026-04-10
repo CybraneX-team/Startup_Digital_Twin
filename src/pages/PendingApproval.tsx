@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Hexagon, Clock, LogOut, RefreshCcw, Building2, CheckCircle } from 'lucide-react';
 import { useAuth } from '../lib/auth';
+import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
 
 export default function PendingApproval() {
@@ -13,6 +14,18 @@ export default function PendingApproval() {
     setChecking(true);
     await refreshProfile();
     setChecking(false);
+    // If profile now has a company, the approval went through
+    // Re-read fresh profile to check
+    const { data: freshProfile } = await supabase
+      .from('user_profiles')
+      .select('company_id')
+      .eq('id', profile?.id ?? '')
+      .single();
+    if (freshProfile?.company_id) {
+      await refreshProfile();
+      navigate('/overview', { replace: true });
+      return;
+    }
     setChecked(true);
   }
 
