@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Database, Upload, PenLine, FileSpreadsheet, Check, AlertCircle,
   Link2, Globe2, Wifi, WifiOff, Clock,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import { integrations } from '../data/mockData';
+import { useAuth } from '../lib/auth';
+import { api } from '../lib/api';
 
 type Tab = 'manual' | 'csv' | 'integrations' | 'public';
 
@@ -35,6 +37,8 @@ const catLabels: Record<string, string> = {
 };
 
 export default function DataIngestion() {
+  const { canWrite } = useAuth();
+  const canUploadExcel = canWrite('data');
   const [activeTab, setActiveTab] = useState<Tab>('manual');
   const [formData, setFormData] = useState<FormData>({
     mrr: '8500',
@@ -47,12 +51,72 @@ export default function DataIngestion() {
   });
   const [submitted, setSubmitted] = useState(false);
   const [csvFile, setCsvFile] = useState<string | null>(null);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [jobState, setJobState] = useState<{
+    status: 'pending' | 'running' | 'complete' | 'failed';
+    record_count?: number | null;
+    last_error?: string | null;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitted(true);
     setTimeout(() => setSubmitted(false), 3000);
   };
+
+  useEffect(() => {
+    if (!jobId) return;
+    let cancelled = false;
+    const timer = setInterval(async () => {
+      try {
+        const next = await api.get<{
+          status: 'pending' | 'running' | 'complete' | 'failed';
+          record_count?: number | null;
+          last_error?: string | null;
+        }>(`/api/ingestion/jobs/${jobId}`);
+        if (cancelled) return;
+        setJobState(next);
+        if (next.status === 'complete' || next.status === 'failed') {
+          clearInterval(timer);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setUploadError(String(e));
+          clearInterval(timer);
+        }
+      }
+    }, 1500);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [jobId]);
+
+  async function handleExcelFile(file: File) {
+    if (!canUploadExcel) return;
+    setUploading(true);
+    setUploadError(null);
+    setJobState(null);
+    setJobId(null);
+    setCsvFile(file.name);
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const result = await api.post<{ jobId: string; dedup?: boolean }>(
+        '/api/ingestion/excel/upload',
+        formData,
+      );
+      setJobId(result.jobId);
+    } catch (e) {
+      setUploadError(String(e));
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const fields = [
     { key: 'mrr', label: 'Monthly Recurring Revenue', unit: '$', placeholder: '8500' },
@@ -66,7 +130,7 @@ export default function DataIngestion() {
 
   const tabs: { id: Tab; icon: React.ReactNode; label: string }[] = [
     { id: 'manual', icon: <PenLine className="w-4 h-4" />, label: 'Manual Input' },
-    { id: 'csv', icon: <FileSpreadsheet className="w-4 h-4" />, label: 'CSV Upload' },
+    { id: 'csv', icon: <FileSpreadsheet className="w-4 h-4" />, label: 'Excel Upload' },
     { id: 'integrations', icon: <Link2 className="w-4 h-4" />, label: 'Integrations' },
     { id: 'public', icon: <Globe2 className="w-4 h-4" />, label: 'Public Sources' },
   ];
@@ -160,42 +224,99 @@ export default function DataIngestion() {
       {/* ===== CSV ===== */}
       {activeTab === 'csv' && (
         <div className="glass-card p-6">
-          <h3 className="text-sm font-medium text-gray-300 mb-4">CSV Upload</h3>
-          <div
-            className="border-2 border-dashed border-gray-700 rounded-xl p-12 text-center hover:border-sky-500/50 transition-colors cursor-pointer"
-            onClick={() => setCsvFile('metrics_q1_2026.csv')}
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-medium text-gray-300">Excel Upload</h3>
+            <a
+              href="/templates/FounderOS_Metrics_Template.xlsx"
+              className="text-xs text-sky-400 hover:text-sky-300 underline"
+            >
+              Download template
+            </a>
+          </div>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) void handleExcelFile(file);
+              e.currentTarget.value = '';
+            }}
+          />
+
+          <button
+            type="button"
+            className={`w-full border-2 border-dashed rounded-xl p-12 text-center transition-colors ${
+              canUploadExcel
+                ? 'border-gray-700 hover:border-sky-500/50 cursor-pointer'
+                : 'border-gray-800 cursor-not-allowed opacity-60'
+            }`}
+            onClick={() => canUploadExcel && fileInputRef.current?.click()}
+            disabled={!canUploadExcel || uploading}
           >
-            {csvFile ? (
+            {uploading ? (
+              <div>
+                <Upload className="w-8 h-8 text-sky-400 mx-auto mb-3 animate-pulse" />
+                <p className="text-sm text-sky-300">Uploading file...</p>
+                <p className="text-xs text-gray-500 mt-1">We will process and sync automatically</p>
+              </div>
+            ) : csvFile ? (
               <div>
                 <Check className="w-8 h-8 text-emerald-400 mx-auto mb-3" />
                 <p className="text-sm text-emerald-300 font-medium">{csvFile}</p>
-                <p className="text-xs text-gray-500 mt-1">File ready for validation</p>
+                <p className="text-xs text-gray-500 mt-1">Upload submitted. Tracking ingestion job.</p>
               </div>
             ) : (
               <div>
                 <FileSpreadsheet className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-                <p className="text-sm text-gray-400">Click to upload or drag & drop CSV file</p>
-                <p className="text-xs text-gray-600 mt-1">Schema validation will run automatically</p>
+                <p className="text-sm text-gray-400">
+                  {canUploadExcel
+                    ? 'Click to upload filled .xlsx template'
+                    : 'You do not have permission to upload data'}
+                </p>
+                <p className="text-xs text-gray-600 mt-1">Supported: FounderOS canonical template</p>
               </div>
             )}
-          </div>
+          </button>
 
-          {csvFile && (
+          {(jobState || uploadError) && (
             <div className="mt-6">
-              <h4 className="text-xs font-medium text-gray-400 mb-3">Schema Validation</h4>
-              <div className="space-y-2">
-                {['Revenue fields mapped', 'Date format validated', 'Numeric types confirmed', 'No missing required fields'].map((check) => (
-                  <div key={check} className="flex items-center gap-2 text-sm text-emerald-400">
-                    <Check className="w-3.5 h-3.5" /> {check}
-                  </div>
-                ))}
-                <div className="flex items-center gap-2 text-sm text-amber-400">
-                  <AlertCircle className="w-3.5 h-3.5" /> Optional field 'nps' missing — will use simulated value
+              <h4 className="text-xs font-medium text-gray-400 mb-3">Ingestion Job</h4>
+              {uploadError && (
+                <div className="flex items-center gap-2 text-sm text-red-400 mb-2">
+                  <AlertCircle className="w-3.5 h-3.5" />
+                  {uploadError}
                 </div>
-              </div>
-              <button className="mt-4 flex items-center gap-2 px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg transition-all">
-                <Upload className="w-4 h-4" /> Process & Sync
-              </button>
+              )}
+              {jobState && (
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2 text-gray-300">
+                    <span className="text-gray-500">Status:</span>
+                    <span className={`font-medium ${
+                      jobState.status === 'complete'
+                        ? 'text-emerald-400'
+                        : jobState.status === 'failed'
+                          ? 'text-red-400'
+                          : 'text-sky-400'
+                    }`}>
+                      {jobState.status}
+                    </span>
+                  </div>
+                  {typeof jobState.record_count === 'number' && (
+                    <div className="text-gray-300">
+                      <span className="text-gray-500">Records:</span> {jobState.record_count}
+                    </div>
+                  )}
+                  {jobState.last_error && (
+                    <div className="flex items-center gap-2 text-red-400">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {jobState.last_error}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>

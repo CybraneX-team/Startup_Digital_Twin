@@ -18,10 +18,21 @@ import Onboarding from './pages/Onboarding';
 import JoinWorkspace from './pages/JoinWorkspace';
 import PendingApproval from './pages/PendingApproval';
 
+function FullPageLoader() {
+  return (
+    <div className="min-h-[50vh] flex items-center justify-center">
+      <p className="text-sm text-slate-400">Loading session...</p>
+    </div>
+  );
+}
+
 function AuthPageRoute() {
   const { user, profile, loading } = useAuth();
-  if (loading) return null;
-  if (user && profile?.onboarding_completed && profile?.company_id) return <Navigate to="/overview" replace />;
+  const location = useLocation();
+  const from = (location.state as { from?: string })?.from ?? '/overview';
+
+  if (loading) return <FullPageLoader />;
+  if (user && profile?.onboarding_completed && profile?.company_id) return <Navigate to={from} replace />;
   if (user && profile?.onboarding_completed && !profile?.company_id) return <Navigate to="/pending" replace />;
   if (user && !profile?.onboarding_completed) return <Navigate to="/onboarding" replace />;
   return <AuthPage />;
@@ -29,7 +40,7 @@ function AuthPageRoute() {
 
 function RootRoute() {
   const { user, profile, loading } = useAuth();
-  if (loading) return null;
+  if (loading) return <FullPageLoader />;
   // Fully onboarded users with a company go straight to the dashboard
   if (user && profile?.onboarding_completed && profile?.company_id) return <Navigate to="/overview" replace />;
   // Join-request users waiting for approval

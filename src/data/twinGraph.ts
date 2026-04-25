@@ -10,6 +10,8 @@ import { INDUSTRIES } from '../db/industries';
 import { COMPANIES, getCompaniesByIndustry } from '../db/index';
 import { SIGNALS } from '../db/signals';
 import { getActiveCompanies, getCompanyById, companyToTwinNodeData } from '../lib/db/companies';
+import { useCompanyMetrics } from '../lib/db/metrics';
+import { computeHealth } from '../lib/health';
 
 /* ──────────────────────────────────────────────────
    Internal nodes for YOUR company (FounderOS)
@@ -295,6 +297,32 @@ export function useTwinGraph(authCompanyId: string | null | undefined): {
       ]
     : [...twinEdges, ...allLiveEdges];
 
+  const { metrics } = useCompanyMetrics(authCompanyId ?? null);
+  const overlay = useMemo(
+    () => computeHealth(metrics, myCompanyNodeId),
+    [metrics, myCompanyNodeId],
+  );
+
+  const overlaidNodes = useMemo(() => {
+    if (
+      Object.keys(overlay.nodeStatus).length === 0 &&
+      Object.keys(overlay.nodeMetrics).length === 0
+    ) {
+      return finalNodes;
+    }
+
+    return finalNodes.map((n) => {
+      const status = overlay.nodeStatus[n.id];
+      const nodeMetrics = overlay.nodeMetrics[n.id];
+      if (!status && !nodeMetrics) return n;
+      return {
+        ...n,
+        ...(status ? { status } : {}),
+        ...(nodeMetrics ? { metrics: { ...(n.metrics ?? {}), ...nodeMetrics } } : {}),
+      };
+    });
+  }, [finalNodes, overlay.nodeMetrics, overlay.nodeStatus]);
+
   // Remap comp-you → live company id when user has a company.
   // If user is logged in but has no company yet (null), keep EMERGE_PARENT as-is
   // (dept/feat nodes won't appear since comp-you is hidden and no company focused).
@@ -307,5 +335,5 @@ export function useTwinGraph(authCompanyId: string | null | undefined): {
       )
     : EMERGE_PARENT;
 
-  return { nodes: finalNodes, edges: finalEdges, myCompanyNodeId, emergeParent };
+  return { nodes: overlaidNodes, edges: finalEdges, myCompanyNodeId, emergeParent };
 }

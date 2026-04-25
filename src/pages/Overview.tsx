@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { LayoutDashboard, Activity, Zap, Shield, Bot, User, Clock, CheckCircle2, Loader2, CircleDot } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -8,7 +9,9 @@ import MetricCard from '../components/MetricCard';
 import { keyMetrics, revenueHistory, departmentHealth, environmentSignals, activeTasks } from '../data/mockData';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/db/companies';
+import { useCompanyMetrics } from '../lib/db/metrics';
 import { INDUSTRIES } from '../db/industries';
+import type { Metric } from '../types';
 
 const statusConfig = {
   running: { icon: Loader2, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/20', animate: 'animate-spin' },
@@ -20,6 +23,7 @@ const statusConfig = {
 export default function Overview() {
   const { profile } = useAuth();
   const { company } = useCompany(profile?.company_id);
+  const { metrics } = useCompanyMetrics(profile?.company_id ?? null);
 
   const industryLabel = company?.industry_id
     ? INDUSTRIES.find(i => i.id === company.industry_id)?.label ?? company.industry_id
@@ -27,6 +31,32 @@ export default function Overview() {
 
   const displayName = company?.name ?? 'Your Company';
   const displayStage = company?.stage ?? 'Seed';
+
+  const liveKeyMetrics = useMemo<Metric[]>(() => {
+    const ordered = [
+      { key: 'revenue', name: 'Revenue', unit: '$' },
+      { key: 'burn', name: 'Burn', unit: '$' },
+      { key: 'cash', name: 'Cash', unit: '$' },
+      { key: 'headcount', name: 'Team', unit: 'people' },
+      { key: 'ad_spend', name: 'Ad Spend', unit: '$' },
+      { key: 'signups', name: 'Signups', unit: 'count' },
+    ] as const;
+
+    return ordered
+      .map(({ key, name, unit }) => {
+        const m = metrics[key];
+        if (!m) return null;
+        return {
+          name,
+          value: Number(m.value),
+          unit,
+          change: 0,
+        } as Metric;
+      })
+      .filter(Boolean) as Metric[];
+  }, [metrics]);
+
+  const displayMetrics = liveKeyMetrics.length > 0 ? liveKeyMetrics : keyMetrics.slice(0, 8);
 
   return (
     <div>
@@ -61,7 +91,7 @@ export default function Overview() {
 
       {/* Key Metrics Grid */}
       <div className="grid grid-cols-4 gap-4 mb-6">
-        {keyMetrics.slice(0, 8).map((m) => (
+        {displayMetrics.map((m) => (
           <MetricCard key={m.name} metric={m} />
         ))}
       </div>

@@ -120,9 +120,9 @@ export default function Onboarding() {
   const navigate = useNavigate();
   const { user, refreshProfile } = useAuth();
 
-  // Auto-recovery: if user already has a company (via company_members) but
-  // profile.company_id is null (broken by prior UPDATE bug), fix the profile
-  // and redirect away from onboarding.
+  // Auto-recovery: if the profile loaded without a company_id but a membership
+  // row exists (e.g. previous profile-update failed), look up the membership
+  // via the non-recursive helper function and patch the profile.
   useEffect(() => {
     if (!user) return;
     (async () => {
@@ -134,7 +134,6 @@ export default function Onboarding() {
         .limit(1)
         .maybeSingle();
       if (membership?.company_id) {
-        // Profile is stale — patch it and redirect
         await supabase.from('user_profiles').upsert(
           { id: user.id, company_id: membership.company_id, role: membership.role, onboarding_completed: true },
           { onConflict: 'id' },

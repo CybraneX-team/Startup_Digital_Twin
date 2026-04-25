@@ -1,16 +1,11 @@
 import { useState } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
 import { Hexagon } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 
 type AuthMode = 'signin' | 'signup';
 
 export default function AuthPage() {
-  const navigate = useNavigate();
-  const location = useLocation();
   const { signIn, signUp } = useAuth();
-
-  const from = (location.state as { from?: string })?.from ?? '/overview';
 
   const [mode, setMode] = useState<AuthMode>('signin');
   const [loading, setLoading] = useState(false);
@@ -31,31 +26,41 @@ export default function AuthPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
+
     setLoading(true);
     setError(null);
     setSuccess(null);
 
-    if (mode === 'signin') {
-      const { error: err } = await signIn(form.email, form.password);
-      if (err) { setError(err); setLoading(false); return; }
-      navigate(from, { replace: true });
-    } else {
-      if (!form.first_name.trim()) { setError('First name is required'); setLoading(false); return; }
-      const { error: err, needsEmailConfirm } = await signUp(form.email, form.password, {
-        first_name: form.first_name.trim(),
-        last_name: form.last_name.trim(),
-      });
-      if (err) { setError(err); setLoading(false); return; }
-      if (needsEmailConfirm) {
-        // Email confirmation required — prompt user then switch to sign-in
-        setSuccess('Account created! Check your email to confirm, then sign back in.');
-        setMode('signin');
+    try {
+      if (mode === 'signin') {
+        const { error: err } = await signIn(form.email, form.password);
+        if (err) { setError(err); return; }
+        // Don't navigate here — AuthPageRoute watches auth state and redirects
+        // once onAuthStateChange has finished loading the profile. Navigating
+        // early causes AuthGuard to see user=null and redirect back to /auth,
+        // re-mounting the form and making sign-in appear to silently fail.
+      } else {
+        if (!form.first_name.trim()) { setError('First name is required'); return; }
+        const { error: err, needsEmailConfirm } = await signUp(form.email, form.password, {
+          first_name: form.first_name.trim(),
+          last_name: form.last_name.trim(),
+        });
+        if (err) { setError(err); return; }
+        if (needsEmailConfirm) {
+          // Email confirmation required — prompt user then switch to sign-in
+          setSuccess('Account created! Check your email to confirm, then sign back in.');
+          setMode('signin');
+        }
+        // If no needsEmailConfirm, the user is already signed in → onAuthStateChange
+        // fires automatically and AuthPageRoute redirects to /onboarding
       }
-      // If no needsEmailConfirm, the user is already signed in → onAuthStateChange
-      // fires automatically and AuthPageRoute redirects to /onboarding
+    } catch (err) {
+      console.error('[auth] submit failed', err);
+      setError(err instanceof Error ? err.message : 'Authentication failed. Please try again.');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }
 
   return (

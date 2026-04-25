@@ -1,9 +1,26 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
-import { supabase } from './supabase';
+import { hasSupabaseConfig, supabase } from './supabase';
 import type { DbUserProfile, UserRole } from './supabase';
 import { can, canRead, canWrite, canDelete } from './db/rbac';
 import type { Module } from './db/rbac';
+
+const AUTH_TIMEOUT_MS = Number(import.meta.env.VITE_AUTH_TIMEOUT_MS ?? 15000);
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => reject(new Error(message)), timeoutMs);
+    promise
+      .then((value) => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((err) => {
+        clearTimeout(timeoutId);
+        reject(err);
+      });
+  });
+}
 
 /* ──────────────────────────────────────────────────
    Types
@@ -62,25 +79,80 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /* Bootstrap session */
   useEffect(() => {
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      const profile = session?.user ? await loadProfile(session.user.id) : null;
-      setState({ user: session?.user ?? null, session, profile, loading: false });
-    });
+    let cancelled = false;
+    let timeoutId: ReturnType<typeof setTimeout>;
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+    const setAuthState = (session: Session | null, profile: DbUserProfile | null) => {
+      if (cancelled) return;
+      clearTimeout(timeoutId);
+      setState({ user: session?.user ?? null, session, profile, loading: false });
+    };
+
+    // Safety net: if session restore hangs (e.g. expired token refresh), unblock
+    // the UI after 8s so AuthGuard can redirect to /auth instead of spinning forever.
+    timeoutId = setTimeout(() => {
+      if (!cancelled) setState(s => s.loading ? { ...s, loading: false } : s);
+    }, 8000);
+
+    const bootstrap = async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error) console.error('[auth] getSession', error);
         const profile = session?.user ? await loadProfile(session.user.id) : null;
-        setState({ user: session?.user ?? null, session, profile, loading: false });
+        setAuthState(session, profile);
+      } catch (err) {
+        console.error('[auth] bootstrap failed', err);
+        setAuthState(null, null);
+      }
+    };
+
+    void bootstrap();
+
+    // Skip INITIAL_SESSION — bootstrap() handles the initial state.
+    // Only process subsequent auth events (sign-in, sign-out, token refresh).
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'INITIAL_SESSION') return;
+
+        // Keep this callback synchronous. Async Supabase calls inside this handler
+        // can deadlock auth requests in supabase-js.
+        setTimeout(() => {
+          void (async () => {
+            try {
+              const profile = session?.user ? await loadProfile(session.user.id) : null;
+              setAuthState(session, profile);
+            } catch (err) {
+              console.error('[auth] onAuthStateChange failed', err);
+              setAuthState(session, null);
+            }
+          })();
+        }, 0);
       }
     );
 
-    return () => subscription.unsubscribe();
+    return () => {
+      cancelled = true;
+      clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
   }, []);
 
   /* Auth actions */
   async function signIn(email: string, password: string) {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    return { error: error?.message ?? null };
+    if (!hasSupabaseConfig) {
+      return { error: 'Auth is not configured. Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY.' };
+    }
+    try {
+      const { error } = await withTimeout(
+        supabase.auth.signInWithPassword({ email, password }),
+        AUTH_TIMEOUT_MS,
+        `Sign in timed out after ${AUTH_TIMEOUT_MS}ms`,
+      );
+      return { error: error?.message ?? null };
+    } catch (err) {
+      console.error('[auth] signIn failed', err);
+      return { error: err instanceof Error ? err.message : 'Sign in failed. Please try again.' };
+    }
   }
 
   async function signUp(
@@ -88,13 +160,31 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     password: string,
     meta: { first_name: string; last_name: string },
   ) {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: meta },
-    });
-    // If session is returned, email confirmation is disabled — user is already signed in
-    return { error: error?.message ?? null, needsEmailConfirm: !data.session && !error };
+    if (!hasSupabaseConfig) {
+      return {
+        error: 'Auth is not configured. Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY.',
+        needsEmailConfirm: false,
+      };
+    }
+    try {
+      const { data, error } = await withTimeout(
+        supabase.auth.signUp({
+          email,
+          password,
+          options: { data: meta },
+        }),
+        AUTH_TIMEOUT_MS,
+        `Sign up timed out after ${AUTH_TIMEOUT_MS}ms`,
+      );
+      // If session is returned, email confirmation is disabled — user is already signed in
+      return { error: error?.message ?? null, needsEmailConfirm: !data.session && !error };
+    } catch (err) {
+      console.error('[auth] signUp failed', err);
+      return {
+        error: err instanceof Error ? err.message : 'Sign up failed. Please try again.',
+        needsEmailConfirm: false,
+      };
+    }
   }
 
   async function signOut() {
