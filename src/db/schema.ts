@@ -7,7 +7,8 @@
 export type NodeStatus = 'healthy' | 'warning' | 'critical';
 export type CompanyStage =
   | 'Idea' | 'Pre-seed' | 'Seed' | 'Series A' | 'Series B'
-  | 'Series C' | 'Series D+' | 'Pre-IPO' | 'Public' | 'PSU' | 'Bootstrapped';
+  | 'Series C' | 'Series D+' | 'Series E' | 'Series F' | 'Series G' | 'Series H'
+  | 'Pre-IPO' | 'Public' | 'PSU' | 'Bootstrapped';
 
 export type Country =
   | 'India' | 'USA' | 'UK' | 'Brazil' | 'France' | 'Canada'

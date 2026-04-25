@@ -180,7 +180,7 @@ export function companyToTwinNodeData(c: DbCompany) {
       mrr: c.mrr_usd,
       team: c.employees,
       stage: c.stage,
-    } as Record<string, number>,
+    },
     _pos3D: pos3D,       // used by twinGraph to inject into POS3D
     _industryId: c.industry_id ?? undefined,
   };

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import {
   ShieldCheck, Users, Crown, Briefcase, UserCircle, Plus, Copy,
-  Check, X, ChevronDown, Clock, Link2, Trash2, MoreHorizontal,
-  UserCheck, AlertCircle, Bot, Mail,
+  Check, X, ChevronDown, Clock, Link2, Trash2,
+  UserCheck, AlertCircle, Mail,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../lib/auth';
@@ -183,7 +183,9 @@ export default function RBAC() {
             {t.label}
             {t.count !== null && t.count > 0 && (
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                t.alert ? 'bg-amber-500/20 text-amber-400' : 'bg-gray-700 text-gray-400'
+                t.key === 'requests' && pendingCount > 0
+                  ? 'bg-amber-500/20 text-amber-400'
+                  : 'bg-gray-700 text-gray-400'
               }`}>
                 {t.count}
               </span>

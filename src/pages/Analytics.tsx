@@ -342,7 +342,13 @@ function SimulationView() {
             <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
             <XAxis dataKey="month" stroke="#6b7280" fontSize={11} />
             <YAxis stroke="#6b7280" fontSize={11} tickFormatter={(v: number) => `$${(v / 1000).toFixed(0)}K`} />
-            <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '8px' }} formatter={(v: number) => [`$${v.toLocaleString()}`, undefined]} />
+            <Tooltip
+              contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '8px' }}
+              formatter={(value) => {
+                const n = typeof value === 'number' ? value : Number(value);
+                return [Number.isFinite(n) ? `$${n.toLocaleString()}` : String(value ?? ''), ''];
+              }}
+            />
             <Area type="monotone" dataKey="p10Base" stackId="band" fill="transparent" stroke="none" />
             <Area type="monotone" dataKey="band" stackId="band" fill="#0ea5e9" fillOpacity={0.12} stroke="none" name="P10–P90 Range" />
             {[1,2,3,4,5].map((p) => (

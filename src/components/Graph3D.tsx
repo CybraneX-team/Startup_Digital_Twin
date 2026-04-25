@@ -1,6 +1,9 @@
 import { useRef, useMemo, useEffect, createContext, useContext, useState, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Stars, Html, Line } from '@react-three/drei';
+import { OrbitControls } from '@react-three/drei/core/OrbitControls';
+import { Stars } from '@react-three/drei/core/Stars';
+import { Html } from '@react-three/drei/web/Html';
+import { Line } from '@react-three/drei/core/Line';
 import * as THREE from 'three';
 import type { TwinNode, TwinEdge } from '../types';
 import { GRAPH_LAYOUT } from '../db';
@@ -272,7 +275,7 @@ interface CameraHandle {
 
 function CameraWatcher({
   scopeRef, onScopeChange, controlsRef, cameraHandleRef,
-  companyEntriesRef, onIndustryEnter, onEnterCompany, onExitCompany,
+  onIndustryEnter, onEnterCompany, onExitCompany,
 }: {
   scopeRef: React.RefObject<ScopeState>;
   onScopeChange: (s: ScopeLevel) => void;
@@ -1210,7 +1213,6 @@ export default function Graph3D(props: Graph3DProps) {
   const [galaxyViewMode, setGalaxyViewMode] = useState<GalaxyViewMode>('relational');
   const [carouselIdx, setCarouselIdx] = useState(0);
   const [lockedCompanyId, setLockedCompanyId] = useState<string | null>(null);
-  const [focusedIndustryId, setFocusedIndustryId] = useState<string | null>(null);
 
   const handleScopeChange = useCallback((s: ScopeLevel) => {
     setScope(s);
@@ -1218,7 +1220,6 @@ export default function Graph3D(props: Graph3DProps) {
       setClusterFilter('all');
       setGalaxyViewMode('relational');
       setCarouselIdx(0);
-      setFocusedIndustryId(null);
       setLockedCompanyId(null);
     }
     if (s === 'cluster') setLockedCompanyId(null);
@@ -1270,7 +1271,7 @@ export default function Graph3D(props: Graph3DProps) {
           {...props}
           onScopeChange={handleScopeChange}
           clusterFilter={clusterFilter}
-          onIndustryEnter={(id) => { setFocusedIndustryId(id); setLockedCompanyId(null); }}
+          onIndustryEnter={() => { setLockedCompanyId(null); }}
           onEnterCompany={(id) => setLockedCompanyId(id)}
           onExitCompany={() => setLockedCompanyId(null)}
         />

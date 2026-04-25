@@ -5,7 +5,7 @@ import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/db/companies';
 import { supabase } from '../lib/supabase';
 import { INDUSTRIES } from '../db/industries';
-import type { CompanyStage, BusinessModel } from '../lib/supabase';
+import type { CompanyStage } from '../lib/supabase';
 
 const STAGES: CompanyStage[] = [
   'Idea', 'Pre-seed', 'Seed', 'Series A', 'Series B',
@@ -200,8 +200,6 @@ export default function SettingsPage() {
       setDepts(templates[template]);
     }
   };
-
-  const selectedIndustry = INDUSTRIES.find(i => i.id === config.industry_id);
 
   if (companyLoading) {
     return (

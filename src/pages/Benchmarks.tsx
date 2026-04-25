@@ -301,7 +301,10 @@ export default function Benchmarks() {
                 border: '1px solid #374151',
                 borderRadius: '8px',
               }}
-              formatter={(v: number) => [`${v}%`, undefined]}
+              formatter={(value) => {
+                const n = typeof value === 'number' ? value : Number(value);
+                return [Number.isFinite(n) ? `${n}%` : String(value ?? ''), ''];
+              }}
             />
             <Legend wrapperStyle={{ fontSize: '12px' }} />
             <Area

@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import {
   Handshake, BadgeDollarSign, FileText, Users, Plus, Search,
-  ChevronRight, Eye, EyeOff, Send, Calendar, Clock, CheckCircle2,
-  XCircle, Trash2, Edit3, Check, X, Globe, MapPin, Sparkles,
-  ArrowUpRight, UserCheck, Loader, ExternalLink, RefreshCcw,
+  ChevronRight, Send, Calendar, Clock, CheckCircle2,
+  XCircle, Trash2, Edit3, Check, X, Sparkles,
+  ArrowUpRight, UserCheck, Loader, ExternalLink,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../lib/auth';
@@ -54,8 +54,6 @@ export default function VCConnect() {
   const [selectedPipeline, setSelectedPipeline] = useState<string | null>(null);
   const [selectedSession, setSelectedSession] = useState<string | null>(null);
 
-  const selectedEntry = selectedPipeline ? pipeline.find(p => p.id === selectedPipeline) : null;
-
   return (
     <div>
       <PageHeader
@@ -96,7 +94,6 @@ export default function VCConnect() {
           selectedId={selectedPipeline}
           onSelect={setSelectedPipeline}
           onRefetch={refetchPipeline}
-          updates={updates}
         />
       )}
       {tab === 'updates' && (
@@ -130,7 +127,7 @@ export default function VCConnect() {
    PIPELINE TAB
 ══════════════════════════════════════════════════ */
 function PipelineTab({
-  companyId, userId, pipeline, loading, selectedId, onSelect, onRefetch, updates,
+  companyId, userId, pipeline, loading, selectedId, onSelect, onRefetch,
 }: {
   companyId: string | null;
   userId: string;
@@ -139,7 +136,6 @@ function PipelineTab({
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onRefetch: () => void;
-  updates: InvestorUpdate[];
 }) {
   const [showAdd, setShowAdd] = useState(false);
   const [filterStatus, setFilterStatus] = useState<InvestorStatus | 'all'>('all');
@@ -239,7 +235,6 @@ function PipelineTab({
             inv={selected}
             onSaveNotes={async (notes) => { await updateInvestorNotes(selected.id, notes); onRefetch(); }}
             onStatusChange={async (st) => { await updateInvestorStatus(selected.id, st); onRefetch(); }}
-            updates={updates}
           />
         ) : (
           <div className="glass-card p-8 flex flex-col items-center justify-center text-gray-500">
@@ -340,16 +335,14 @@ function PipelineCard({
 }
 
 function InvestorDetailPanel({
-  inv, onSaveNotes, onStatusChange, updates,
+  inv, onSaveNotes, onStatusChange,
 }: {
   inv: InvestorPipeline;
   onSaveNotes: (notes: string) => void;
   onStatusChange: (st: InvestorStatus) => void;
-  updates: InvestorUpdate[];
 }) {
   const [notes, setNotes] = useState(inv.notes ?? '');
   const [editingNotes, setEditingNotes] = useState(false);
-  const cfg = STATUS_CFG[inv.status];
   const firm = inv.vc_firm;
   const name = firm?.name ?? inv.custom_name ?? 'Unknown';
 
@@ -720,7 +713,6 @@ function UpdatesTab({
   onRefetch: () => void;
 }) {
   const [editing, setEditing] = useState<InvestorUpdate | null>(null);
-  const [creating, setCreating] = useState(false);
 
   async function handleCreate() {
     if (!companyId) return;
@@ -770,7 +762,6 @@ function UpdatesTab({
       {editing && (
         <UpdateEditorModal
           update={editing}
-          pipeline={pipeline}
           onClose={() => setEditing(null)}
           onSaved={() => { setEditing(null); onRefetch(); }}
         />
@@ -883,10 +874,9 @@ function UpdateCard({
 }
 
 function UpdateEditorModal({
-  update, pipeline, onClose, onSaved,
+  update, onClose, onSaved,
 }: {
   update: InvestorUpdate;
-  pipeline: InvestorPipeline[];
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -1292,6 +1282,11 @@ function AddMentorModal({
           <div>
             <label className="text-xs text-gray-500 mb-1 block">Expertise (comma-separated)</label>
             <input value={expertise} onChange={e => setExpertise(e.target.value)} placeholder="Growth, Fintech, Fundraising"
+              className="w-full px-3 py-2.5 rounded-xl text-sm text-white outline-none" style={{ background: '#161618' }} />
+          </div>
+          <div>
+            <label className="text-xs text-gray-500 mb-1 block">LinkedIn URL</label>
+            <input value={linkedin} onChange={e => setLinkedin(e.target.value)} placeholder="https://linkedin.com/in/..."
               className="w-full px-3 py-2.5 rounded-xl text-sm text-white outline-none" style={{ background: '#161618' }} />
           </div>
           <div>

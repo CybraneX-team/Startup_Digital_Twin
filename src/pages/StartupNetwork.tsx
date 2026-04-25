@@ -12,7 +12,6 @@ import {
   ChevronRight,
   MapPin,
   Briefcase,
-  Search,
   TrendingUp,
   TrendingDown,
   Minus,
@@ -57,7 +56,11 @@ function BenchmarkTrend({ b }: { b: PeerBenchmark }) {
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <h4 className="text-sm font-medium text-white">{b.metric}</h4>
-          {b.anonymised && <Shield className="w-3 h-3 text-gray-500" title="Anonymised" />}
+          {b.anonymised && (
+            <span title="Anonymised">
+              <Shield className="w-3 h-3 text-gray-500" />
+            </span>
+          )}
         </div>
         <Icon className={`w-4 h-4 ${color}`} />
       </div>
@@ -179,7 +182,9 @@ export default function StartupNetwork() {
                           <span className="text-emerald-400">{activeConns} active</span>
                         )}
                         {p.optInBenchmark && (
-                          <ShieldCheck className="w-3.5 h-3.5 text-sky-400" title="Benchmark opt-in" />
+                          <span title="Benchmark opt-in">
+                            <ShieldCheck className="w-3.5 h-3.5 text-sky-400" />
+                          </span>
                         )}
                       </div>
                     </div>

@@ -92,7 +92,7 @@ const companyNodes: TwinNode[] = COMPANIES.map(comp => {
       team: comp.employees,
       valuation: comp.valuation,
       stage: comp.stage,
-    } as Record<string, number>,
+    },
   };
 });
 

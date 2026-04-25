@@ -4,7 +4,6 @@ import {
   Brain,
   Shield,
   TrendingUp,
-  Users,
   Layers,
   GitBranch,
   BarChart3,

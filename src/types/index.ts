@@ -60,7 +60,7 @@ export interface TwinNode {
   label: string;
   type: 'industry' | 'company' | 'department' | 'signal' | 'kpi' | 'feature';
   children?: string[];
-  metrics?: Record<string, number>;
+  metrics?: Record<string, number | string | null | undefined>;
   status?: 'healthy' | 'warning' | 'critical';
   description?: string;
   route?: string; // for feature nodes — navigates to this route on click

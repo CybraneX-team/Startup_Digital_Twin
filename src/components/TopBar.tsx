@@ -1,11 +1,11 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Hexagon, Settings, LogOut, LogIn } from 'lucide-react';
+import { Hexagon, LogOut, LogIn } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 
 export default function TopBar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, profile, signOut, loading, canRead, role } = useAuth();
+  const { user, profile, signOut, loading, canRead } = useAuth();
 
   const isTwinGraph = location.pathname === '/twin';
   const isData = location.pathname === '/twin/data';

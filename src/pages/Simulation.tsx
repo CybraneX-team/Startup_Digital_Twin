@@ -246,7 +246,10 @@ export default function Simulation() {
                 border: '1px solid #374151',
                 borderRadius: '8px',
               }}
-              formatter={(v: number) => [`$${v.toLocaleString()}`, undefined]}
+              formatter={(value) => {
+                const n = typeof value === 'number' ? value : Number(value);
+                return [Number.isFinite(n) ? `$${n.toLocaleString()}` : String(value ?? ''), ''];
+              }}
             />
 
             {/* Confidence band: invisible base + colored band */}

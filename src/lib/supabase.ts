@@ -22,7 +22,8 @@ export const supabase = createClient(
 
 export type CompanyStage =
   | 'Idea' | 'Pre-seed' | 'Seed' | 'Series A' | 'Series B'
-  | 'Series C' | 'Series D+' | 'Pre-IPO' | 'Public' | 'PSU' | 'Bootstrapped';
+  | 'Series C' | 'Series D+' | 'Series E' | 'Series F' | 'Series G' | 'Series H'
+  | 'Pre-IPO' | 'Public' | 'PSU' | 'Bootstrapped';
 
 export type CompanyStatus = 'onboarding' | 'active' | 'inactive' | 'suspended';
 export type BusinessModel  = 'B2B' | 'B2C' | 'B2B2C' | 'Marketplace' | 'SaaS' | 'D2C' | 'Other';
