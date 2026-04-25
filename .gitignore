@@ -33,3 +33,4 @@ claude.md
 *.njsproj
 *.sln
 *.sw?
+*.env
