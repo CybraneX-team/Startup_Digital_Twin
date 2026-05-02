@@ -5,6 +5,7 @@ import TopBar from './components/TopBar';
 import LandingPage from './pages/LandingPage';
 import Overview from './pages/Overview';
 import Twin from './pages/Twin';
+import Universe3D from './pages/Universe3D';
 import Strategy from './pages/Strategy';
 import DataIngestion from './pages/DataIngestion';
 import Benchmarks from './pages/Benchmarks';
@@ -52,6 +53,8 @@ function RootRoute() {
 
 function AppRoutes() {
   const location = useLocation();
+  const { user, profile } = useAuth();
+
   // Auth + onboarding pages are full-screen without TopBar
   if (location.pathname === '/auth') {
     return (
@@ -95,81 +98,108 @@ function AppRoutes() {
   }
 
   const isTwinGraph = location.pathname === '/twin';
+  const is3DUniverse = location.pathname === '/3d';
+  // Universe3D stays mounted for fully-authed users so camera/galaxy state persists across navigation
+  const isFullyAuthed = !!user && !!profile?.onboarding_completed && !!profile?.company_id;
 
   return (
-    <div className="min-h-screen cosmos-bg">
-      <TopBar />
-      {isTwinGraph ? (
-        <Routes>
-          <Route
-            path="/twin"
-            element={
-              <AuthGuard>
-                <Twin />
-              </AuthGuard>
-            }
-          />
-        </Routes>
-      ) : (
-        <main className="pt-14 px-8 pb-8 overflow-y-auto">
-          <Routes>
-            {/* Root: redirect authenticated+onboarded users to dashboard */}
-            <Route path="/" element={<RootRoute />} />
-
-            {/* Authenticated app routes */}
-            <Route path="/overview" element={
-              <AuthGuard requireOnboarding>
-                <Overview />
-              </AuthGuard>
-            } />
-            <Route path="/twin/strategy" element={
-              <AuthGuard requireOnboarding requiredModule="strategy">
-                <Strategy />
-              </AuthGuard>
-            } />
-            <Route path="/twin/data" element={
-              <AuthGuard requireOnboarding requiredModule="data">
-                <DataIngestion />
-              </AuthGuard>
-            } />
-            <Route path="/twin/benchmarks" element={
-              <AuthGuard requireOnboarding requiredModule="benchmarks">
-                <Benchmarks />
-              </AuthGuard>
-            } />
-            <Route path="/twin/team" element={
-              <AuthGuard requireOnboarding requiredModule="team">
-                <RBAC />
-              </AuthGuard>
-            } />
-            <Route path="/twin/analytics" element={
-              <AuthGuard requireOnboarding requiredModule="analytics">
-                <Analytics />
-              </AuthGuard>
-            } />
-
-            {/* Ecosystem (accessed through Twin) */}
-            <Route path="/ecosystem/vc-connect" element={
-              <AuthGuard requireOnboarding requiredModule="ecosystem">
-                <VCConnect />
-              </AuthGuard>
-            } />
-            <Route path="/ecosystem/network" element={
-              <AuthGuard requireOnboarding requiredModule="ecosystem">
-                <StartupNetwork />
-              </AuthGuard>
-            } />
-
-            {/* Settings */}
-            <Route path="/settings" element={
-              <AuthGuard requiredModule="settings">
-                <SettingsPage />
-              </AuthGuard>
-            } />
-          </Routes>
-        </main>
+    <>
+      {/* Persistent 3D universe — always mounted for authed users, shown/hidden via CSS.
+          Uses visibility instead of display so the canvas has correct viewport dimensions
+          from the start (display:none causes 0×0 init, breaking ResizeObserver). */}
+      {isFullyAuthed && (
+        <div
+          className="fixed inset-0 z-40"
+          style={{
+            visibility: is3DUniverse ? 'visible' : 'hidden',
+            pointerEvents: is3DUniverse ? 'auto' : 'none',
+          }}
+        >
+          <TopBar />
+          <Universe3D />
+        </div>
       )}
-    </div>
+
+      {/* Normal app shell — removed from layout entirely when on /3d */}
+      <div style={{ display: (isFullyAuthed && is3DUniverse) ? 'none' : 'block' }}>
+        <div className="min-h-screen cosmos-bg">
+          <TopBar />
+          {isTwinGraph ? (
+            <Routes>
+              <Route
+                path="/twin"
+                element={
+                  <AuthGuard>
+                    <Twin />
+                  </AuthGuard>
+                }
+              />
+            </Routes>
+          ) : (
+            <main className="pt-14 px-8 pb-8 overflow-y-auto">
+              <Routes>
+                {/* Root: redirect authenticated+onboarded users to dashboard */}
+                <Route path="/" element={<RootRoute />} />
+
+                {/* Authenticated app routes */}
+                <Route path="/overview" element={
+                  <AuthGuard requireOnboarding>
+                    <Overview />
+                  </AuthGuard>
+                } />
+                <Route path="/twin/strategy" element={
+                  <AuthGuard requireOnboarding requiredModule="strategy">
+                    <Strategy />
+                  </AuthGuard>
+                } />
+                <Route path="/twin/data" element={
+                  <AuthGuard requireOnboarding requiredModule="data">
+                    <DataIngestion />
+                  </AuthGuard>
+                } />
+                <Route path="/twin/benchmarks" element={
+                  <AuthGuard requireOnboarding requiredModule="benchmarks">
+                    <Benchmarks />
+                  </AuthGuard>
+                } />
+                <Route path="/twin/team" element={
+                  <AuthGuard requireOnboarding requiredModule="team">
+                    <RBAC />
+                  </AuthGuard>
+                } />
+                <Route path="/twin/analytics" element={
+                  <AuthGuard requireOnboarding requiredModule="analytics">
+                    <Analytics />
+                  </AuthGuard>
+                } />
+
+                {/* Ecosystem (accessed through Twin) */}
+                <Route path="/ecosystem/vc-connect" element={
+                  <AuthGuard requireOnboarding requiredModule="ecosystem">
+                    <VCConnect />
+                  </AuthGuard>
+                } />
+                <Route path="/ecosystem/network" element={
+                  <AuthGuard requireOnboarding requiredModule="ecosystem">
+                    <StartupNetwork />
+                  </AuthGuard>
+                } />
+
+                {/* Settings */}
+                <Route path="/settings" element={
+                  <AuthGuard requiredModule="settings">
+                    <SettingsPage />
+                  </AuthGuard>
+                } />
+
+                {/* /3d — redirect unauthenticated users to /auth via AuthGuard */}
+                <Route path="/3d" element={<AuthGuard><></></AuthGuard>} />
+              </Routes>
+            </main>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 

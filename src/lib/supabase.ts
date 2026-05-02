@@ -46,6 +46,7 @@ export interface DbCompany {
   name: string;
   slug: string;
   industry_id: string | null;
+  subdomain_id: string | null;
   stage: CompanyStage;
   country: string;
   founded_year: number | null;

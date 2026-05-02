@@ -7,9 +7,9 @@ export default function TopBar() {
   const navigate = useNavigate();
   const { user, profile, signOut, loading, canRead } = useAuth();
 
-  const isTwinGraph = location.pathname === '/twin';
+  const isTwinGraph = location.pathname === '/twin' || location.pathname === '/3d';
   const isData = location.pathname === '/twin/data';
-  const isTwin = location.pathname.startsWith('/twin') && !isData;
+  const isTwin = (location.pathname.startsWith('/twin') || location.pathname === '/3d') && !isData;
   const isOverview = location.pathname.startsWith('/overview');
 
   const isAuthed = !!user;
@@ -58,7 +58,7 @@ export default function TopBar() {
           >
             {([
               { path: '/overview',   label: 'Home',     active: isOverview },
-              { path: '/twin',       label: 'Twin',     active: isTwin },
+              { path: '/3d',         label: 'Twin',     active: isTwin },
               ...(canRead('data')     ? [{ path: '/twin/data' as const,  label: 'Data' as const,     active: isData }] : []),
               ...(canRead('settings') ? [{ path: '/settings' as const,   label: 'Settings' as const, active: location.pathname === '/settings' }] : []),
             ]).map(({ path, label, active }) => (
@@ -81,9 +81,9 @@ export default function TopBar() {
       {/* Right */}
       <div className="flex items-center gap-2 shrink-0">
         {/* Back to graph button (Twin sub-pages) */}
-        {isTwin && location.pathname !== '/twin' && (
+        {isTwin && location.pathname !== '/3d' && location.pathname !== '/twin' && (
           <button
-            onClick={() => navigate('/twin')}
+            onClick={() => navigate('/3d')}
             className="text-[10px] px-2 py-1 rounded transition-all"
             style={{ color: '#C1AEFF', background: 'rgba(193,174,255,0.08)' }}
           >

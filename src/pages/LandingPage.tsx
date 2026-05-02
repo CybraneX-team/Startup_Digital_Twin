@@ -25,7 +25,7 @@ const features = [
     icon: GitBranch,
     title: '3D Digital Twin',
     desc: 'A living, interactive graph of your startup — industries, departments, KPIs, and signals all connected in real-time.',
-    route: '/twin',
+    route: '/3d',
   },
   {
     icon: Target,
@@ -43,7 +43,7 @@ const features = [
     icon: Shield,
     title: 'Decision Intelligence',
     desc: 'Structured decision flows with weighted inputs, trade-off analysis, and full audit trails.',
-    route: '/twin',
+    route: '/3d',
   },
   {
     icon: Users,
@@ -140,7 +140,7 @@ export default function LandingPage() {
           {isAuthed && hasCompany ? (
             <>
               <button
-                onClick={() => navigate('/twin')}
+                onClick={() => navigate('/3d')}
                 className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold transition-all hover:opacity-90"
                 style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)', color: '#161618' }}
               >
@@ -265,7 +265,7 @@ export default function LandingPage() {
             and credible investor workflows — all built on a single digital twin.
           </p>
           <button
-            onClick={() => navigate('/twin')}
+            onClick={() => navigate('/3d')}
             className="inline-flex items-center gap-2 px-6 py-3 rounded-lg text-sm font-medium text-white transition-all hover:opacity-90"
             style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)' }}
           >

@@ -15,7 +15,7 @@ import {
 
 const navItems = [
   { to: '/', icon: LayoutDashboard, label: 'Overview' },
-  { to: '/twin', icon: Network, label: 'Twin' },
+  { to: '/3d', icon: Network, label: 'Twin' },
   { to: '/rbac', icon: ShieldCheck, label: 'Team & RBAC' },
   { to: '/decisions', icon: GitBranch, label: 'Decisions' },
   { to: '/goals', icon: Target, label: 'Goals' },

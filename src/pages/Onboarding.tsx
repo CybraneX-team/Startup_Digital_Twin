@@ -6,6 +6,7 @@ import { supabase } from '../lib/supabase';
 import { createCompany } from '../lib/db/companies';
 import type { CreateCompanyInput } from '../lib/db/companies';
 import { INDUSTRIES } from '../db/industries';
+import { useSubdomainsByIndustry } from '../lib/db/subdomains';
 import type { BusinessModel, CompanyStage } from '../lib/supabase';
 import { searchCompanyBySlug, submitJoinRequest } from '../lib/db/team';
 
@@ -39,6 +40,7 @@ interface FormData {
   // Step 1
   name: string;
   industry_id: string;
+  subdomain_id: string;
   stage: CompanyStage;
   country: string;
   founded_year: string;
@@ -62,7 +64,7 @@ interface FormData {
 }
 
 const INITIAL: FormData = {
-  name: '', industry_id: '', stage: 'Seed', country: 'India',
+  name: '', industry_id: '', subdomain_id: '', stage: 'Seed', country: 'India',
   founded_year: '', website: '',
   description: '', problem_solved: '', usp: '', target_market: '', business_model: '',
   employees: '', mrr_usd: '', burn_rate_usd: '', runway_months: '',
@@ -222,6 +224,7 @@ export default function Onboarding() {
     const payload: CreateCompanyInput = {
       name: form.name.trim(),
       industry_id: form.industry_id,
+      subdomain_id: form.subdomain_id || undefined,
       stage: form.stage,
       country: form.country,
       founded_year: form.founded_year ? parseInt(form.founded_year) : undefined,
@@ -269,6 +272,7 @@ export default function Onboarding() {
   }
 
   const selectedIndustry = INDUSTRIES.find(i => i.id === form.industry_id);
+  const { subdomains: industrySubdomains } = useSubdomainsByIndustry(form.industry_id || null);
 
   /* ── Mode chooser screen ── */
   if (mode === 'choose') {
@@ -500,7 +504,7 @@ export default function Onboarding() {
                     <button
                       key={ind.id}
                       type="button"
-                      onClick={() => update('industry_id', ind.id)}
+                      onClick={() => { update('industry_id', ind.id); update('subdomain_id', ''); }}
                       className="rounded-xl px-3 py-2.5 text-sm font-medium text-left transition-all"
                       style={{
                         background: form.industry_id === ind.id
@@ -519,6 +523,29 @@ export default function Onboarding() {
                   ))}
                 </div>
               </Field>
+              {form.industry_id && industrySubdomains.length > 0 && (
+                <Field label="Sub-domain (where in the industry?)">
+                  <div className="grid grid-cols-2 gap-2">
+                    {industrySubdomains.map(sd => (
+                      <button
+                        key={sd.id}
+                        type="button"
+                        onClick={() => update('subdomain_id', sd.id)}
+                        className="rounded-xl px-3 py-2 text-xs font-medium text-left transition-all"
+                        style={{
+                          background: form.subdomain_id === sd.id
+                            ? 'rgba(193,174,255,0.15)' : '#161618',
+                          color: form.subdomain_id === sd.id ? '#C1AEFF' : '#5E5E5E',
+                          border: form.subdomain_id === sd.id
+                            ? '1px solid rgba(193,174,255,0.4)' : '1px solid transparent',
+                        }}
+                      >
+                        {sd.label}
+                      </button>
+                    ))}
+                  </div>
+                </Field>
+              )}
               <div className="grid grid-cols-2 gap-4">
                 <Field label="Stage">
                   <Select value={form.stage} onChange={e => update('stage', e.target.value)}>

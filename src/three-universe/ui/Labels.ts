@@ -1,0 +1,259 @@
+// @ts-nocheck
+/**
+ * Labels — 3D-Anchored CSS Labels (container-mounted)
+ * Uses CSS2DRenderer to place floating labels near entities.
+ */
+
+import * as THREE from 'three';
+import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
+
+const _wp = new THREE.Vector3();
+
+export class Labels {
+  constructor(scene, camera, container) {
+    this.scene = scene;
+    this.camera = camera;
+    this.container = container;
+    this.labelRenderer = null;
+    this.labels = new Map();
+    this.onLabelClick = null;
+    this._resizeObserver = null;
+
+    this._initRenderer();
+  }
+
+  _initRenderer() {
+    this.labelRenderer = new CSS2DRenderer();
+    const { clientWidth: w, clientHeight: h } = this.container;
+    this.labelRenderer.setSize(w, h);
+    this.labelRenderer.domElement.style.position = 'absolute';
+    this.labelRenderer.domElement.style.top = '0';
+    this.labelRenderer.domElement.style.left = '0';
+    this.labelRenderer.domElement.style.pointerEvents = 'none';
+    this.labelRenderer.domElement.style.zIndex = '5';
+    this.container.appendChild(this.labelRenderer.domElement);
+
+    this._resizeObserver = new ResizeObserver(() => {
+      const { clientWidth: w, clientHeight: h } = this.container;
+      if (w && h) this.labelRenderer.setSize(w, h);
+    });
+    this._resizeObserver.observe(this.container);
+  }
+
+  createIndustryLabels(industries, getPosition) {
+    industries.forEach((industry, idx) => {
+      const position = getPosition(idx, industries.length);
+      this._createLabel(
+        `industry-${industry.id}`,
+        industry.name + ' Galaxy',
+        position,
+        'industry',
+        industry.color,
+        () => { if (this.onLabelClick) this.onLabelClick('industry', industry, idx, industries.length); }
+      );
+    });
+  }
+
+  createSubdomainLabels(industry, getSubdomainMeshes) {
+    const meshes = getSubdomainMeshes();
+    meshes.forEach((mesh) => {
+      const subdomain = mesh.userData.subdomain;
+      const id = `subdomain-${subdomain.id}`;
+      if (this.labels.has(id)) return;
+
+      const el = document.createElement('div');
+      el.className = 'label-3d subdomain';
+      el.textContent = subdomain.name;
+      el.style.color = industry.color;
+      el.style.pointerEvents = 'auto';
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', () => {
+        if (this.onLabelClick) this.onLabelClick('subdomain', subdomain, industry);
+      });
+
+      const labelObj = new CSS2DObject(el);
+      labelObj.position.set(0, mesh.userData.planetSize + 4, 0);
+      mesh.add(labelObj);
+
+      this.labels.set(id, { object: labelObj, element: el, parent: mesh });
+    });
+  }
+
+  createCompanyLabels(subdomain, getCompanyMeshes) {
+    const meshes = getCompanyMeshes();
+    meshes.forEach((mesh) => {
+      const company = mesh.userData.company;
+      const id = `company-${company.id}`;
+      if (this.labels.has(id)) return;
+
+      const el = document.createElement('div');
+      el.className = 'label-3d company';
+      el.textContent = company.name;
+      el.style.color = mesh.userData.industry?.color || '#fff';
+      el.style.pointerEvents = 'auto';
+      el.style.cursor = 'pointer';
+      el.addEventListener('click', () => {
+        if (this.onLabelClick) this.onLabelClick('company', company, mesh.userData.subdomain, mesh.userData.industry);
+      });
+
+      const labelObj = new CSS2DObject(el);
+      labelObj.position.set(0, mesh.userData.planetSize + 2, 0);
+      mesh.add(labelObj);
+
+      this.labels.set(id, { object: labelObj, element: el, parent: mesh });
+    });
+  }
+
+  createDepartmentLabels(company, getMoonMeshes) {
+    const meshes = getMoonMeshes();
+    meshes.forEach((mesh) => {
+      const dept = mesh.userData.department;
+      const id = `dept-${dept.id}`;
+      if (this.labels.has(id)) return;
+
+      const el = document.createElement('div');
+      el.className = 'label-3d department';
+      el.textContent = dept.name;
+      el.style.pointerEvents = 'auto';
+
+      const labelObj = new CSS2DObject(el);
+      labelObj.position.set(0, mesh.userData.moonSize + 1.5, 0);
+      mesh.add(labelObj);
+
+      this.labels.set(id, { object: labelObj, element: el, parent: mesh });
+    });
+  }
+
+  _createLabel(id, text, position, className, color, onClick) {
+    if (this.labels.has(id)) return;
+
+    const el = document.createElement('div');
+    el.className = 'canvas-label';
+
+    if (id.startsWith('industry-')) {
+      el.style.textAlign = 'center';
+      el.style.whiteSpace = 'nowrap';
+      el.innerHTML = `
+        <div style="font-size: 0.65rem; font-weight: 600; letter-spacing: 0.5px;">${text.toUpperCase()}</div>
+        <div style="font-size: 0.45rem; letter-spacing: 0.3px; opacity: 0.5; margin-top: 2px;">EXPLORE →</div>
+      `;
+      if (color) {
+        el.style.color = color;
+        el.style.textShadow = `0 0 8px ${color}`;
+      }
+    } else {
+      el.innerHTML = `
+        <div class="canvas-label-title">${text}</div>
+        <div class="canvas-label-type">${className.toUpperCase()}</div>
+      `;
+      if (color) el.style.color = color;
+    }
+
+    el.style.pointerEvents = 'auto';
+    el.style.cursor = 'pointer';
+
+    if (onClick) el.addEventListener('click', onClick);
+
+    const labelObj = new CSS2DObject(el);
+    labelObj.position.copy(position);
+
+    if (id.startsWith('industry-')) {
+      labelObj.position.y -= 300;
+      labelObj.visible = false;
+    } else {
+      labelObj.position.y += 5;
+    }
+
+    this.scene.add(labelObj);
+    this.labels.set(id, { object: labelObj, element: el });
+  }
+
+  setVisibility(prefix, visible) {
+    let idx = 0;
+    this.labels.forEach((label, id) => {
+      if (!id.startsWith(prefix)) return;
+      const el = label.element;
+      if (visible) {
+        el.style.display = '';
+        el.style.transition = '';
+        el.style.opacity = '0';
+        const delay = idx * 60;
+        setTimeout(() => { el.style.opacity = '1'; }, delay + 16);
+        idx++;
+      } else {
+        el.style.transition = 'none';
+        el.style.opacity = '0';
+        el.style.display = 'none';
+      }
+    });
+  }
+
+  updateIndustryLabelPosition(id, pos) {
+    const entry = this.labels.get(id);
+    if (entry?.object) entry.object.position.set(pos.x, pos.y - 300, pos.z);
+  }
+
+  hideSpecific(id) {
+    const label = this.labels.get(id);
+    if (label) {
+      label.element.style.display = 'none';
+      label.element.style.opacity = '0';
+    }
+  }
+
+  removeByPrefix(prefix) {
+    const toRemove = [];
+    this.labels.forEach((label, id) => {
+      if (id.startsWith(prefix)) {
+        if (label.parent) label.parent.remove(label.object);
+        else this.scene.remove(label.object);
+        toRemove.push(id);
+      }
+    });
+    toRemove.forEach((id) => this.labels.delete(id));
+  }
+
+  setActiveIndustry(industryId) {
+    this._activeIndustryId = industryId || null;
+  }
+
+  render() {
+    const camPos = this.camera.position;
+    this.labels.forEach((label, id) => {
+      if (id.startsWith('industry-')) {
+        const indId = id.replace('industry-', '');
+        if (this._activeIndustryId && indId === this._activeIndustryId) {
+          label.object.visible = false;
+          return;
+        }
+        label.object.getWorldPosition(_wp);
+        const dist = camPos.distanceTo(_wp);
+        const inRange = dist < 6000;
+        label.object.visible = inRange;
+        if (inRange) {
+          const scale = Math.max(0.3, Math.min(1.0, 3500 / dist));
+          const opacity = Math.max(0, Math.min(1, (6000 - dist) / 1800));
+          label.element.style.opacity = opacity.toFixed(3);
+          label.element.style.transform = `scale(${scale.toFixed(3)})`;
+          label.element.style.transformOrigin = 'center top';
+        }
+      }
+    });
+    this.labelRenderer.render(this.scene, this.camera);
+  }
+
+  dispose() {
+    this.labels.forEach((label) => {
+      if (label.parent) label.parent.remove(label.object);
+      else this.scene.remove(label.object);
+    });
+    this.labels.clear();
+    if (this._resizeObserver) {
+      this._resizeObserver.disconnect();
+      this._resizeObserver = null;
+    }
+    if (this.labelRenderer?.domElement?.parentNode) {
+      this.labelRenderer.domElement.parentNode.removeChild(this.labelRenderer.domElement);
+    }
+  }
+}

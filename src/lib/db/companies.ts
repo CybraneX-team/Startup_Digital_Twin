@@ -66,6 +66,7 @@ async function computeOffset3D(industryId: string): Promise<{x:number; y:number;
 export interface CreateCompanyInput {
   name: string;
   industry_id: string;
+  subdomain_id?: string;
   stage: CompanyStage;
   country: string;
   founded_year?: number;
