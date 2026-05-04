@@ -60,9 +60,10 @@ export default function TopBar() {
           >
             {(isBypassUser ? (
               [
-                { path: '/3d',           label: 'Twin',          active: location.pathname === '/3d' },
-                { path: '/vc/find',      label: 'Find Startups', active: location.pathname === '/vc/find' },
-                { path: '/vc/portfolio', label: 'My Portfolio',  active: location.pathname === '/vc/portfolio' },
+                { path: '/3d',           label: 'Twin',           active: location.pathname === '/3d' },
+                { path: '/vc/find',      label: 'Find Startups',  active: location.pathname === '/vc/find' },
+                { path: '/vc/manage',    label: 'Manage',         active: location.pathname === '/vc/manage' },
+                { path: '/vc/portfolio', label: 'My Portfolio',   active: location.pathname === '/vc/portfolio' },
               ]
             ) : (
               [

@@ -276,30 +276,10 @@ export class UniverseController {
       const activeId = level === ZOOM_LEVELS.GALAXY ? null : path[0]?.data?.id || null;
       this.labels.setActiveIndustry(activeId);
 
-      // Create button appears ONLY after the solar system is fully built (onNavigate, not onNavigateBegin)
-      if (level === ZOOM_LEVELS.SUBDOMAIN) {
-        const industry = path[0]?.data;
-        const subdomain = path[1]?.data;
-        if (industry && subdomain) {
-          setTimeout(() => {
-            if (this._disposed) return;
-            this.labels.createSunCreateButton(industry.color, () => {
-              this._callbacks?.onCreateCompany?.(industry, subdomain);
-            });
-          }, 400); // slight delay so camera settles first
-        }
-      } else {
-        this.labels.removeSunCreateButton();
-      }
-
       this._callbacks?.onNavigate?.(path, level);
     };
     this.navigation.onNavigateBegin = (path, level) => {
       this._updateLabelsForLevel(path, level, industries);
-      // Remove stale create button immediately when leaving subdomain
-      if (level !== ZOOM_LEVELS.SUBDOMAIN) {
-        this.labels.removeSunCreateButton();
-      }
     };
     this.navigation.onHover = (target) => {
       this._callbacks?.onHover?.(target);
@@ -687,9 +667,6 @@ export class UniverseController {
     // Freeze all orbits so the planet stays locked in place
     this.subdomainSolarSystem.freeze();
 
-    // Hide the sun create button — it will reappear when modal closes
-    this.labels.removeSunCreateButton();
-
     // Disable user controls so nothing interferes with the cinematic
     this.cameraCtrl.controls.enabled = false;
 
@@ -736,19 +713,6 @@ export class UniverseController {
         this.cameraCtrl.controls.target.set(0, 0, 0);
         this.cameraCtrl.controls.update();
         this.cameraCtrl.controls.enabled = true;  // restore user controls
-
-        // Re-show the create button
-        const path = this.navigation?.navigationPath ?? [];
-        const level = this.navigation?.currentLevel;
-        if (level === ZOOM_LEVELS.SUBDOMAIN) {
-          const industry = path[0]?.data;
-          const subdomain = path[1]?.data;
-          if (industry && subdomain) {
-            this.labels.createSunCreateButton(industry.color, () => {
-              this._callbacks?.onCreateCompany?.(industry, subdomain);
-            });
-          }
-        }
       },
     });
   }

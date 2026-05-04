@@ -20,6 +20,7 @@ import JoinWorkspace from './pages/JoinWorkspace';
 import PendingApproval from './pages/PendingApproval';
 import VCFindStartups from './pages/VCFindStartups';
 import VCPortfolio from './pages/VCPortfolio';
+import VCManage from './pages/VCManage';
 
 function FullPageLoader() {
   return (
@@ -215,6 +216,11 @@ function AppRoutes() {
                 <Route path="/vc/portfolio" element={
                   <VCGuard>
                     <VCPortfolio />
+                  </VCGuard>
+                } />
+                <Route path="/vc/manage" element={
+                  <VCGuard>
+                    <VCManage />
                   </VCGuard>
                 } />
 

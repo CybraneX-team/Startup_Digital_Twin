@@ -104,43 +104,6 @@ export class Labels {
     });
   }
 
-  /**
-   * Place a "✦ Create Company" CSS2D button above the subdomain sun.
-   * It floats above the origin (0, sunY, 0). Fires onClick when clicked.
-   */
-  createSunCreateButton(industryColor, onClick) {
-    const id = 'create-company-btn';
-    if (this.labels.has(id)) return;
-
-    const el = document.createElement('div');
-    el.className = 'label-3d-create-btn';
-    el.innerHTML = `
-      <div class="create-btn-inner">
-        <span class="create-btn-icon">✦</span>
-        <span class="create-btn-text">Create Company</span>
-      </div>
-      <div class="create-btn-arrow">▼</div>
-    `;
-    el.style.color = industryColor;
-    el.style.pointerEvents = 'auto';
-    el.style.cursor = 'pointer';
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (onClick) onClick();
-    });
-
-    const labelObj = new CSS2DObject(el);
-    labelObj.position.set(0, 48, 0); // above the sun
-    this.scene.add(labelObj);
-
-    this.labels.set(id, { object: labelObj, element: el });
-  }
-
-  /** Remove the sun create button */
-  removeSunCreateButton() {
-    this.removeByPrefix('create-company-btn');
-  }
-
   /** Add a label for a single company mesh (used for dynamically spawned planets) */
   addSingleCompanyLabel(companyId, companyName, mesh, industryColor) {
     const id = `company-${companyId}`;
