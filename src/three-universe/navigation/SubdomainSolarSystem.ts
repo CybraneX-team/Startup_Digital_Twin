@@ -37,6 +37,7 @@ export class SubdomainSolarSystem {
     this._containers   = [];
     this._atmoMats     = [];
     this.companyMeshes = [];
+    this.active = true;
 
     const color = new THREE.Color(industry.color);
 
@@ -80,27 +81,30 @@ export class SubdomainSolarSystem {
       const container = new THREE.Group();
       container.position.set(Math.cos(angle) * orbitRadius, 0, Math.sin(angle) * orbitRadius);
 
-      const r = 8 + ((company.employees || 0) / maxEmp) * 12;  // bigger, more visible
+      const r = 8 + ((company.employees || 0) / maxEmp) * 12;
       const mesh = new THREE.Mesh(
-        new THREE.IcosahedronGeometry(r, 3),
+        new THREE.SphereGeometry(r, 32, 32),
         new THREE.MeshStandardMaterial({
-          color: color.clone().multiplyScalar(0.7),
-          emissive: color, emissiveIntensity: 0.45,  // bright enough to see clearly
-          roughness: 0.6, metalness: 0.3,
+          color: color.clone().multiplyScalar(0.4),
+          emissive: color, emissiveIntensity: 0.3,
+          roughness: 0.4, metalness: 0.6,
         })
       );
-      mesh.userData = { type: 'company', company, subdomain, industry };
+      mesh.userData = { type: 'company', company, subdomain, industry, planetSize: r };
+      
+      const wire = new THREE.Mesh(
+        new THREE.SphereGeometry(r + 0.2, 16, 16),
+        new THREE.MeshBasicMaterial({
+          color: color.clone().multiplyScalar(1.5),
+          wireframe: true,
+          transparent: true,
+          opacity: 0.3,
+        })
+      );
+      mesh.add(wire);
+      
       container.add(mesh);
       this.companyMeshes.push(mesh);
-
-      // Atmosphere
-      const atmoMat = new THREE.ShaderMaterial({
-        vertexShader: atmVert, fragmentShader: atmFrag,
-        uniforms: { uColor: { value: color.clone() }, uIntensity: { value: 0.5 }, uTime: { value: 0 } },
-        transparent: true, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending,
-      });
-      container.add(new THREE.Mesh(new THREE.IcosahedronGeometry(r * 1.4, 2), atmoMat));
-      this._atmoMats.push(atmoMat);
 
       // Glow
       const cgSpr = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -179,6 +183,7 @@ export class SubdomainSolarSystem {
     this._containers = [];
     this._atmoMats  = [];
     this.companyMeshes = [];
+    this.active = false;
   }
 
   // ── HELPERS ──────────────────────────────────────────────────────────────

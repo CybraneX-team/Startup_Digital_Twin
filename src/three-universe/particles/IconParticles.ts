@@ -83,9 +83,8 @@ function sampleImage(src) {
       for (let y = 0; y < SAMPLE_SIZE; y++) {
         for (let x = 0; x < SAMPLE_SIZE; x++) {
           const i = (y * SAMPLE_SIZE + x) * 4;
-          const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
-          const brightness = (r + g + b) / 3;
-          if (a > 100 && brightness < 160) {
+          const a = data[i+3];
+          if (a > 50) {
             pixels.push({ nx: x / SAMPLE_SIZE, ny: y / SAMPLE_SIZE });
           }
         }

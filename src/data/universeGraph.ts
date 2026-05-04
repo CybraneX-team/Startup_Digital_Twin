@@ -8,6 +8,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { INDUSTRIES } from '../db/industries';
+import { COMPANIES } from '../db/companies';
 import type { IndustryRecord } from '../db/schema';
 import { getAllSubdomains, type DbSubdomain } from '../lib/db/subdomains';
 import { getActiveCompanies } from '../lib/db/companies';
@@ -99,6 +100,74 @@ export function buildUniverseData(args: {
     };
     if (!compsBySub.has(sdId)) compsBySub.set(sdId, []);
     compsBySub.get(sdId)!.push(node);
+  }
+
+  // ── Inject Static COMPANIES ──
+  for (const c of COMPANIES) {
+    let sdId: string | null = null;
+    
+    // Attempt 1: Match by Subdomain name if Supabase subdomains exist
+    const dbSubs = subsByInd.get(c.industryId);
+    if (dbSubs && c.subdomain) {
+      const match = dbSubs.find(s => s.label === c.subdomain);
+      if (match) sdId = match.id;
+    }
+    
+    // Attempt 2: Match by synthetic subdomain ID
+    if (!sdId && c.subdomain) {
+      const ind = industries.find(i => i.id === c.industryId);
+      if (ind && ind.subdomains) {
+        const idx = ind.subdomains.indexOf(c.subdomain);
+        if (idx !== -1) sdId = `${c.industryId}-sd-${idx}`;
+      }
+    }
+    
+    // Attempt 3: Fallback to the first subdomain
+    if (!sdId) {
+      const fallback = subsByInd.get(c.industryId)?.[0];
+      sdId = fallback?.id ?? `${c.industryId}-sd-0`;
+    }
+
+    const staticNode: UniverseCompany = {
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      founded: c.founded,
+      funding: c.stage,
+      stage: c.stage,
+      employees: c.employees,
+      isLive: false,
+      departments: [],
+      // Mock DbCompany structure for raw payload mapping
+      raw: {
+        id: c.id,
+        name: c.name,
+        slug: c.id,
+        industry_id: c.industryId,
+        subdomain_id: sdId,
+        stage: c.stage as any,
+        country: c.country,
+        founded_year: c.founded,
+        description: c.description,
+        website: null,
+        logo_url: null,
+        mrr_usd: c.mrrUSD,
+        employees: c.employees,
+        annual_revenue: c.mrrUSD * 12,
+        burn_rate_usd: 0,
+        runway_months: 0,
+        valuation: c.valuation,
+        target_market: null,
+        business_model: null,
+        problem_solved: null,
+        usp: null,
+        competitors: null,
+        status: 'active'
+      } as any,
+    };
+    
+    if (!compsBySub.has(sdId)) compsBySub.set(sdId, []);
+    compsBySub.get(sdId)!.push(staticNode);
   }
 
   // Assemble industries with derived angle. Angle is the polar

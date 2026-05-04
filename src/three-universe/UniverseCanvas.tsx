@@ -44,5 +44,11 @@ export default function UniverseCanvas({ data, onNavigate, onHover, controllerRe
     };
   }, []); // mount once — data passed at construction time
 
+  useEffect(() => {
+    if (ctrlRef.current && data) {
+      ctrlRef.current.updateData(data);
+    }
+  }, [data]);
+
   return <div ref={containerRef} className="absolute inset-1 w-screen h-screen overflow-hidden" />;
 }

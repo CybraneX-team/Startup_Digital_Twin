@@ -207,6 +207,7 @@ export default function Universe3DPage() {
   // NO canvas remount, camera stays exactly where it is.
   const handleCompanyCreated = useCallback((company: LocalCompany) => {
     appendLocalCompany(company as any);
+    setCreateModal(null);
     // Keep createModal closed but do NOT touch navPath/currentLevel
     // so the sidebar stays at the subdomain level.
   }, [appendLocalCompany]);

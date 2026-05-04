@@ -300,7 +300,7 @@ export class UniverseController {
       const industry = path[0]?.data;
       const subdomain = path[1]?.data;
       if (industry && subdomain) {
-        this.labels.createCompanyLabels(subdomain, () => this.systemParticles.getCompanyMeshes(industry.id, subdomain.id));
+        this.labels.createCompanyLabels(subdomain, () => this.subdomainSolarSystem.companyMeshes);
         this.labels.setVisibility('company-', true);
       }
     } else if (level === ZOOM_LEVELS.COMPANY) {
@@ -310,6 +310,7 @@ export class UniverseController {
       const subdomain = path[1]?.data;
       const company = path[2]?.data;
       if (industry && subdomain && company) {
+        this.labels.createCompanyLabels(subdomain, () => this.subdomainSolarSystem.companyMeshes);
         this.labels.createDepartmentLabels(company, () => this.systemParticles.getDeptMeshes(industry.id, subdomain.id, company.id));
         this.labels.setVisibility('dept-', true);
       }
@@ -431,6 +432,37 @@ export class UniverseController {
   }
 
   // Public API
+
+  updateData(data: UniverseData) {
+    if (this._disposed) return;
+    this._data = data;
+    this._industries = this._mapIndustries(data);
+
+    // If we are currently inside a subdomain, update it live
+    if (
+      this.cameraCtrl.currentLevel === ZOOM_LEVELS.SUBDOMAIN ||
+      this.cameraCtrl.currentLevel === ZOOM_LEVELS.COMPANY ||
+      this.cameraCtrl.currentLevel === ZOOM_LEVELS.DEPARTMENT
+    ) {
+      const activeInd = this.navigation?.selectedIndustry;
+      const activeSd = this.navigation?.selectedSubdomain;
+      if (activeInd && activeSd) {
+        const freshInd = this._industries.find(i => i.id === activeInd.id);
+        const freshSd = freshInd?.subdomains.find(s => s.id === activeSd.id);
+        if (freshInd && freshSd) {
+          this.navigation.selectedIndustry = freshInd;
+          this.navigation.selectedSubdomain = freshSd;
+          if (this.subdomainSolarSystem) {
+            this.subdomainSolarSystem.build(freshSd, freshInd);
+          }
+          if (this.navigation.navigationPath.length >= 2) {
+            this.navigation.navigationPath[0].data = freshInd;
+            this.navigation.navigationPath[1].data = freshSd;
+          }
+        }
+      }
+    }
+  }
 
   navigate(path: NavPathEntry[]): void {
     // Programmatic navigation — not used in v1, available for future
