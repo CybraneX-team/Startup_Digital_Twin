@@ -183,7 +183,7 @@ export default function Universe3DPage() {
   const { pathname } = useLocation();
   const { user, profile, canRead } = useAuth();
   // Bypass users (VC/Incubator) have no company — pass null so the universe loads without waiting
-  const isBypassUser = !!user && user.email === 'developer.cybranex@gmail.com';
+  const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
   const companyId = isBypassUser ? null : (user ? (profile?.company_id ?? null) : undefined);
   const { data, loading, error, appendLocalCompany } = useUniverseGraph(companyId);
 

@@ -23,10 +23,20 @@ import VCPortfolio from './pages/VCPortfolio';
 
 function FullPageLoader() {
   return (
-    <div className="min-h-[50vh] flex items-center justify-center">
-      <p className="text-sm text-slate-400">Loading session...</p>
+    <div className="min-h-screen flex items-center justify-center" style={{ background: '#161618' }}>
+      <div className="w-8 h-8 rounded-full animate-spin"
+        style={{ border: '2px solid #C1AEFF', borderTopColor: 'transparent' }} />
     </div>
   );
+}
+
+function VCGuard({ children }: { children: React.ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) return <FullPageLoader />;
+  if (!user || localStorage.getItem('active_role') !== 'vc') {
+    return <Navigate to="/overview" replace />;
+  }
+  return <>{children}</>;
 }
 
 function AuthPageRoute() {
@@ -102,7 +112,7 @@ function AppRoutes() {
   const isTwinGraph = location.pathname === '/twin';
   const is3DUniverse = location.pathname === '/3d';
   // Bypass users (VC / Incubator) are authed but have no company — still let them see /3d
-  const isBypassUser = !!user && user.email === 'developer.cybranex@gmail.com';
+  const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
   // Universe3D stays mounted for fully-authed users so camera/galaxy state persists across navigation
   const isFullyAuthed = (!!user && !!profile?.onboarding_completed && !!profile?.company_id) || isBypassUser;
 
@@ -197,8 +207,16 @@ function AppRoutes() {
                 } />
 
                 {/* VC pages */}
-                <Route path="/vc/find" element={<VCFindStartups />} />
-                <Route path="/vc/portfolio" element={<VCPortfolio />} />
+                <Route path="/vc/find" element={
+                  <VCGuard>
+                    <VCFindStartups />
+                  </VCGuard>
+                } />
+                <Route path="/vc/portfolio" element={
+                  <VCGuard>
+                    <VCPortfolio />
+                  </VCGuard>
+                } />
 
                 {/* /3d — redirect unauthenticated users to /auth via AuthGuard */}
                 <Route path="/3d" element={<AuthGuard><></></AuthGuard>} />

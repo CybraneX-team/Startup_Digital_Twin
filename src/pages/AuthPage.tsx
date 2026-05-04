@@ -36,6 +36,8 @@ export default function AuthPage() {
       if (mode === 'signin') {
         const { error: err } = await signIn(form.email, form.password);
         if (err) { setError(err); return; }
+        // Ensure normal sign-in doesn't inherit VC views
+        localStorage.removeItem('active_role');
         // Don't navigate here — AuthPageRoute watches auth state and redirects
         // once onAuthStateChange has finished loading the profile. Navigating
         // early causes AuthGuard to see user=null and redirect back to /auth,
@@ -47,6 +49,7 @@ export default function AuthPage() {
           last_name: form.last_name.trim(),
         });
         if (err) { setError(err); return; }
+        localStorage.removeItem('active_role');
         if (needsEmailConfirm) {
           // Email confirmation required — prompt user then switch to sign-in
           setSuccess('Account created! Check your email to confirm, then sign back in.');

@@ -57,6 +57,10 @@ function BypassSignInModal({
     const { error: err } = await signIn(email, password);
     setLoading(false);
     if (err) { setError(err); return; }
+    
+    // Explicitly set role for VC view
+    localStorage.setItem('active_role', 'vc');
+    
     navigate('/3d');
     onClose();
   }

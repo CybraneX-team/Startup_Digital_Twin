@@ -14,13 +14,14 @@ export default function TopBar() {
 
   const isAuthed = !!user;
   const hasCompany = !!profile?.company_id;
-  const isBypassUser = !!user && user.email === 'developer.cybranex@gmail.com';
+  const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
 
   const initials = profile?.first_name
     ? `${profile.first_name[0]}${profile.last_name?.[0] ?? ''}`.toUpperCase()
     : user?.email?.[0]?.toUpperCase() ?? '?';
 
   async function handleSignOut() {
+    localStorage.removeItem('active_role');
     await signOut();
     navigate('/');
   }
