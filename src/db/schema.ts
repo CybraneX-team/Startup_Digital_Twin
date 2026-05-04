@@ -18,13 +18,15 @@ export type Country =
 /*  Industry                                                         */
 /* ---------------------------------------------------------------- */
 export interface IndustryRecord {
-  id: string;                          // e.g. 'ind-saas'
+  id: string;                          // e.g. 'ind-technology'
   label: string;                       // display name
   description: string;                 // one-liner
   color: string;                       // hex — used for 3D globe tint
   position3D: [number, number, number]; // cluster center in 3D space
   bubbleRadius: number;                // wireframe sphere visual radius
   tags: string[];                      // e.g. ['b2b', 'india', 'global']
+  subdomains: string[];                // e.g. ['AI', 'Cloud', 'Cybersecurity']
+  coreLabel: string;                   // e.g. 'TECH CORE'
 }
 
 /* ---------------------------------------------------------------- */
@@ -33,7 +35,8 @@ export interface IndustryRecord {
 export interface CompanyRecord {
   id: string;                           // unique graph node id
   name: string;
-  industryId: string;                   // parent industry
+  industryId: string;                   // parent industry (e.g. 'ind-technology')
+  subdomain: string;                    // e.g. 'AI', 'Fintech', 'E-commerce'
   country: Country;
   founded: number;
   stage: CompanyStage;

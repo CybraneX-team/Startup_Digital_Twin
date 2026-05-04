@@ -76,6 +76,7 @@ export class UniverseController {
     try {
       // Transform UniverseData industries into the shape the particle system expects
       const industries = this._mapIndustries(data);
+      this._industries = industries; // cache for panel navigation
 
       // 1. Engine — mounts into container
       this.engine = new Engine(this.container);
@@ -441,6 +442,33 @@ export class UniverseController {
 
   goToGalaxy(): void {
     this.navigation?.goToGalaxy();
+  }
+
+  zoomToIndustry(industryId: string): void {
+    if (!this.navigation || !this._industries) return;
+    const idx = this._industries.findIndex((i) => i.id === industryId);
+    if (idx < 0) return;
+    this.navigation.navigateToIndustry(this._industries[idx], idx, this._industries.length);
+  }
+
+  zoomToSubdomain(industryId: string, subdomainId: string): void {
+    if (!this.navigation || !this._industries) return;
+    const industry = this._industries.find((i) => i.id === industryId);
+    if (!industry) return;
+    const subdomain = industry.subdomains.find((s) => s.id === subdomainId);
+    if (!subdomain) return;
+    this.navigation.navigateToSubdomain(industry, subdomain);
+  }
+
+  zoomToCompany(industryId: string, subdomainId: string, companyId: string): void {
+    if (!this.navigation || !this._industries) return;
+    const industry = this._industries.find((i) => i.id === industryId);
+    if (!industry) return;
+    const subdomain = industry.subdomains.find((s) => s.id === subdomainId);
+    if (!subdomain) return;
+    const company = subdomain.companies.find((c) => c.id === companyId);
+    if (!company) return;
+    this.navigation.navigateToCompany(industry, subdomain, company);
   }
 
   getCurrentLevel(): ZoomLevel {

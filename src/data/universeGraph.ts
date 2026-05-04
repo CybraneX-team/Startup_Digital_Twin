@@ -11,6 +11,7 @@ import { INDUSTRIES } from '../db/industries';
 import type { IndustryRecord } from '../db/schema';
 import { getAllSubdomains, type DbSubdomain } from '../lib/db/subdomains';
 import { getActiveCompanies } from '../lib/db/companies';
+import { getAllLocalCompanies } from '../lib/localCompanies';
 import type { DbCompany } from '../lib/supabase';
 
 /* ──────────────────────────────────────────────────
@@ -104,21 +105,40 @@ export function buildUniverseData(args: {
   // azimuth derived from idx — keeps galaxies in a ring.
   const TAU = Math.PI * 2;
   const out: UniverseIndustry[] = industries.map((ind, idx) => {
-    const subdomainsOut: UniverseSubdomain[] = (subsByInd.get(ind.id) ?? []).map(sd => ({
-      id: sd.id,
-      name: sd.label,
-      description: sd.description ?? undefined,
-      orbit_index: sd.orbit_index,
-      color: sd.color ?? ind.color,
-      companies: compsBySub.get(sd.id) ?? [],
-    }));
+    const dbSubdomains = subsByInd.get(ind.id) ?? [];
+
+    // ── Fallback: if Supabase has no subdomains for this industry,
+    //    synthesise them from the IndustryRecord.subdomains string array.
+    //    This ensures every galaxy always shows its subdomain planets even
+    //    before the DB is seeded.
+    const effectiveSubs: UniverseSubdomain[] = dbSubdomains.length > 0
+      ? dbSubdomains.map(sd => ({
+          id: sd.id,
+          name: sd.label,
+          description: sd.description ?? undefined,
+          orbit_index: sd.orbit_index,
+          color: sd.color ?? ind.color,
+          companies: compsBySub.get(sd.id) ?? [],
+        }))
+      : (ind.subdomains ?? []).map((sdName, i) => {
+          const syntheticId = `${ind.id}-sd-${i}`;
+          return {
+            id: syntheticId,
+            name: sdName,
+            description: undefined,
+            orbit_index: i,
+            color: ind.color,
+            companies: compsBySub.get(syntheticId) ?? [],
+          };
+        });
+
     return {
       id: ind.id,
       name: ind.label,
       description: ind.description,
       color: ind.color,
       angle: TAU * (idx / industries.length),
-      subdomains: subdomainsOut,
+      subdomains: effectiveSubs,
       raw: ind,
     };
   });
@@ -136,11 +156,23 @@ export function useUniverseGraph(authCompanyId?: string | null): {
   data: UniverseData | null;
   loading: boolean;
   error: string | null;
+  refresh: () => void;
+  appendLocalCompany: (company: DbCompany) => void;
 } {
   const [subdomains, setSubdomains] = useState<DbSubdomain[]>([]);
   const [companies, setCompanies]   = useState<DbCompany[]>([]);
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Full reload (only call when canvas can tolerate a remount)
+  const refresh = () => setRefreshKey(k => k + 1);
+
+  // Non-destructive append — does NOT set loading=true, so the
+  // canvas stays mounted and the camera keeps its position.
+  const appendLocalCompany = (company: DbCompany) => {
+    setCompanies(prev => [...prev, company]);
+  };
 
   useEffect(() => {
     let alive = true;
@@ -149,7 +181,9 @@ export function useUniverseGraph(authCompanyId?: string | null): {
       .then(([sd, co]) => {
         if (!alive) return;
         setSubdomains(sd);
-        setCompanies(co);
+        // Merge Supabase companies with any already-stored local companies
+        const localCos = getAllLocalCompanies() as unknown as DbCompany[];
+        setCompanies([...co, ...localCos]);
         setLoading(false);
       })
       .catch(err => {
@@ -158,7 +192,7 @@ export function useUniverseGraph(authCompanyId?: string | null): {
         setLoading(false);
       });
     return () => { alive = false; };
-  }, []);
+  }, [refreshKey]);
 
   const data = useMemo(() => {
     if (loading) return null;
@@ -170,5 +204,5 @@ export function useUniverseGraph(authCompanyId?: string | null): {
     });
   }, [loading, subdomains, companies, authCompanyId]);
 
-  return { data, loading, error };
+  return { data, loading, error, refresh, appendLocalCompany };
 }

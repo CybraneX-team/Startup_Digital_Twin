@@ -14,6 +14,7 @@ export default function TopBar() {
 
   const isAuthed = !!user;
   const hasCompany = !!profile?.company_id;
+  const isBypassUser = !!user && user.email === 'developer.cybranex@gmail.com';
 
   const initials = profile?.first_name
     ? `${profile.first_name[0]}${profile.last_name?.[0] ?? ''}`.toUpperCase()
@@ -56,12 +57,20 @@ export default function TopBar() {
             className="flex rounded-full p-0.5 shrink-0"
             style={{ background: '#1B1B1D' }}
           >
-            {([
-              { path: '/overview',   label: 'Home',     active: isOverview },
-              { path: '/3d',         label: 'Twin',     active: isTwin },
-              ...(canRead('data')     ? [{ path: '/twin/data' as const,  label: 'Data' as const,     active: isData }] : []),
-              ...(canRead('settings') ? [{ path: '/settings' as const,   label: 'Settings' as const, active: location.pathname === '/settings' }] : []),
-            ]).map(({ path, label, active }) => (
+            {(isBypassUser ? (
+              [
+                { path: '/3d',           label: 'Twin',          active: location.pathname === '/3d' },
+                { path: '/vc/find',      label: 'Find Startups', active: location.pathname === '/vc/find' },
+                { path: '/vc/portfolio', label: 'My Portfolio',  active: location.pathname === '/vc/portfolio' },
+              ]
+            ) : (
+              [
+                { path: '/overview',   label: 'Home',     active: isOverview },
+                { path: '/3d',         label: 'Twin',     active: isTwin },
+                ...(canRead('data')     ? [{ path: '/twin/data' as const,  label: 'Data' as const,     active: isData }] : []),
+                ...(canRead('settings') ? [{ path: '/settings' as const,   label: 'Settings' as const, active: location.pathname === '/settings' }] : []),
+              ]
+            )).map(({ path, label, active }) => (
               <button
                 key={path}
                 onClick={() => navigate(path)}

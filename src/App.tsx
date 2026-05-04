@@ -18,6 +18,8 @@ import AuthPage from './pages/AuthPage';
 import Onboarding from './pages/Onboarding';
 import JoinWorkspace from './pages/JoinWorkspace';
 import PendingApproval from './pages/PendingApproval';
+import VCFindStartups from './pages/VCFindStartups';
+import VCPortfolio from './pages/VCPortfolio';
 
 function FullPageLoader() {
   return (
@@ -99,8 +101,10 @@ function AppRoutes() {
 
   const isTwinGraph = location.pathname === '/twin';
   const is3DUniverse = location.pathname === '/3d';
+  // Bypass users (VC / Incubator) are authed but have no company — still let them see /3d
+  const isBypassUser = !!user && user.email === 'developer.cybranex@gmail.com';
   // Universe3D stays mounted for fully-authed users so camera/galaxy state persists across navigation
-  const isFullyAuthed = !!user && !!profile?.onboarding_completed && !!profile?.company_id;
+  const isFullyAuthed = (!!user && !!profile?.onboarding_completed && !!profile?.company_id) || isBypassUser;
 
   return (
     <>
@@ -191,6 +195,10 @@ function AppRoutes() {
                     <SettingsPage />
                   </AuthGuard>
                 } />
+
+                {/* VC pages */}
+                <Route path="/vc/find" element={<VCFindStartups />} />
+                <Route path="/vc/portfolio" element={<VCPortfolio />} />
 
                 {/* /3d — redirect unauthenticated users to /auth via AuthGuard */}
                 <Route path="/3d" element={<AuthGuard><></></AuthGuard>} />
