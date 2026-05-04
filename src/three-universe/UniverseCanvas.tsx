@@ -6,10 +6,11 @@ interface UniverseCanvasProps {
   data: UniverseData;
   onNavigate?: (path: NavPathEntry[], level: ZoomLevel) => void;
   onHover?: (target: HoverTarget | null) => void;
+  onCreateCompany?: (industry: any, subdomain: any) => void;
   controllerRef?: React.MutableRefObject<UniverseController | null>;
 }
 
-export default function UniverseCanvas({ data, onNavigate, onHover, controllerRef }: UniverseCanvasProps) {
+export default function UniverseCanvas({ data, onNavigate, onHover, onCreateCompany, controllerRef }: UniverseCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const ctrlRef = useRef<UniverseController | null>(null);
 
@@ -17,6 +18,8 @@ export default function UniverseCanvas({ data, onNavigate, onHover, controllerRe
   stableOnNavigate.current = onNavigate;
   const stableOnHover = useRef(onHover);
   stableOnHover.current = onHover;
+  const stableOnCreateCompany = useRef(onCreateCompany);
+  stableOnCreateCompany.current = onCreateCompany;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -27,6 +30,7 @@ export default function UniverseCanvas({ data, onNavigate, onHover, controllerRe
       {
         onNavigate: (path, level) => stableOnNavigate.current?.(path, level),
         onHover: (target) => stableOnHover.current?.(target),
+        onCreateCompany: (industry, subdomain) => stableOnCreateCompany.current?.(industry, subdomain),
       },
     );
     ctrlRef.current = ctrl;

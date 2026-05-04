@@ -39,6 +39,7 @@ export interface HoverTarget {
 export interface UniverseCallbacks {
   onNavigate?: (path: NavPathEntry[], level: ZoomLevel) => void;
   onHover?: (target: HoverTarget | null) => void;
+  onCreateCompany?: (industry: any, subdomain: any) => void;
 }
 
 const _orbitPos = new THREE.Vector3();
@@ -274,10 +275,31 @@ export class UniverseController {
       this._updateLabelsForLevel(path, level, industries);
       const activeId = level === ZOOM_LEVELS.GALAXY ? null : path[0]?.data?.id || null;
       this.labels.setActiveIndustry(activeId);
+
+      // Create button appears ONLY after the solar system is fully built (onNavigate, not onNavigateBegin)
+      if (level === ZOOM_LEVELS.SUBDOMAIN) {
+        const industry = path[0]?.data;
+        const subdomain = path[1]?.data;
+        if (industry && subdomain) {
+          setTimeout(() => {
+            if (this._disposed) return;
+            this.labels.createSunCreateButton(industry.color, () => {
+              this._callbacks?.onCreateCompany?.(industry, subdomain);
+            });
+          }, 400); // slight delay so camera settles first
+        }
+      } else {
+        this.labels.removeSunCreateButton();
+      }
+
       this._callbacks?.onNavigate?.(path, level);
     };
     this.navigation.onNavigateBegin = (path, level) => {
       this._updateLabelsForLevel(path, level, industries);
+      // Remove stale create button immediately when leaving subdomain
+      if (level !== ZOOM_LEVELS.SUBDOMAIN) {
+        this.labels.removeSunCreateButton();
+      }
     };
     this.navigation.onHover = (target) => {
       this._callbacks?.onHover?.(target);
@@ -286,8 +308,8 @@ export class UniverseController {
 
   private _updateLabelsForLevel(path: any[], level: string, industries: any[]) {
     this.labels.setVisibility('subdomain-', false);
-    this.labels.setVisibility('company-', false);
-    this.labels.setVisibility('dept-', false);
+    this.labels.removeByPrefix('company-');
+    this.labels.removeByPrefix('dept-');
 
     if (level === ZOOM_LEVELS.INDUSTRY) {
       const industry = path[0]?.data;
@@ -459,6 +481,9 @@ export class UniverseController {
             this.navigation.navigationPath[0].data = freshInd;
             this.navigation.navigationPath[1].data = freshSd;
           }
+          
+          // Rebuild the labels for the new meshes
+          this._updateLabelsForLevel(this.navigation.navigationPath, this.cameraCtrl.currentLevel, this._industries);
         }
       }
     }
@@ -466,6 +491,82 @@ export class UniverseController {
 
   navigate(path: NavPathEntry[]): void {
     // Programmatic navigation — not used in v1, available for future
+  }
+
+  async routeTo(targetLevel: ZoomLevel, industryId?: string, subdomainId?: string, companyId?: string): Promise<void> {
+    if (!this.navigation || !this._industries) return;
+
+    // Prevent multiple routes running at once
+    if ((this as any)._isRouting) return;
+    (this as any)._isRouting = true;
+
+    try {
+      const waitForIdle = () => new Promise<void>(resolve => {
+        const check = () => {
+          if (!this.cameraCtrl.isTransitioning) resolve();
+          else setTimeout(check, 100);
+        };
+        setTimeout(check, 50); // delay first check to let transitions begin
+      });
+
+      // Phase 1: Go up until we reach the common ancestor
+      while (true) {
+        await waitForIdle();
+        const lvl = this.getCurrentLevel();
+        if (lvl === ZOOM_LEVELS.GALAXY) break;
+        
+        const curPath = this.getNavigationPath();
+        const curInd = curPath[0]?.id;
+        const curSub = curPath[1]?.id;
+        
+        const sameInd = (curInd === industryId);
+        const sameSub = (sameInd && curSub === subdomainId);
+
+        if (lvl === ZOOM_LEVELS.DEPARTMENT || lvl === ZOOM_LEVELS.COMPANY) {
+          // If we are at a company, and we want another company in the SAME subdomain, we can just pan directly!
+          if (sameSub && targetLevel === ZOOM_LEVELS.COMPANY) {
+            break; 
+          }
+          this.goBack();
+          continue;
+        }
+        
+        if (lvl === ZOOM_LEVELS.SUBDOMAIN) {
+          if (!sameInd || targetLevel === ZOOM_LEVELS.INDUSTRY || !sameSub) {
+            this.goBack();
+            continue;
+          }
+          break; // we are in the correct subdomain
+        }
+        
+        if (lvl === ZOOM_LEVELS.INDUSTRY) {
+          if (!sameInd) {
+            this.goToGalaxy();
+            continue;
+          }
+          break; // we are in the correct industry
+        }
+      }
+
+      // Phase 2: Go down to target
+      await waitForIdle();
+      if (this.getCurrentLevel() === ZOOM_LEVELS.GALAXY && industryId) {
+        this.zoomToIndustry(industryId);
+        await waitForIdle();
+      }
+      
+      if (this.getCurrentLevel() === ZOOM_LEVELS.INDUSTRY && subdomainId) {
+        this.zoomToSubdomain(industryId, subdomainId);
+        await waitForIdle();
+      }
+      
+      if ((this.getCurrentLevel() === ZOOM_LEVELS.SUBDOMAIN || this.getCurrentLevel() === ZOOM_LEVELS.COMPANY) && companyId && subdomainId && industryId) {
+        this.zoomToCompany(industryId, subdomainId, companyId);
+        await waitForIdle();
+      }
+    } finally {
+      (this as any)._isRouting = false;
+    }
   }
 
   goBack(): void {
@@ -520,6 +621,136 @@ export class UniverseController {
     this.engine.camera.updateProjectionMatrix();
     this.engine.renderer.setSize(width, height);
     if (this.engine.onResize) this.engine.onResize(width, height);
+  }
+
+  /**
+   * Spawn a draft company planet into the current subdomain solar system.
+   * Returns the draft company ID so React can track it for form binding.
+   */
+  spawnDraftCompany(industryId: string, subdomainId: string): string | null {
+    if (!this.subdomainSolarSystem?.active) return null;
+    const industry = this._industries?.find(i => i.id === industryId);
+    const subdomain = industry?.subdomains.find(s => s.id === subdomainId);
+    if (!industry || !subdomain) return null;
+
+    const draftId = `draft-${Date.now()}`;
+    const draftCompany = { id: draftId, name: 'New Company', employees: 10, departments: [] };
+
+    const mesh = this.subdomainSolarSystem.addCompanyPlanet(draftCompany, subdomain, industry);
+    if (!mesh) return null;
+
+    // Add a floating label for the new planet
+    this.labels.addSingleCompanyLabel(draftId, 'New Company', mesh, industry.color);
+
+    return draftId;
+  }
+
+  /** Live-update the draft planet's label text as user types */
+  updateDraftName(draftId: string, name: string): void {
+    this.labels.updateCompanyLabelText(draftId, name);
+    this.subdomainSolarSystem?.updateCompanyLabel(draftId, name);
+  }
+
+  /** Remove the draft company planet if the user cancels creation */
+  removeDraftCompany(draftId: string): void {
+    this.labels.removeSpecific(`company-${draftId}`);
+    this.subdomainSolarSystem?.removeCompanyPlanet(draftId);
+  }
+
+  /**
+   * Get the screen-space (CSS pixel) position of a company planet.
+   * Used by React to draw a connector line from the form modal to the planet.
+   */
+  getCompanyScreenPos(companyId: string): { x: number; y: number } | null {
+    if (!this.subdomainSolarSystem?.active || !this.engine) return null;
+    const wp = this.subdomainSolarSystem.getCompanyWorldPosition(companyId);
+    if (wp.lengthSq() === 0) return null;
+
+    const v = wp.clone().project(this.engine.camera);
+    const rect = this.container.getBoundingClientRect();
+    return {
+      x: (v.x * 0.5 + 0.5) * rect.width + rect.left,
+      y: (-v.y * 0.5 + 0.5) * rect.height + rect.top,
+    };
+  }
+
+  /**
+   * Fly the camera to a draft company planet and freeze all orbits.
+   * Planet is positioned so it fills the right portion of the screen
+   * while the form panel sits on the left.
+   */
+  focusDraftPlanet(draftId: string): void {
+    if (!this.subdomainSolarSystem?.active || !this.engine) return;
+    const wp = this.subdomainSolarSystem.getCompanyWorldPosition(draftId);
+    if (wp.lengthSq() === 0) return;
+
+    // Freeze all orbits so the planet stays locked in place
+    this.subdomainSolarSystem.freeze();
+
+    // Hide the sun create button — it will reappear when modal closes
+    this.labels.removeSunCreateButton();
+
+    // Disable user controls so nothing interferes with the cinematic
+    this.cameraCtrl.controls.enabled = false;
+
+    // Camera positioned to the upper-left of the planet so it dominates
+    // the RIGHT half of the screen while the form modal sits on the LEFT.
+    // Distance ~38 units → planet (r=12) subtends ~35° of vertical FOV → very large.
+    const camTarget = wp.clone();
+    const camPos = wp.clone().add(new THREE.Vector3(-18, 8, 32));
+
+    this.cameraCtrl.isTransitioning = true;
+    gsap.to(this.engine.camera.position, {
+      x: camPos.x, y: camPos.y, z: camPos.z,
+      duration: 1.8,
+      ease: 'power3.inOut',
+      onUpdate: () => {
+        this.engine.camera.lookAt(camTarget);
+        this.cameraCtrl.controls.target.copy(camTarget);
+      },
+      onComplete: () => {
+        this.cameraCtrl.isTransitioning = false;
+        this.cameraCtrl.controls.target.copy(camTarget);
+        // Keep controls disabled — user can only interact via the form
+      },
+    });
+  }
+
+  /** Unfreeze all orbits, re-enable controls, and fly camera back to subdomain overview. */
+  unfocusDraftPlanet(): void {
+    if (!this.subdomainSolarSystem?.active) return;
+    this.subdomainSolarSystem.unfreeze();
+
+    if (!this.engine) return;
+    this.cameraCtrl.isTransitioning = true;
+    gsap.to(this.engine.camera.position, {
+      x: 0, y: 200, z: 750,
+      duration: 1.4,
+      ease: 'power2.inOut',
+      onUpdate: () => {
+        this.engine.camera.lookAt(0, 0, 0);
+        this.cameraCtrl.controls.target.set(0, 0, 0);
+      },
+      onComplete: () => {
+        this.cameraCtrl.isTransitioning = false;
+        this.cameraCtrl.controls.target.set(0, 0, 0);
+        this.cameraCtrl.controls.update();
+        this.cameraCtrl.controls.enabled = true;  // restore user controls
+
+        // Re-show the create button
+        const path = this.navigation?.navigationPath ?? [];
+        const level = this.navigation?.currentLevel;
+        if (level === ZOOM_LEVELS.SUBDOMAIN) {
+          const industry = path[0]?.data;
+          const subdomain = path[1]?.data;
+          if (industry && subdomain) {
+            this.labels.createSunCreateButton(industry.color, () => {
+              this._callbacks?.onCreateCompany?.(industry, subdomain);
+            });
+          }
+        }
+      },
+    });
   }
 
   dispose(): void {

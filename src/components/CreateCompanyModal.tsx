@@ -1,22 +1,22 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   X, Building2, Globe, Calendar, Users, DollarSign,
-  Briefcase, ChevronDown, Loader2, CheckCircle2,
+  Briefcase, ChevronDown, Loader2, CheckCircle2, Rocket,
 } from 'lucide-react';
 import { saveLocalCompany, type LocalCompany } from '../lib/localCompanies';
 import type { CompanyStage, BusinessModel } from '../lib/supabase';
+import type { UniverseController } from '../three-universe/UniverseController';
 
 /* ── Types ──────────────────────────────────────────────── */
 interface CreateCompanyModalProps {
-  /** The industry galaxy the subdomain belongs to */
   industryId: string;
-  /** The specific subdomain planet the user is browsing */
   subdomainId: string;
   subdomainName: string;
   industryName: string;
   industryColor: string;
-  onClose: () => void;
-  /** Called with the full saved company after a successful save */
+  draftPlanetId: string | null;
+  controllerRef: React.MutableRefObject<UniverseController | null>;
+  onClose: (isCancel?: boolean) => void;
   onCreated: (company: LocalCompany) => void;
 }
 
@@ -36,8 +36,8 @@ const COUNTRIES = [
 /* ── Field helpers ───────────────────────────────────────── */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col gap-1.5">
-      <label className="text-[11px] font-semibold uppercase tracking-wider" style={{ color: '#5E5E5E' }}>
+    <div className="flex flex-col gap-1">
+      <label className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#5E5E5E' }}>
         {label}
       </label>
       {children}
@@ -46,18 +46,19 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 }
 
 const inputStyle: React.CSSProperties = {
-  background: '#161618',
-  border: '1px solid rgba(255,255,255,0.07)',
+  background: 'rgba(255,255,255,0.04)',
+  border: '1px solid rgba(255,255,255,0.08)',
   color: '#fff',
-  borderRadius: '0.75rem',
-  padding: '10px 14px',
-  fontSize: '13px',
+  borderRadius: '0.625rem',
+  padding: '8px 12px',
+  fontSize: '12px',
   outline: 'none',
   width: '100%',
+  transition: 'border-color 0.2s',
 };
 
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} style={{ ...inputStyle, ...props.style }} />;
+  return <input {...props} style={{ ...inputStyle, ...props.style }} onFocus={e => e.target.style.borderColor = 'rgba(255,255,255,0.2)'} onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'} />;
 }
 
 function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
@@ -68,13 +69,13 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
         style={{
           ...inputStyle,
           appearance: 'none',
-          paddingRight: '36px',
+          paddingRight: '30px',
           cursor: 'pointer',
           ...props.style,
         }}
       />
       <ChevronDown
-        className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+        className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none"
         style={{ color: '#5E5E5E' }}
       />
     </div>
@@ -88,7 +89,7 @@ function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
       style={{
         ...inputStyle,
         resize: 'none',
-        minHeight: '72px',
+        minHeight: '56px',
         ...props.style,
       }}
     />
@@ -102,6 +103,8 @@ export default function CreateCompanyModal({
   subdomainName,
   industryName,
   industryColor,
+  draftPlanetId,
+  controllerRef,
   onClose,
   onCreated,
 }: CreateCompanyModalProps) {
@@ -122,11 +125,39 @@ export default function CreateCompanyModal({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
+  const [planetPos, setPlanetPos] = useState<{ x: number; y: number } | null>(null);
+  const rafRef = useRef<number>(0);
+  const nameInputRef = useRef<HTMLInputElement>(null);
 
   function set(key: string, value: string | number) {
     setForm(f => ({ ...f, [key]: value }));
     setError(null);
   }
+
+  // Live-update planet label when name changes
+  useEffect(() => {
+    if (draftPlanetId && controllerRef.current) {
+      controllerRef.current.updateDraftName(draftPlanetId, form.name || 'New Company');
+    }
+  }, [form.name, draftPlanetId, controllerRef]);
+
+  // Track planet screen position for connector line
+  const updatePlanetPos = useCallback(() => {
+    if (!draftPlanetId || !controllerRef.current) return;
+    const pos = controllerRef.current.getCompanyScreenPos(draftPlanetId);
+    if (pos) setPlanetPos(pos);
+    rafRef.current = requestAnimationFrame(updatePlanetPos);
+  }, [draftPlanetId, controllerRef]);
+
+  useEffect(() => {
+    rafRef.current = requestAnimationFrame(updatePlanetPos);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [updatePlanetPos]);
+
+  // Auto-focus name field
+  useEffect(() => {
+    setTimeout(() => nameInputRef.current?.focus(), 300);
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -155,114 +186,148 @@ export default function CreateCompanyModal({
       setLoading(false);
       setDone(true);
       setTimeout(() => {
-        onCreated(saved);   // pass full object so caller can append it to graph
-        onClose();
-      }, 1400);
+        onCreated(saved);
+        onClose(false); // false = not cancelled
+      }, 1200);
     } catch (err) {
       setLoading(false);
       setError('Failed to save company. Please try again.');
     }
   }
 
+  const modalLeft = 24;
+  const modalTop = 100;
+  const modalWidth = 340;
+  const modalHeight = 580;
+  const modalCenterY = modalTop + modalHeight / 2;
+  const modalRight = modalLeft + modalWidth;
+
   /* ── Success state ── */
   if (done) {
     return (
       <div
-        className="fixed inset-0 z-[999] flex items-center justify-center"
-        style={{ background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)' }}
+        className="fixed z-[999] flex flex-col items-center justify-center gap-4 p-8 rounded-2xl"
+        style={{
+          left: modalLeft, top: modalTop, width: modalWidth,
+          background: 'rgba(10, 10, 12, 0.95)',
+          border: `1px solid ${industryColor}40`,
+          backdropFilter: 'blur(20px)',
+          boxShadow: `0 0 60px ${industryColor}18, 0 24px 64px rgba(0,0,0,0.7)`,
+        }}
       >
         <div
-          className="flex flex-col items-center gap-4 p-10 rounded-2xl"
-          style={{ background: '#1B1B1D', border: `1px solid ${industryColor}40` }}
+          className="w-14 h-14 rounded-full flex items-center justify-center"
+          style={{ background: `${industryColor}20` }}
         >
-          <div
-            className="w-16 h-16 rounded-full flex items-center justify-center"
-            style={{ background: `${industryColor}20` }}
-          >
-            <CheckCircle2 className="w-8 h-8" style={{ color: industryColor }} />
-          </div>
-          <p className="text-white text-lg font-semibold">Company Created!</p>
-          <p className="text-sm" style={{ color: '#5E5E5E' }}>
-            <span style={{ color: industryColor }}>{form.name}</span> is now orbiting{' '}
-            <span className="text-white">{subdomainName}</span>
-          </p>
+          <CheckCircle2 className="w-7 h-7" style={{ color: industryColor }} />
         </div>
+        <p className="text-white text-sm font-semibold">Company Created!</p>
+        <p className="text-xs text-center" style={{ color: '#5E5E5E' }}>
+          <span style={{ color: industryColor }}>{form.name}</span> is now orbiting{' '}
+          <span className="text-white">{subdomainName}</span>
+        </p>
       </div>
     );
   }
 
-  /* ── Main modal ── */
+  /* ── Main floating panel ── */
   return (
-    <div
-      className="fixed inset-0 z-[999] flex items-center justify-center p-4"
-      style={{ background: 'rgba(0,0,0,0.82)', backdropFilter: 'blur(12px)' }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}
-    >
+    <>
+      {/* Connector line from modal to planet */}
+      {planetPos && (
+        <svg
+          className="create-modal-connector"
+          style={{ left: 0, top: 0, width: '100vw', height: '100vh' }}
+        >
+          <line
+            x1={modalRight + 8}
+            y1={modalCenterY}
+            x2={planetPos.x}
+            y2={planetPos.y}
+            stroke={industryColor}
+            strokeWidth="1.5"
+            strokeOpacity="0.5"
+          />
+          {/* Dot at planet end */}
+          <circle cx={planetPos.x} cy={planetPos.y} r="4" fill={industryColor} fillOpacity="0.7" />
+          {/* Dot at modal end */}
+          <circle cx={modalRight + 8} cy={modalCenterY} r="3" fill={industryColor} fillOpacity="0.5" />
+        </svg>
+      )}
+
+      {/* Floating left-side panel */}
       <div
-        className="relative w-full max-w-2xl max-h-[90vh] rounded-2xl flex flex-col overflow-hidden"
+        className="fixed z-[999] flex flex-col rounded-2xl overflow-hidden"
         style={{
-          background: '#1B1B1D',
+          left: modalLeft,
+          top: modalTop,
+          width: modalWidth,
+          maxHeight: `calc(100vh - ${modalTop + 40}px)`,
+          background: 'rgba(10, 10, 12, 0.92)',
           border: `1px solid ${industryColor}25`,
-          boxShadow: `0 0 60px ${industryColor}18, 0 24px 64px rgba(0,0,0,0.7)`,
+          backdropFilter: 'blur(24px)',
+          boxShadow: `0 0 80px ${industryColor}12, 0 24px 64px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,255,255,0.04)`,
+          animation: 'panel-slide-in 0.3s cubic-bezier(0.23, 1, 0.32, 1) both',
         }}
       >
         {/* ── Header ── */}
         <div
-          className="flex items-center gap-3 px-6 py-5 shrink-0"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+          className="flex items-center gap-2.5 px-4 py-3.5 shrink-0"
+          style={{ borderBottom: `1px solid ${industryColor}15` }}
         >
           <div
-            className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: `${industryColor}18`, border: `1px solid ${industryColor}30` }}
+            className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+            style={{ background: `${industryColor}18`, border: `1px solid ${industryColor}25` }}
           >
-            <Building2 className="w-4.5 h-4.5" style={{ color: industryColor }} />
+            <Rocket className="w-4 h-4" style={{ color: industryColor }} />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-white text-base font-semibold leading-tight">Add Company to Universe</h2>
-            <p className="text-xs mt-0.5" style={{ color: '#5E5E5E' }}>
+            <h2 className="text-white text-sm font-semibold leading-tight">Launch Company</h2>
+            <p className="text-[10px] mt-0.5 truncate" style={{ color: '#5E5E5E' }}>
               {industryName} → <span style={{ color: industryColor }}>{subdomainName}</span>
             </p>
           </div>
           <button
-            onClick={onClose}
+            onClick={() => onClose(true)}
             className="p-1.5 rounded-lg transition-colors hover:bg-white/10 shrink-0"
             style={{ color: '#5E5E5E' }}
           >
-            <X className="w-4 h-4" />
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
 
         {/* ── Form ── */}
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1" style={{ scrollbarWidth: 'none' }}>
-          <div className="px-6 py-5 flex flex-col gap-5">
+          <div className="px-4 py-3.5 flex flex-col gap-3.5">
+            {/* Name — large prominent field */}
+            <Field label="Company Name *">
+              <Input
+                ref={nameInputRef}
+                type="text"
+                placeholder="e.g. Acme Inc."
+                value={form.name}
+                onChange={e => set('name', e.target.value)}
+                required
+                style={{ fontSize: '14px', padding: '10px 12px', borderColor: `${industryColor}30` }}
+              />
+            </Field>
 
-            {/* Row 1 — Name + Website */}
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Company Name *">
+            {/* Website */}
+            <Field label="Website">
+              <div className="relative">
+                <Globe className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3" style={{ color: '#5E5E5E' }} />
                 <Input
-                  type="text"
-                  placeholder="e.g. Acme Inc."
-                  value={form.name}
-                  onChange={e => set('name', e.target.value)}
-                  required
+                  type="url"
+                  placeholder="https://..."
+                  value={form.website}
+                  onChange={e => set('website', e.target.value)}
+                  style={{ paddingLeft: '28px' }}
                 />
-              </Field>
-              <Field label="Website">
-                <div className="relative">
-                  <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: '#5E5E5E' }} />
-                  <Input
-                    type="url"
-                    placeholder="https://..."
-                    value={form.website}
-                    onChange={e => set('website', e.target.value)}
-                    style={{ paddingLeft: '34px' }}
-                  />
-                </div>
-              </Field>
-            </div>
+              </div>
+            </Field>
 
-            {/* Row 2 — Stage + Country + Founded */}
-            <div className="grid grid-cols-3 gap-4">
+            {/* Stage + Country */}
+            <div className="grid grid-cols-2 gap-2.5">
               <Field label="Stage *">
                 <Select value={form.stage} onChange={e => set('stage', e.target.value)}>
                   {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -273,104 +338,89 @@ export default function CreateCompanyModal({
                   {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </Select>
               </Field>
-              <Field label="Founded Year">
+            </div>
+
+            {/* Founded + Team Size */}
+            <div className="grid grid-cols-2 gap-2.5">
+              <Field label="Founded">
                 <div className="relative">
-                  <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: '#5E5E5E' }} />
+                  <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3" style={{ color: '#5E5E5E' }} />
                   <Input
                     type="number"
                     min={1900}
                     max={new Date().getFullYear()}
                     value={form.founded_year}
                     onChange={e => set('founded_year', parseInt(e.target.value, 10))}
-                    style={{ paddingLeft: '34px' }}
+                    style={{ paddingLeft: '28px' }}
                   />
                 </div>
               </Field>
-            </div>
-
-            {/* Row 3 — Employees + MRR + Business Model */}
-            <div className="grid grid-cols-3 gap-4">
               <Field label="Team Size">
                 <div className="relative">
-                  <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: '#5E5E5E' }} />
+                  <Users className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3" style={{ color: '#5E5E5E' }} />
                   <Input
                     type="number"
                     min={1}
                     placeholder="e.g. 25"
                     value={form.employees}
                     onChange={e => set('employees', e.target.value)}
-                    style={{ paddingLeft: '34px' }}
+                    style={{ paddingLeft: '28px' }}
                   />
                 </div>
               </Field>
+            </div>
+
+            {/* MRR + Business Model */}
+            <div className="grid grid-cols-2 gap-2.5">
               <Field label="MRR (USD)">
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5" style={{ color: '#5E5E5E' }} />
+                  <DollarSign className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3 h-3" style={{ color: '#5E5E5E' }} />
                   <Input
                     type="number"
                     min={0}
                     placeholder="e.g. 50000"
                     value={form.mrr_usd}
                     onChange={e => set('mrr_usd', e.target.value)}
-                    style={{ paddingLeft: '34px' }}
+                    style={{ paddingLeft: '28px' }}
                   />
                 </div>
               </Field>
-              <Field label="Business Model">
+              <Field label="Model">
                 <Select value={form.business_model} onChange={e => set('business_model', e.target.value)}>
                   {MODELS.map(m => <option key={m} value={m}>{m}</option>)}
                 </Select>
               </Field>
             </div>
 
-            {/* Row 4 — Description */}
+            {/* Description */}
             <Field label="Description">
               <Textarea
-                placeholder="Brief description of what the company does..."
+                placeholder="Brief description..."
                 value={form.description}
                 onChange={e => set('description', e.target.value)}
-                rows={3}
+                rows={2}
               />
             </Field>
 
-            {/* Row 5 — Problem + USP */}
-            <div className="grid grid-cols-2 gap-4">
-              <Field label="Problem Solved">
-                <Textarea
-                  placeholder="What core problem does this company solve?"
-                  value={form.problem_solved}
-                  onChange={e => set('problem_solved', e.target.value)}
-                  rows={2}
-                />
-              </Field>
-              <Field label="Unique Selling Point">
-                <Textarea
-                  placeholder="What makes this company different?"
-                  value={form.usp}
-                  onChange={e => set('usp', e.target.value)}
-                  rows={2}
-                />
-              </Field>
-            </div>
-
             {/* Context badge */}
             <div
-              className="flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
+              className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[10px]"
               style={{
-                background: `${industryColor}0d`,
-                border: `1px solid ${industryColor}20`,
+                background: `${industryColor}0a`,
+                border: `1px solid ${industryColor}15`,
                 color: industryColor,
               }}
             >
-              <Briefcase className="w-3.5 h-3.5 shrink-0" />
-              This company will orbit the <strong>{subdomainName}</strong> subdomain within the{' '}
-              <strong>{industryName}</strong> galaxy.
+              <Briefcase className="w-3 h-3 shrink-0" />
+              <span>
+                Orbiting <strong>{subdomainName}</strong> in <strong>{industryName}</strong>
+              </span>
             </div>
 
             {/* Error */}
             {error && (
               <p
-                className="text-sm rounded-xl px-4 py-3"
+                className="text-xs rounded-lg px-3 py-2"
                 style={{ background: 'rgba(239,68,68,0.12)', color: '#f87171' }}
               >
                 {error}
@@ -381,23 +431,22 @@ export default function CreateCompanyModal({
 
         {/* ── Footer ── */}
         <div
-          className="flex items-center justify-end gap-3 px-6 py-4 shrink-0"
-          style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}
+          className="flex items-center justify-end gap-2 px-4 py-3 shrink-0"
+          style={{ borderTop: `1px solid ${industryColor}12` }}
         >
           <button
             type="button"
-            onClick={onClose}
-            className="px-5 py-2.5 rounded-xl text-sm font-medium transition-colors hover:bg-white/5"
+            onClick={() => onClose(true)}
+            className="px-4 py-2 rounded-lg text-[11px] font-medium transition-colors hover:bg-white/5"
             style={{ color: '#5E5E5E' }}
           >
             Cancel
           </button>
           <button
             type="submit"
-            form="create-company-form"
             disabled={loading || !form.name.trim()}
             onClick={handleSubmit}
-            className="flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-semibold transition-all hover:opacity-90 disabled:opacity-40"
+            className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-[11px] font-semibold transition-all hover:opacity-90 disabled:opacity-40"
             style={{
               background: `linear-gradient(135deg, ${industryColor}, ${industryColor}bb)`,
               color: '#161618',
@@ -405,18 +454,18 @@ export default function CreateCompanyModal({
           >
             {loading ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 Creating…
               </>
             ) : (
               <>
-                <Building2 className="w-4 h-4" />
-                Launch into Universe
+                <Rocket className="w-3.5 h-3.5" />
+                Launch
               </>
             )}
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
 }

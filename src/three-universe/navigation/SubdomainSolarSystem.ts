@@ -13,6 +13,63 @@ import atmVert from '../shaders/atmosphere/vertex.glsl';
 import atmFrag from '../shaders/atmosphere/fragment.glsl';
 import { TextureGenerator } from '../engine/TextureGenerator.js';
 
+function generatePlanetTexture(baseColor: THREE.Color, seed: number) {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 256;
+  const ctx = canvas.getContext('2d')!;
+  
+  ctx.fillStyle = `#${baseColor.getHexString()}`;
+  ctx.fillRect(0, 0, 512, 256);
+  
+  // Random deterministic function
+  const rand = (n: number) => {
+    let t = Math.sin(seed * n) * 10000;
+    return t - Math.floor(t);
+  };
+
+  // Draw noisy bands (gas giant look) or craters
+  const isGasGiant = rand(1) > 0.5;
+  
+  for (let i = 0; i < 150; i++) {
+    const x = rand(i * 2) * 512;
+    const y = rand(i * 2 + 1) * 256;
+    
+    const hsl = { h: 0, s: 0, l: 0 };
+    baseColor.getHSL(hsl);
+    hsl.l += (rand(i * 3) - 0.5) * 0.4;
+    hsl.s += (rand(i * 3 + 1) - 0.5) * 0.2;
+    const c = new THREE.Color().setHSL(hsl.h, Math.max(0, Math.min(1, hsl.s)), Math.max(0, Math.min(1, hsl.l)));
+    
+    ctx.fillStyle = `#${c.getHexString()}`;
+    ctx.globalAlpha = 0.3 + rand(i * 4) * 0.5;
+    
+    ctx.beginPath();
+    if (isGasGiant) {
+      // Band-like structures
+      const w = 50 + rand(i*5) * 200;
+      const h = 5 + rand(i*6) * 15;
+      ctx.ellipse(x, y, w, h, 0, 0, Math.PI * 2);
+    } else {
+      // Crater-like spots
+      const r = 5 + rand(i*5) * 25;
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+    }
+    ctx.fill();
+  }
+  
+  // Add some tiny dots for texture
+  ctx.globalAlpha = 0.15;
+  ctx.fillStyle = '#ffffff';
+  for (let i = 0; i < 1000; i++) {
+    ctx.fillRect(rand(i * 7) * 512, rand(i * 8) * 256, 1, 1);
+  }
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.minFilter = THREE.LinearFilter;
+  return texture;
+}
+
 let _glowTex = null;
 const getGlow = () => {
   if (!_glowTex) _glowTex = new THREE.CanvasTexture(TextureGenerator.createGlowTexture(128));
@@ -27,6 +84,8 @@ export class SubdomainSolarSystem {
     this._containers = [];   // { container, orbitRadius, angle, speed }
     this._atmoMats   = [];
     this.companyMeshes = [];  // exposed for raycasting
+    this._frozen = false;    // when true, all planets stop orbiting
+    this._frozenAngle = new Map(); // companyId → frozen angle
   }
 
   // ── BUILD ────────────────────────────────────────────────────────────────
@@ -38,6 +97,8 @@ export class SubdomainSolarSystem {
     this._atmoMats     = [];
     this.companyMeshes = [];
     this.active = true;
+    this._frozen = false;
+    this._frozenAngle = new Map();
 
     const color = new THREE.Color(industry.color);
 
@@ -57,61 +118,60 @@ export class SubdomainSolarSystem {
 
     // Sun glow sprite — keep small so company planets aren't swallowed
     const glowSpr = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: getGlow(), color, transparent: true, opacity: 0.65,
+      map: getGlow(), color, transparent: true, opacity: 0.35,
       blending: THREE.AdditiveBlending, depthWrite: false,
     }));
     glowSpr.scale.set(75, 75, 1);
     this.group.add(glowSpr);
 
-    // Point light from sun
-    this.group.add(new THREE.PointLight(color.getHex(), 1.4, 900, 2.0));
+    // Strong white/tinted point light from sun so planets are well-lit
+    const lightColor = new THREE.Color(0xffffff).lerp(color, 0.3); // mostly white, slightly tinted
+    this.group.add(new THREE.PointLight(lightColor.getHex(), 4.5, 1500, 1.2));
 
-    // Ambient light so dark sides of planets are still visible
-    this.group.add(new THREE.AmbientLight(0x223344, 0.8));
+    // Ambient light so dark sides of planets are brightly visible
+    this.group.add(new THREE.AmbientLight(0xffffff, 0.45));
 
     // ─ COMPANY PLANETS ─
     const companies = subdomain.companies || [];
     const maxEmp    = Math.max(...companies.map(c => c.employees || 1), 1);
 
     companies.forEach((company, idx) => {
-      const orbitRadius = 130 + idx * 75;
-      const angle = (idx / companies.length) * Math.PI * 2;
-      const speed = 3.0 / Math.sqrt(orbitRadius); // rad/sec — inner ~25s rev, outer ~50s
+      // Bound radius so they don't go infinitely far away, but keep the spiral look
+      const maxRadius = 800;
+      const minRadius = 180;
+      const orbitRadius = minRadius + (idx / Math.max(1, companies.length - 1)) * (maxRadius - minRadius);
+      // Add the same + idx * 0.5 angle wrap used by subdomains to make it look identical
+      const angle = (idx / companies.length) * Math.PI * 2 + idx * 0.5;
+      const speed = 3.0 / Math.sqrt(orbitRadius); // rad/sec
 
       const container = new THREE.Group();
       container.position.set(Math.cos(angle) * orbitRadius, 0, Math.sin(angle) * orbitRadius);
 
+      const texture = generatePlanetTexture(color, company.id.length * (company.employees || 1) + Math.random());
+
       const r = 8 + ((company.employees || 0) / maxEmp) * 12;
       const mesh = new THREE.Mesh(
-        new THREE.SphereGeometry(r, 32, 32),
+        new THREE.SphereGeometry(r, 64, 64),
         new THREE.MeshStandardMaterial({
-          color: color.clone().multiplyScalar(0.4),
-          emissive: color, emissiveIntensity: 0.3,
-          roughness: 0.4, metalness: 0.6,
+          map: texture,
+          bumpMap: texture,
+          bumpScale: 0.5,
+          color: 0xffffff, // The texture already has the color
+          roughness: 0.8,
+          metalness: 0.1,
         })
       );
       mesh.userData = { type: 'company', company, subdomain, industry, planetSize: r };
-      
-      const wire = new THREE.Mesh(
-        new THREE.SphereGeometry(r + 0.2, 16, 16),
-        new THREE.MeshBasicMaterial({
-          color: color.clone().multiplyScalar(1.5),
-          wireframe: true,
-          transparent: true,
-          opacity: 0.3,
-        })
-      );
-      mesh.add(wire);
       
       container.add(mesh);
       this.companyMeshes.push(mesh);
 
       // Glow
       const cgSpr = new THREE.Sprite(new THREE.SpriteMaterial({
-        map: getGlow(), color, transparent: true, opacity: 0.25,
+        map: getGlow(), color, transparent: true, opacity: 0.08,
         blending: THREE.AdditiveBlending, depthWrite: false,
       }));
-      cgSpr.scale.set(r * 5, r * 5, 1);
+      cgSpr.scale.set(r * 4, r * 4, 1);
       container.add(cgSpr);
 
       this.group.add(container);
@@ -154,17 +214,24 @@ export class SubdomainSolarSystem {
   update(elapsed) {
     if (!this.group) return;
     if (this._sunMat) this._sunMat.uniforms.uTime.value = elapsed;
+    if (this._frozen) return;  // planets are stopped — skip orbit update
     const ts = 0.016 * 0.12;
     this._containers.forEach(cc => {
       cc.angle += cc.speed * ts;
       cc.container.position.set(
         Math.cos(cc.angle) * cc.orbitRadius,
-        Math.sin(cc.angle * 1.5) * 2.5,
+        Math.sin(cc.angle * 2.0) * 1.5,
         Math.sin(cc.angle) * cc.orbitRadius
       );
     });
     this._atmoMats.forEach(m => { m.uniforms.uTime.value = elapsed; });
   }
+
+  /** Stop all planets in their current positions */
+  freeze() { this._frozen = true; }
+
+  /** Resume normal orbiting */
+  unfreeze() { this._frozen = false; }
 
   // ── DESTROY ──────────────────────────────────────────────────────────────
   destroy() {
@@ -184,6 +251,107 @@ export class SubdomainSolarSystem {
     this._atmoMats  = [];
     this.companyMeshes = [];
     this.active = false;
+  }
+
+  // ── DYNAMIC PLANET CREATION ──────────────────────────────────────────────
+  /**
+   * Spawn a brand-new company planet into orbit around the sun.
+   * Returns the mesh so the caller can track its world position.
+   */
+  addCompanyPlanet(company, subdomain, industry) {
+    if (!this.group) return null;
+
+    const color = new THREE.Color(industry.color);
+    const existingCount = this._containers.length;
+    
+    // Use the same bounded radius + angle wrap logic for new planets
+    const maxRadius = 800;
+    const minRadius = 180;
+    const orbitRadius = minRadius + (existingCount / Math.max(1, existingCount)) * (maxRadius - minRadius) + 40; // slight push out for new ones
+    const angle = (existingCount / Math.max(1, existingCount + 1)) * Math.PI * 2 + existingCount * 0.5;
+    const speed = 3.0 / Math.sqrt(orbitRadius);
+
+    const container = new THREE.Group();
+    container.position.set(Math.cos(angle) * orbitRadius, 0, Math.sin(angle) * orbitRadius);
+
+    const texture = generatePlanetTexture(color, company.name.length * 7 + Math.random() * 1000);
+    const r = 12;
+    const mesh = new THREE.Mesh(
+      new THREE.SphereGeometry(r, 64, 64),
+      new THREE.MeshStandardMaterial({
+        map: texture,
+        bumpMap: texture,
+        bumpScale: 0.5,
+        color: 0xffffff,
+        roughness: 0.8,
+        metalness: 0.1,
+      })
+    );
+    mesh.userData = { type: 'company', company, subdomain, industry, planetSize: r };
+    container.add(mesh);
+    this.companyMeshes.push(mesh);
+
+    // Glow sprite
+    const cgSpr = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: getGlow(), color, transparent: true, opacity: 0.08,
+      blending: THREE.AdditiveBlending, depthWrite: false,
+    }));
+    cgSpr.scale.set(r * 4, r * 4, 1);
+    container.add(cgSpr);
+
+    // Spawn animation — scale from 0
+    container.scale.setScalar(0.01);
+    gsap.to(container.scale, { x: 1, y: 1, z: 1, duration: 1.2, ease: 'elastic.out(1, 0.5)' });
+
+    this.group.add(container);
+    this._containers.push({ container, orbitRadius, angle, speed, companyId: company.id });
+
+    return mesh;
+  }
+
+  /**
+   * Remove a specifically spawned company planet (e.g. if draft is cancelled)
+   */
+  removeCompanyPlanet(companyId) {
+    if (!this.group) return;
+
+    // Remove from meshes array
+    const meshIndex = this.companyMeshes.findIndex(m => m.userData.company?.id === companyId);
+    if (meshIndex !== -1) {
+      this.companyMeshes.splice(meshIndex, 1);
+    }
+
+    // Remove from containers array and scene graph
+    const containerIndex = this._containers.findIndex(c => c.companyId === companyId);
+    if (containerIndex !== -1) {
+      const { container } = this._containers[containerIndex];
+      this.group.remove(container);
+      
+      // Clean up geometries/materials to prevent memory leaks
+      container.traverse(o => {
+        if (o.geometry) o.geometry.dispose();
+        if (o.material) {
+          if (Array.isArray(o.material)) o.material.forEach(m => m.dispose());
+          else o.material.dispose();
+        }
+      });
+      
+      this._containers.splice(containerIndex, 1);
+    }
+  }
+
+  /** Live-update the name stored in a company mesh's userData */
+  updateCompanyLabel(companyId, newName) {
+    const mesh = this.companyMeshes.find(m => m.userData.company?.id === companyId);
+    if (mesh) {
+      mesh.userData.company = { ...mesh.userData.company, name: newName };
+    }
+  }
+
+  /** Get the world-space position of the sun (centre of the solar system) */
+  getSunWorldPosition() {
+    if (!this.group) return new THREE.Vector3();
+    return this.group.position.clone();
   }
 
   // ── HELPERS ──────────────────────────────────────────────────────────────

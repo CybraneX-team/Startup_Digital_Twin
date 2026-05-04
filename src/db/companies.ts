@@ -1,5 +1,12 @@
 import type { CompanyRecord } from './schema';
 import { FINANCE_COMPANIES } from './companies_finance';
+import { MANUFACTURING_COMPANIES } from './companies_manufacturing';
+import { HEALTHCARE_COMPANIES } from './companies_healthcare';
+import { EDUCATION_COMPANIES } from './companies_education';
+import { MEDIA_COMPANIES } from './companies_media';
+import { COMMERCE_COMPANIES } from './companies_commerce';
+import { REST_COMPANIES } from './companies_rest';
+import { AUTO_COMPANIES } from './companies_auto';
 
 /* Reusable offset sets — spread companies across a small sphere */
 const O = {
@@ -243,6 +250,13 @@ export const COMPANIES: CompanyRecord[] = [
     description: 'Issue tracking for modern software teams.', status: 'healthy', offset3D: O.c,
   },
   ...(FINANCE_COMPANIES as CompanyRecord[]),
+  ...(MANUFACTURING_COMPANIES as CompanyRecord[]),
+  ...(HEALTHCARE_COMPANIES as CompanyRecord[]),
+  ...(EDUCATION_COMPANIES as CompanyRecord[]),
+  ...(MEDIA_COMPANIES as CompanyRecord[]),
+  ...(COMMERCE_COMPANIES as CompanyRecord[]),
+  ...(REST_COMPANIES as CompanyRecord[]),
+  ...(AUTO_COMPANIES as CompanyRecord[]),
 ];
 
 export const COMPANY_MAP = new Map<string, CompanyRecord>(

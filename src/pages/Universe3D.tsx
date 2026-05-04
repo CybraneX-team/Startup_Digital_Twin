@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Loader2, Plus } from 'lucide-react';
+import { ArrowLeft, Loader2, Plus, Search, Command } from 'lucide-react';
 import UniverseCanvas from '../three-universe/UniverseCanvas';
 import { useUniverseGraph } from '../data/universeGraph';
 import { useAuth } from '../lib/auth';
@@ -17,9 +17,11 @@ interface SidePanelProps {
   currentLevel: ZoomLevel;
   controllerRef: React.MutableRefObject<UniverseController | null>;
   onAddCompany: (industry: UniverseIndustry, subdomain: UniverseSubdomain) => void;
+  searchQuery: string;
+  setSearchQuery: (q: string) => void;
 }
 
-function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany }: SidePanelProps) {
+function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany, searchQuery, setSearchQuery }: SidePanelProps) {
   // navPath entries carry stale snapshots — always look up from live `data` by ID
   const industryId  = navPath[0]?.data?.id ?? null;
   const subdomainId = navPath[1]?.data?.id ?? null;
@@ -35,10 +37,34 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany }:
   const listKey = `${currentLevel}-${navPath.map(e => e.id).join('-')}`;
 
   let sectionLabel = 'GALAXIES';
-  let items: { id: string; name: string; color?: string; meta?: string }[] = [];
-  let onItemClick = (_id: string) => { };
+  let items: { id: string; name: string; color?: string; meta?: string; onClick?: () => void }[] = [];
+  let onItemClick = (id: string) => { };
 
-  if (isGalaxy) {
+  const isSearchActive = searchQuery.trim().length > 0;
+
+  if (isSearchActive) {
+    const q = searchQuery.toLowerCase();
+    const results: typeof items = [];
+    
+    data?.industries.forEach(ind => {
+      if (ind.name.toLowerCase().includes(q)) {
+        results.push({ id: ind.id, name: ind.name, color: ind.color, meta: 'Industry', onClick: () => { controllerRef.current?.routeTo('industry', ind.id); setSearchQuery(''); } });
+      }
+      ind.subdomains.forEach(sub => {
+        if (sub.name.toLowerCase().includes(q)) {
+          results.push({ id: sub.id, name: sub.name, color: sub.color ?? ind.color, meta: `Subdomain in ${ind.name}`, onClick: () => { controllerRef.current?.routeTo('subdomain', ind.id, sub.id); setSearchQuery(''); } });
+        }
+        sub.companies.forEach(co => {
+          if (co.name.toLowerCase().includes(q)) {
+            results.push({ id: co.id, name: co.name, color: ind.color, meta: `Company in ${sub.name}`, onClick: () => { controllerRef.current?.routeTo('company', ind.id, sub.id, co.id); setSearchQuery(''); } });
+          }
+        });
+      });
+    });
+    
+    sectionLabel = 'SEARCH RESULTS';
+    items = results.slice(0, 50);
+  } else if (isGalaxy) {
     sectionLabel = 'GALAXIES';
     items = (data?.industries ?? []).map((ind) => ({
       id: ind.id,
@@ -58,8 +84,6 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany }:
     onItemClick = (id) => controllerRef.current?.zoomToSubdomain(industry.id, id);
   } else if (isSubdomainOrDeeper && industry && subdomain) {
     sectionLabel = 'COMPANIES';
-    // Read from the live subdomain object resolved from data above —
-    // this updates instantly when appendLocalCompany() fires.
     items = subdomain.companies.map((co) => ({
       id: co.id,
       name: co.name,
@@ -86,7 +110,7 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany }:
       }}
     >
       {/* Back nav — slides in when drilled */}
-      {!isGalaxy && (
+      {!isGalaxy && !isSearchActive && (
         <div
           className="flex items-center gap-2 px-3 pt-3 pb-2 shrink-0 panel-slide-in"
           style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
@@ -129,8 +153,11 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany }:
       >
         {items.map((item, i) => (
           <button
-            key={item.id}
-            onClick={() => onItemClick(item.id)}
+            key={item.meta + '-' + item.id}
+            onClick={() => {
+              if (item.onClick) item.onClick();
+              else onItemClick(item.id);
+            }}
             className="panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group"
             style={{ animationDelay: `${i * 28}ms` }}
           >
@@ -156,7 +183,7 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany }:
       </div>
 
       {/* ── Add Company button — only at subdomain level ── */}
-      {isSubdomainOrDeeper && industry && subdomain && (
+      {isSubdomainOrDeeper && industry && subdomain && !isSearchActive && (
         <div className="px-3 pb-3 pt-1 shrink-0" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
           <button
             onClick={() => onAddCompany(industry, subdomain)}
@@ -191,26 +218,45 @@ export default function Universe3DPage() {
   const [navPath, setNavPath] = useState<NavPathEntry[]>([]);
   const [currentLevel, setCurrentLevel] = useState<ZoomLevel>(ZOOM_LEVELS.GALAXY);
   const [hoverTarget, setHoverTarget] = useState<HoverTarget | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   // ── Create Company modal state ──
   const [createModal, setCreateModal] = useState<{
     industry: UniverseIndustry;
     subdomain: UniverseSubdomain;
+    draftPlanetId: string | null;
   } | null>(null);
 
-  const handleAddCompany = useCallback((industry: UniverseIndustry, subdomain: UniverseSubdomain) => {
-    setCreateModal({ industry, subdomain });
+  /** Triggered from either the side panel "Add Company" button or the 3D sun "Create Company" button */
+  const handleAddCompany = useCallback((industry: UniverseIndustry | any, subdomain: UniverseSubdomain | any) => {
+    // Spawn a draft planet immediately
+    const draftId = controllerRef.current?.spawnDraftCompany(industry.id, subdomain.id) ?? null;
+    setCreateModal({ industry, subdomain, draftPlanetId: draftId });
+
+    // After a short delay (planet spawn animation), fly to it and freeze orbits
+    if (draftId) {
+      setTimeout(() => {
+        controllerRef.current?.focusDraftPlanet(draftId);
+      }, 600);
+    }
   }, []);
 
   // Called by the modal after a successful save.
-  // Injects the company directly into the data state — NO loading cycle,
-  // NO canvas remount, camera stays exactly where it is.
   const handleCompanyCreated = useCallback((company: LocalCompany) => {
     appendLocalCompany(company as any);
     setCreateModal(null);
-    // Keep createModal closed but do NOT touch navPath/currentLevel
-    // so the sidebar stays at the subdomain level.
   }, [appendLocalCompany]);
+
+  const handleCloseCreate = useCallback((isCancel: boolean = true) => {
+    // If the user cancelled, we must cleanly remove the placeholder planet
+    if (isCancel && createModal?.draftPlanetId) {
+      controllerRef.current?.removeDraftCompany(createModal.draftPlanetId);
+    }
+    // Unfreeze orbits and fly camera back to subdomain overview
+    controllerRef.current?.unfocusDraftPlanet();
+    setCreateModal(null);
+  }, [createModal]);
 
   useEffect(() => {
     if (pathname === '/3d') {
@@ -222,11 +268,38 @@ export default function Universe3DPage() {
   const handleNavigate = useCallback((path: NavPathEntry[], level: ZoomLevel) => {
     setNavPath([...path]);
     setCurrentLevel(level);
+    // Close create modal when navigating away
+    setCreateModal(null);
   }, []);
 
   const handleHover = useCallback((target: HoverTarget | null) => {
     setHoverTarget(target);
   }, []);
+
+  /** The 3D sun button fires this callback via UniverseController */
+  const handleCreateFromSun = useCallback((industry: any, subdomain: any) => {
+    handleAddCompany(industry, subdomain);
+  }, [handleAddCompany]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+K or Ctrl+K
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === ' ')) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if (e.key === 'Escape') {
+        if (createModal) {
+          setCreateModal(null);
+          return;
+        }
+        setSearchQuery('');
+        searchInputRef.current?.blur();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [createModal]);
 
   if (error) {
     return (
@@ -262,11 +335,12 @@ export default function Universe3DPage() {
           data={data}
           onNavigate={handleNavigate}
           onHover={handleHover}
+          onCreateCompany={handleCreateFromSun}
           controllerRef={controllerRef}
         />
       )}
 
-      {/* ── Create Company Modal ── */}
+      {/* ── Create Company Floating Panel ── */}
       {createModal && (
         <CreateCompanyModal
           industryId={createModal.industry.id}
@@ -274,46 +348,79 @@ export default function Universe3DPage() {
           subdomainName={createModal.subdomain.name}
           industryName={createModal.industry.name}
           industryColor={createModal.industry.color}
-          onClose={() => setCreateModal(null)}
+          draftPlanetId={createModal.draftPlanetId}
+          controllerRef={controllerRef}
+          onClose={handleCloseCreate}
           onCreated={handleCompanyCreated}
         />
       )}
 
-      {/* Bottom-left column: panel stacked above ecosystem pills */}
-      <div className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3">
-        {/* Side nav panel */}
-        {data && (
-          <SidePanel
-            data={data}
-            navPath={navPath}
-            currentLevel={currentLevel}
-            controllerRef={controllerRef}
-            onAddCompany={handleAddCompany}
-          />
-        )}
-
-        {/* Ecosystem pills */}
-        {canRead('ecosystem') && (
-          <div className="flex flex-col gap-2 w-full">
-            <button
-              onClick={() => navigate('/ecosystem/vc-connect')}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-sky-500/30"
-              style={{ background: 'rgba(0,0,0,0.55)', borderColor: 'rgba(148,163,184,0.1)' }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-              VC &amp; Mentors
-            </button>
-            <button
-              onClick={() => navigate('/ecosystem/network')}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-teal-500/30"
-              style={{ background: 'rgba(0,0,0,0.55)', borderColor: 'rgba(148,163,184,0.1)' }}
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
-              Startup Network
-            </button>
+      {/* Bottom-left column: hidden when create modal is active */}
+      {!createModal && (
+        <div className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3">
+          {/* Search Bar */}
+          <div 
+            className="relative rounded-2xl overflow-hidden shadow-xl"
+            style={{
+              width: '196px',
+              background: 'rgba(0, 0, 0, 0.72)',
+              backdropFilter: 'blur(12px)',
+              border: '1px solid rgba(255,255,255,0.07)',
+            }}
+          >
+            <div className="flex items-center px-3 py-2.5">
+              <Search className="w-3.5 h-3.5 text-gray-400 mr-2 shrink-0" />
+              <input 
+                ref={searchInputRef}
+                type="text" 
+                placeholder="Search universe..." 
+                value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                className="bg-transparent border-none outline-none text-xs text-white w-full placeholder:text-gray-500"
+              />
+              <div className="flex items-center gap-0.5 ml-2 opacity-50 shrink-0 bg-white/10 px-1.5 py-0.5 rounded">
+                <Command className="w-2.5 h-2.5 text-gray-300" />
+                <span className="text-[9px] text-gray-300 font-medium">K</span>
+              </div>
+            </div>
           </div>
-        )}
-      </div>
+
+          {/* Side nav panel */}
+          {data && (
+            <SidePanel
+              data={data}
+              navPath={navPath}
+              currentLevel={currentLevel}
+              controllerRef={controllerRef}
+              onAddCompany={handleAddCompany}
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+            />
+          )}
+
+          {/* Ecosystem pills */}
+          {canRead('ecosystem') && (
+            <div className="flex flex-col gap-2 w-full">
+              <button
+                onClick={() => navigate('/ecosystem/vc-connect')}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-sky-500/30"
+                style={{ background: 'rgba(0,0,0,0.55)', borderColor: 'rgba(148,163,184,0.1)' }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                VC &amp; Mentors
+              </button>
+              <button
+                onClick={() => navigate('/ecosystem/network')}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-teal-500/30"
+                style={{ background: 'rgba(0,0,0,0.55)', borderColor: 'rgba(148,163,184,0.1)' }}
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+                Startup Network
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Hover detail panel — right side */}
       {hoverTarget && hoverTarget.type && (

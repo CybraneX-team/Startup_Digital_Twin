@@ -104,6 +104,71 @@ export class Labels {
     });
   }
 
+  /**
+   * Place a "✦ Create Company" CSS2D button above the subdomain sun.
+   * It floats above the origin (0, sunY, 0). Fires onClick when clicked.
+   */
+  createSunCreateButton(industryColor, onClick) {
+    const id = 'create-company-btn';
+    if (this.labels.has(id)) return;
+
+    const el = document.createElement('div');
+    el.className = 'label-3d-create-btn';
+    el.innerHTML = `
+      <div class="create-btn-inner">
+        <span class="create-btn-icon">✦</span>
+        <span class="create-btn-text">Create Company</span>
+      </div>
+      <div class="create-btn-arrow">▼</div>
+    `;
+    el.style.color = industryColor;
+    el.style.pointerEvents = 'auto';
+    el.style.cursor = 'pointer';
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (onClick) onClick();
+    });
+
+    const labelObj = new CSS2DObject(el);
+    labelObj.position.set(0, 48, 0); // above the sun
+    this.scene.add(labelObj);
+
+    this.labels.set(id, { object: labelObj, element: el });
+  }
+
+  /** Remove the sun create button */
+  removeSunCreateButton() {
+    this.removeByPrefix('create-company-btn');
+  }
+
+  /** Add a label for a single company mesh (used for dynamically spawned planets) */
+  addSingleCompanyLabel(companyId, companyName, mesh, industryColor) {
+    const id = `company-${companyId}`;
+    if (this.labels.has(id)) return;
+
+    const el = document.createElement('div');
+    el.className = 'label-3d company';
+    el.textContent = companyName || 'New Company';
+    el.style.color = industryColor || '#fff';
+    el.style.pointerEvents = 'auto';
+    el.style.cursor = 'pointer';
+    el.style.opacity = '1';
+
+    const labelObj = new CSS2DObject(el);
+    labelObj.position.set(0, (mesh.userData?.planetSize ?? 12) + 2, 0);
+    mesh.add(labelObj);
+
+    this.labels.set(id, { object: labelObj, element: el, parent: mesh });
+  }
+
+  /** Live-update a company label's text (for real-time name binding) */
+  updateCompanyLabelText(companyId, newName) {
+    const entry = this.labels.get(`company-${companyId}`);
+    if (entry?.element) {
+      entry.element.textContent = newName || 'New Company';
+    }
+  }
+
   createDepartmentLabels(company, getMoonMeshes) {
     const meshes = getMoonMeshes();
     meshes.forEach((mesh) => {
@@ -177,13 +242,18 @@ export class Labels {
         el.style.display = '';
         el.style.transition = '';
         el.style.opacity = '0';
+        label._isTransitioning = true; // flag to prevent render loop from overriding fade-in
         const delay = idx * 60;
-        setTimeout(() => { el.style.opacity = '1'; }, delay + 16);
+        setTimeout(() => { 
+          el.style.opacity = '1'; 
+          label._isTransitioning = false;
+        }, delay + 16);
         idx++;
       } else {
         el.style.transition = 'none';
         el.style.opacity = '0';
         el.style.display = 'none';
+        label._isTransitioning = false;
       }
     });
   }
@@ -198,6 +268,15 @@ export class Labels {
     if (label) {
       label.element.style.display = 'none';
       label.element.style.opacity = '0';
+    }
+  }
+
+  removeSpecific(id) {
+    const label = this.labels.get(id);
+    if (label) {
+      if (label.parent) label.parent.remove(label.object);
+      else this.scene.remove(label.object);
+      this.labels.delete(id);
     }
   }
 
@@ -236,6 +315,24 @@ export class Labels {
           label.element.style.opacity = opacity.toFixed(3);
           label.element.style.transform = `scale(${scale.toFixed(3)})`;
           label.element.style.transformOrigin = 'center top';
+        }
+      } else if (id.startsWith('company-') && label.element.style.display !== 'none') {
+        label.object.getWorldPosition(_wp);
+        const dist = camPos.distanceTo(_wp);
+        
+        // As the camera zooms out, scale down the company labels
+        // Full size at distance <= 450. Scales down linearly inversely. Minimum scale 0.25.
+        const scale = Math.max(0.25, Math.min(1.0, 450 / dist));
+        
+        // Also subtly fade out the label if it gets extremely far away
+        const opacity = Math.max(0.0, Math.min(1.0, (2500 - dist) / 1000));
+        
+        label.element.style.transform = `scale(${scale.toFixed(3)})`;
+        label.element.style.transformOrigin = 'center bottom';
+        
+        // Only apply distance fading if the label isn't currently running its spawn animation
+        if (!label._isTransitioning) {
+          label.element.style.opacity = opacity.toFixed(3);
         }
       }
     });

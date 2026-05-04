@@ -1,17 +1,18 @@
 /* ================================================================
    FounderOS — Universe Graph Builder
    Produces the UniverseData shape consumed by the
-   /3d UniverseController. Merges Supabase industries +
-   subdomains + live companies into the nested structure
-   the Three.js controller expects.
+   /3d UniverseController. All data is fetched from Supabase:
+     • industries        → lib/db/industries.ts
+     • subdomains        → lib/db/subdomains.ts
+     • catalog_companies → lib/db/catalogCompanies.ts  (pre-seeded universe)
+     • companies         → lib/db/companies.ts          (live user companies)
 ================================================================ */
 
 import { useEffect, useMemo, useState } from 'react';
-import { INDUSTRIES } from '../db/industries';
-import { COMPANIES } from '../db/companies';
-import type { IndustryRecord } from '../db/schema';
+import { getAllIndustries, type DbIndustry } from '../lib/db/industries';
 import { getAllSubdomains, type DbSubdomain } from '../lib/db/subdomains';
 import { getActiveCompanies } from '../lib/db/companies';
+import { getCatalogCompanies, type CatalogCompany } from '../lib/db/catalogCompanies';
 import { getAllLocalCompanies } from '../lib/localCompanies';
 import type { DbCompany } from '../lib/supabase';
 
@@ -19,20 +20,20 @@ import type { DbCompany } from '../lib/supabase';
    UniverseData — exactly what UniverseController consumes
 ────────────────────────────────────────────────── */
 export interface UniverseCompany {
-  id: string;                   // 'live-{uuid}'
+  id: string;
   name: string;
   description?: string;
   founded?: number;
-  funding?: string;             // stage as funding label
+  funding?: string;
   employees?: number;
   stage?: string;
   isLive: boolean;
   departments?: { id: string; name: string; headcount?: number; focus?: string; metrics?: Record<string, number> }[];
-  raw?: DbCompany;              // pass-through for HUD click-through
+  raw?: DbCompany;
 }
 
 export interface UniverseSubdomain {
-  id: string;                   // 'sd-saas-crm'
+  id: string;
   name: string;
   description?: string;
   orbit_index: number;
@@ -41,13 +42,15 @@ export interface UniverseSubdomain {
 }
 
 export interface UniverseIndustry {
-  id: string;                   // 'ind-saas'
-  name: string;                 // display label
+  id: string;
+  name: string;
   description?: string;
   color: string;
-  angle: number;                // radians; auto-derived from idx
+  angle: number;
   subdomains: UniverseSubdomain[];
-  raw?: IndustryRecord;
+  // position exposed for 3D controller
+  position3D?: [number, number, number];
+  bubbleRadius?: number;
 }
 
 export interface UniverseData {
@@ -59,34 +62,39 @@ export interface UniverseData {
    Pure builder — testable without React
 ────────────────────────────────────────────────── */
 export function buildUniverseData(args: {
-  industries: IndustryRecord[];
+  industries: DbIndustry[];
   subdomains: DbSubdomain[];
-  companies: DbCompany[];
+  liveCompanies: DbCompany[];
+  catalogCompanies: CatalogCompany[];
   myCompanyId?: string | null;
 }): UniverseData {
-  const { industries, subdomains, companies, myCompanyId } = args;
+  const { industries, subdomains, liveCompanies, catalogCompanies, myCompanyId } = args;
 
-  // Index subdomains by industry, ordered by orbit_index
+  // ── Index subdomains by industry ─────────────────────────────────
   const subsByInd = new Map<string, DbSubdomain[]>();
   for (const sd of subdomains) {
     if (!subsByInd.has(sd.industry_id)) subsByInd.set(sd.industry_id, []);
     subsByInd.get(sd.industry_id)!.push(sd);
   }
-  // Already ordered by orbit_index from the SQL query, but defend anyway:
   for (const list of subsByInd.values()) list.sort((a, b) => a.orbit_index - b.orbit_index);
 
-  // Bucket companies under subdomains. If subdomain_id is null, fall
-  // back to the first subdomain of the company's industry.
+  // ── Bucket companies under subdomain IDs ─────────────────────────
   const compsBySub = new Map<string, UniverseCompany[]>();
-  for (const c of companies) {
+
+  function addToSub(sdId: string, node: UniverseCompany) {
+    if (!compsBySub.has(sdId)) compsBySub.set(sdId, []);
+    compsBySub.get(sdId)!.push(node);
+  }
+
+  // 1. Live user companies (from `companies` table)
+  for (const c of liveCompanies) {
     if (!c.industry_id) continue;
     let sdId = c.subdomain_id;
     if (!sdId) {
-      const fallback = subsByInd.get(c.industry_id)?.[0];
-      sdId = fallback?.id ?? null;
+      sdId = subsByInd.get(c.industry_id)?.[0]?.id ?? null;
     }
     if (!sdId) continue;
-    const node: UniverseCompany = {
+    addToSub(sdId, {
       id: `live-${c.id}`,
       name: c.name,
       description: c.description ?? undefined,
@@ -97,118 +105,89 @@ export function buildUniverseData(args: {
       isLive: true,
       departments: [],
       raw: c,
-    };
-    if (!compsBySub.has(sdId)) compsBySub.set(sdId, []);
-    compsBySub.get(sdId)!.push(node);
+    });
   }
 
-  // ── Inject Static COMPANIES ──
-  for (const c of COMPANIES) {
-    let sdId: string | null = null;
-    
-    // Attempt 1: Match by Subdomain name if Supabase subdomains exist
-    const dbSubs = subsByInd.get(c.industryId);
-    if (dbSubs && c.subdomain) {
-      const match = dbSubs.find(s => s.label === c.subdomain);
-      if (match) sdId = match.id;
-    }
-    
-    // Attempt 2: Match by synthetic subdomain ID
-    if (!sdId && c.subdomain) {
-      const ind = industries.find(i => i.id === c.industryId);
-      if (ind && ind.subdomains) {
-        const idx = ind.subdomains.indexOf(c.subdomain);
-        if (idx !== -1) sdId = `${c.industryId}-sd-${idx}`;
+  // 2. Catalog companies (from `catalog_companies` table)
+  for (const c of catalogCompanies) {
+    // Resolve subdomain ID
+    let sdId: string | null = c.subdomain_id;
+
+    if (!sdId && c.subdomain_name) {
+      const dbSubs = subsByInd.get(c.industry_id);
+      if (dbSubs) {
+        const match = dbSubs.find(s => s.label === c.subdomain_name);
+        if (match) sdId = match.id;
       }
     }
-    
-    // Attempt 3: Fallback to the first subdomain
     if (!sdId) {
-      const fallback = subsByInd.get(c.industryId)?.[0];
-      sdId = fallback?.id ?? `${c.industryId}-sd-0`;
+      sdId = subsByInd.get(c.industry_id)?.[0]?.id ?? null;
     }
+    if (!sdId) continue;
 
-    const staticNode: UniverseCompany = {
+    addToSub(sdId, {
       id: c.id,
       name: c.name,
-      description: c.description,
-      founded: c.founded,
-      funding: c.stage,
-      stage: c.stage,
-      employees: c.employees,
+      description: c.description ?? undefined,
+      founded: c.founded_year ?? undefined,
+      funding: c.stage ?? undefined,
+      stage: c.stage ?? undefined,
+      employees: c.employees ?? undefined,
       isLive: false,
       departments: [],
-      // Mock DbCompany structure for raw payload mapping
       raw: {
         id: c.id,
         name: c.name,
         slug: c.id,
-        industry_id: c.industryId,
+        industry_id: c.industry_id,
         subdomain_id: sdId,
-        stage: c.stage as any,
-        country: c.country,
-        founded_year: c.founded,
+        stage: (c.stage ?? 'Seed') as any,
+        country: c.country ?? 'Global',
+        founded_year: c.founded_year,
         description: c.description,
         website: null,
         logo_url: null,
-        mrr_usd: c.mrrUSD,
+        mrr_usd: c.mrr_usd,
         employees: c.employees,
-        annual_revenue: c.mrrUSD * 12,
-        burn_rate_usd: 0,
-        runway_months: 0,
+        annual_revenue: c.mrr_usd ? c.mrr_usd * 12 : null,
+        burn_rate_usd: null,
+        runway_months: null,
         valuation: c.valuation,
         target_market: null,
         business_model: null,
         problem_solved: null,
         usp: null,
         competitors: null,
-        status: 'active'
+        status: 'active',
       } as any,
-    };
-    
-    if (!compsBySub.has(sdId)) compsBySub.set(sdId, []);
-    compsBySub.get(sdId)!.push(staticNode);
+    });
   }
 
-  // Assemble industries with derived angle. Angle is the polar
-  // azimuth derived from idx — keeps galaxies in a ring.
+  // ── Assemble the industry tree ────────────────────────────────────
   const TAU = Math.PI * 2;
   const out: UniverseIndustry[] = industries.map((ind, idx) => {
     const dbSubdomains = subsByInd.get(ind.id) ?? [];
 
-    // ── Fallback: if Supabase has no subdomains for this industry,
-    //    synthesise them from the IndustryRecord.subdomains string array.
-    //    This ensures every galaxy always shows its subdomain planets even
-    //    before the DB is seeded.
-    const effectiveSubs: UniverseSubdomain[] = dbSubdomains.length > 0
-      ? dbSubdomains.map(sd => ({
-          id: sd.id,
-          name: sd.label,
-          description: sd.description ?? undefined,
-          orbit_index: sd.orbit_index,
-          color: sd.color ?? ind.color,
-          companies: compsBySub.get(sd.id) ?? [],
-        }))
-      : (ind.subdomains ?? []).map((sdName, i) => {
-          const syntheticId = `${ind.id}-sd-${i}`;
-          return {
-            id: syntheticId,
-            name: sdName,
-            description: undefined,
-            orbit_index: i,
-            color: ind.color,
-            companies: compsBySub.get(syntheticId) ?? [],
-          };
-        });
+    const effectiveSubs: UniverseSubdomain[] = dbSubdomains.map(sd => ({
+      id: sd.id,
+      name: sd.label,
+      description: sd.description ?? undefined,
+      orbit_index: sd.orbit_index,
+      color: sd.color ?? ind.color,
+      companies: compsBySub.get(sd.id) ?? [],
+    }));
+
+    const pos = ind.position_3d;
 
     return {
       id: ind.id,
       name: ind.label,
-      description: ind.description,
+      description: ind.description ?? undefined,
       color: ind.color,
       angle: TAU * (idx / industries.length),
       subdomains: effectiveSubs,
-      raw: ind,
+      position3D: [pos?.x ?? 0, pos?.y ?? 0, pos?.z ?? 0],
+      bubbleRadius: ind.bubble_radius,
     };
   });
 
@@ -219,7 +198,8 @@ export function buildUniverseData(args: {
 }
 
 /* ──────────────────────────────────────────────────
-   useUniverseGraph — React hook for the /3d page
+   useUniverseGraph — React hook for the /3d page.
+   100% DB-driven — no hardcoded TypeScript arrays.
 ────────────────────────────────────────────────── */
 export function useUniverseGraph(authCompanyId?: string | null): {
   data: UniverseData | null;
@@ -228,31 +208,37 @@ export function useUniverseGraph(authCompanyId?: string | null): {
   refresh: () => void;
   appendLocalCompany: (company: DbCompany) => void;
 } {
-  const [subdomains, setSubdomains] = useState<DbSubdomain[]>([]);
-  const [companies, setCompanies]   = useState<DbCompany[]>([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [industries, setIndustries]       = useState<DbIndustry[]>([]);
+  const [subdomains, setSubdomains]       = useState<DbSubdomain[]>([]);
+  const [liveCompanies, setLive]          = useState<DbCompany[]>([]);
+  const [catalogCompanies, setCatalog]    = useState<CatalogCompany[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState<string | null>(null);
+  const [refreshKey, setRefreshKey]       = useState(0);
 
-  // Full reload (only call when canvas can tolerate a remount)
   const refresh = () => setRefreshKey(k => k + 1);
 
-  // Non-destructive append — does NOT set loading=true, so the
-  // canvas stays mounted and the camera keeps its position.
   const appendLocalCompany = (company: DbCompany) => {
-    setCompanies(prev => [...prev, company]);
+    setLive(prev => [...prev, company]);
   };
 
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    Promise.all([getAllSubdomains(), getActiveCompanies()])
-      .then(([sd, co]) => {
+
+    Promise.all([
+      getAllIndustries(),
+      getAllSubdomains(),
+      getActiveCompanies(),
+      getCatalogCompanies(),
+    ])
+      .then(([inds, sds, live, catalog]) => {
         if (!alive) return;
-        setSubdomains(sd);
-        // Merge Supabase companies with any already-stored local companies
+        setIndustries(inds);
+        setSubdomains(sds);
+        setCatalog(catalog);
         const localCos = getAllLocalCompanies() as unknown as DbCompany[];
-        setCompanies([...co, ...localCos]);
+        setLive([...live, ...localCos]);
         setLoading(false);
       })
       .catch(err => {
@@ -260,18 +246,20 @@ export function useUniverseGraph(authCompanyId?: string | null): {
         setError(err?.message ?? 'Failed to load universe data');
         setLoading(false);
       });
+
     return () => { alive = false; };
   }, [refreshKey]);
 
   const data = useMemo(() => {
-    if (loading) return null;
+    if (loading || industries.length === 0) return null;
     return buildUniverseData({
-      industries: INDUSTRIES,
+      industries,
       subdomains,
-      companies,
+      liveCompanies,
+      catalogCompanies,
       myCompanyId: authCompanyId ?? null,
     });
-  }, [loading, subdomains, companies, authCompanyId]);
+  }, [loading, industries, subdomains, liveCompanies, catalogCompanies, authCompanyId]);
 
   return { data, loading, error, refresh, appendLocalCompany };
 }

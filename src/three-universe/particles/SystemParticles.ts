@@ -214,11 +214,11 @@ export class SystemParticles {
 
       // Subdomain glow (planet view)
       const sdGlowMat = new THREE.SpriteMaterial({
-        map: getGlow(), color: color, transparent: true, opacity: 0.3,
+        map: getGlow(), color: color, transparent: true, opacity: 0.1,
         blending: THREE.AdditiveBlending, depthWrite: false,
       });
       const sdGlow = new THREE.Sprite(sdGlowMat);
-      sdGlow.scale.set(sdRadius * 4, sdRadius * 4, 1);
+      sdGlow.scale.set(sdRadius * 3, sdRadius * 3, 1);
       container.add(sdGlow);
 
       // ═══ SUBDOMAIN SOLAR SYSTEM (shown when user enters this subdomain) ═══
@@ -233,17 +233,22 @@ export class SystemParticles {
       container.add(sdSun);
 
       const sdSunGlowMat = new THREE.SpriteMaterial({
-        map: getGlow(), color: color, transparent: true, opacity: 0.6,
+        map: getGlow(), color: color, transparent: true, opacity: 0.2,
         blending: THREE.AdditiveBlending, depthWrite: false,
       });
       const sdSunGlow = new THREE.Sprite(sdSunGlowMat);
-      sdSunGlow.scale.set(120, 120, 1);
+      sdSunGlow.scale.set(90, 90, 1);
       sdSunGlow.visible = false;
       container.add(sdSunGlow);
 
-      const sdSunLight = new THREE.PointLight(color.getHex(), 1.0, 600, 2.0);
+      const lightColor = new THREE.Color(0xffffff).lerp(color, 0.4);
+      const sdSunLight = new THREE.PointLight(lightColor.getHex(), 3.5, 900, 1.5);
       sdSunLight.visible = false;
       container.add(sdSunLight);
+      
+      const sdAmbientLight = new THREE.AmbientLight(0xffffff, 0.35);
+      sdAmbientLight.visible = false;
+      container.add(sdAmbientLight);
 
       // Local star field — surrounds camera when inside the solar system
       const lsCount = 600;
@@ -271,6 +276,7 @@ export class SystemParticles {
       sdMesh.userData.sdSunMat = sdSunMat;
       sdMesh.userData.sdSunGlow = sdSunGlow;
       sdMesh.userData.sdSunLight = sdSunLight;
+      sdMesh.userData.sdAmbientLight = sdAmbientLight;
       sdMesh.userData.localStars = localStars;
 
       // ═══ COMPANY PLANETS (orbiting subdomain) ═══
@@ -308,10 +314,10 @@ export class SystemParticles {
         companyMeshes.push(cMesh);
 
         // Company atmosphere
-        const cAtmoGeo = new THREE.IcosahedronGeometry(cRadius * 1.4, 3);
+        const cAtmoGeo = new THREE.IcosahedronGeometry(cRadius * 1.3, 3);
         const cAtmoMat = new THREE.ShaderMaterial({
           vertexShader: atmosphereVertexShader, fragmentShader: atmosphereFragmentShader,
-          uniforms: { uColor: { value: color.clone() }, uIntensity: { value: 0.4 }, uTime: { value: 0 } },
+          uniforms: { uColor: { value: color.clone() }, uIntensity: { value: 0.15 }, uTime: { value: 0 } },
           transparent: true, depthWrite: false, side: THREE.BackSide, blending: THREE.AdditiveBlending,
         });
         cContainer.add(new THREE.Mesh(cAtmoGeo, cAtmoMat));
