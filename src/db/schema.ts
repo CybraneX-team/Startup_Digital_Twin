@@ -36,7 +36,7 @@ export interface CompanyRecord {
   id: string;                           // unique graph node id
   name: string;
   industryId: string;                   // parent industry (e.g. 'ind-technology')
-  subdomain: string;                    // e.g. 'AI', 'Fintech', 'E-commerce'
+  subdomain?: string;                   // e.g. 'AI', 'Fintech', 'E-commerce'
   country: Country;
   founded: number;
   stage: CompanyStage;

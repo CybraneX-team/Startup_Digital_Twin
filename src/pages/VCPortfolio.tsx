@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
-  Star, TrendingUp, Users, DollarSign, Building2,
-  Globe, Trash2, ExternalLink, BarChart2, Award,
+  Star, Users, DollarSign, Building2,
+  Globe, Trash2, Award,
   AlertTriangle, CheckCircle2, ChevronDown, ChevronUp,
 } from 'lucide-react';
 import { COMPANIES } from '../db/companies';

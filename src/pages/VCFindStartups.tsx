@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react';
 import {
-  Search, Filter, TrendingUp, Users, DollarSign,
+  Search, TrendingUp, Users, DollarSign,
   Building2, Globe, Star, StarOff, ChevronRight,
-  Zap, Award, BarChart2, X,
+  Zap, BarChart2, X,
 } from 'lucide-react';
 import { COMPANIES } from '../db/companies';
 import { INDUSTRIES } from '../db/industries';

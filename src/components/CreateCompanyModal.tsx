@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   X, Building2, Globe, Calendar, Users, DollarSign,
-  Briefcase, FileText, ChevronDown, Loader2, CheckCircle2,
+  Briefcase, ChevronDown, Loader2, CheckCircle2,
 } from 'lucide-react';
 import { saveLocalCompany, type LocalCompany } from '../lib/localCompanies';
 import type { CompanyStage, BusinessModel } from '../lib/supabase';
