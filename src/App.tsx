@@ -21,6 +21,8 @@ import PendingApproval from './pages/PendingApproval';
 import VCFindStartups from './pages/VCFindStartups';
 import VCPortfolio from './pages/VCPortfolio';
 import VCManage from './pages/VCManage';
+import VCAuthPage from './pages/VCAuthPage';
+import IncubatorAuthPage from './pages/IncubatorAuthPage';
 
 function FullPageLoader() {
   return (
@@ -69,10 +71,12 @@ function AppRoutes() {
   const { user, profile } = useAuth();
 
   // Auth + onboarding pages are full-screen without TopBar
-  if (location.pathname === '/auth') {
+  if (location.pathname === '/auth' || location.pathname === '/auth/vc' || location.pathname === '/auth/incubator') {
     return (
       <Routes>
         <Route path="/auth" element={<AuthPageRoute />} />
+        <Route path="/auth/vc" element={<VCAuthPage />} />
+        <Route path="/auth/incubator" element={<IncubatorAuthPage />} />
       </Routes>
     );
   }
