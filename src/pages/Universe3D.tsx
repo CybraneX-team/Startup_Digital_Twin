@@ -38,7 +38,7 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany, s
 
   let sectionLabel = 'GALAXIES';
   let items: { id: string; name: string; color?: string; meta?: string; onClick?: () => void }[] = [];
-  let onItemClick = (id: string) => { };
+  let onItemClick = (_id: string) => { };
 
   const isSearchActive = searchQuery.trim().length > 0;
 

@@ -7,12 +7,18 @@
 export type NodeStatus = 'healthy' | 'warning' | 'critical';
 export type CompanyStage =
   | 'Idea' | 'Pre-seed' | 'Seed' | 'Series A' | 'Series B'
-  | 'Series C' | 'Series D+' | 'Series E' | 'Series F' | 'Series G' | 'Series H'
-  | 'Pre-IPO' | 'Public' | 'PSU' | 'Bootstrapped';
+  | 'Series C' | 'Series D' | 'Series D+' | 'Series E' | 'Series F'
+  | 'Series G' | 'Series H' | 'Series I' | 'Growth'
+  | 'Pre-IPO' | 'Public' | 'PSU' | 'Bootstrapped'
+  | 'Private' | 'Acquired' | 'Subsidiary';
 
 export type Country =
   | 'India' | 'USA' | 'UK' | 'Brazil' | 'France' | 'Canada'
-  | 'South Korea' | 'Australia' | 'Germany' | 'Singapore' | 'Global';
+  | 'South Korea' | 'Australia' | 'Germany' | 'Singapore' | 'Global'
+  | 'China' | 'Japan' | 'Israel' | 'Sweden' | 'Netherlands' | 'Denmark'
+  | 'Norway' | 'Finland' | 'Switzerland' | 'Spain' | 'Ireland'
+  | 'Taiwan' | 'Argentina' | 'Mexico' | 'UAE' | 'South Africa'
+  | 'Indonesia' | 'Nigeria' | 'Italy' | 'Belgium' | 'Austria';
 
 /* ---------------------------------------------------------------- */
 /*  Industry                                                         */

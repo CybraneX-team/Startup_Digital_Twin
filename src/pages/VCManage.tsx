@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import {
   LayoutDashboard, Users, Globe, AlertTriangle, DollarSign,
-  TrendingUp, Star, X, ChevronRight, Flame, Building2,
+  TrendingUp, Star, X, ChevronRight, Building2,
   MapPin, Zap, BarChart2,
 } from 'lucide-react';
 import { COMPANIES } from '../db/companies';

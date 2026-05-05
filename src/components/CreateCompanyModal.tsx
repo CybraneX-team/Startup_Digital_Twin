@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
-  X, Building2, Globe, Calendar, Users, DollarSign,
+  X, Globe, Calendar, Users, DollarSign,
   Briefcase, ChevronDown, Loader2, CheckCircle2, Rocket,
 } from 'lucide-react';
 import { saveLocalCompany, type LocalCompany } from '../lib/localCompanies';
@@ -57,9 +57,13 @@ const inputStyle: React.CSSProperties = {
   transition: 'border-color 0.2s',
 };
 
-function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} style={{ ...inputStyle, ...props.style }} onFocus={e => e.target.style.borderColor = 'rgba(255,255,255,0.2)'} onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'} />;
-}
+const Input = React.forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  (props, ref) => (
+    <input {...props} ref={ref} style={{ ...inputStyle, ...props.style }}
+      onFocus={e => e.target.style.borderColor = 'rgba(255,255,255,0.2)'}
+      onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'} />
+  )
+);
 
 function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
