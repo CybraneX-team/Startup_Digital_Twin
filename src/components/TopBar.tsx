@@ -9,6 +9,7 @@ export default function TopBar() {
 
   const isTwinGraph = location.pathname === '/twin' || location.pathname === '/3d';
   const isData = location.pathname === '/twin/data';
+  const is3D = location.pathname === '/3d';
   const isTwin = (location.pathname.startsWith('/twin') || location.pathname === '/3d') && !isData;
   const isOverview = location.pathname.startsWith('/overview');
 
@@ -60,7 +61,8 @@ export default function TopBar() {
           >
             {(isBypassUser ? (
               [
-                { path: '/3d',           label: 'Twin',           active: location.pathname === '/3d' },
+                { path: '/3d',           label: '3D Twin',        active: is3D },
+                { path: '/twin',         label: 'Twin',           active: location.pathname === '/twin' },
                 { path: '/vc/find',      label: 'Find Startups',  active: location.pathname === '/vc/find' },
                 { path: '/vc/manage',    label: 'Manage',         active: location.pathname === '/vc/manage' },
                 { path: '/vc/portfolio', label: 'My Portfolio',   active: location.pathname === '/vc/portfolio' },
@@ -68,7 +70,8 @@ export default function TopBar() {
             ) : (
               [
                 { path: '/overview',   label: 'Home',     active: isOverview },
-                { path: '/3d',         label: 'Twin',     active: isTwin },
+                { path: '/3d',         label: '3D Twin',  active: is3D },
+                { path: '/twin',       label: 'Twin',     active: location.pathname === '/twin' || (location.pathname.startsWith('/twin') && !isData) },
                 ...(canRead('data')     ? [{ path: '/twin/data' as const,  label: 'Data' as const,     active: isData }] : []),
                 ...(canRead('settings') ? [{ path: '/settings' as const,   label: 'Settings' as const, active: location.pathname === '/settings' }] : []),
               ]
