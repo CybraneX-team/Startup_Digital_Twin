@@ -57,6 +57,36 @@ export default function LandingNew() {
           hue={0}
           forceHoverState={false}
         />
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          pointerEvents: 'none',
+          userSelect: 'none',
+        }}>
+          <h1 style={{
+            margin: 0,
+            fontSize: 'clamp(2.5rem, 6vw, 5rem)',
+            fontWeight: 300,
+            letterSpacing: '0.02em',
+            color: '#ffffff',
+            lineHeight: 1,
+          }}>
+            Work OS
+          </h1>
+          <p style={{
+            margin: '0.75rem 0 0',
+            fontSize: 'clamp(0.85rem, 1.5vw, 1.1rem)',
+            fontWeight: 400,
+            letterSpacing: '0.08em',
+            color: 'rgba(255,255,255,0.55)',
+          }}>
+            One System. Infinite Opportunities.
+          </p>
+        </div>
       </div>
     </div>
   );
