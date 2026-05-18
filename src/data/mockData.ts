@@ -385,6 +385,7 @@ export const integrations: Integration[] = [
   { id: 'int-mixpanel', name: 'Mixpanel', category: 'analytics', status: 'connected', description: 'Product analytics events' },
   { id: 'int-amplitude', name: 'Amplitude', category: 'analytics', status: 'available', description: 'Product analytics' },
   { id: 'int-ga', name: 'Google Analytics', category: 'analytics', status: 'available', description: 'Web & traffic analytics' },
+  { id: 'int-meta', name: 'Meta Ads', category: 'analytics', status: 'available', description: 'Facebook / Instagram ad performance' },
   // Project
   { id: 'int-jira', name: 'Jira', category: 'project', status: 'connected', description: 'Sprint & issue tracking' },
   { id: 'int-linear', name: 'Linear', category: 'project', status: 'available', description: 'Modern issue tracking' },

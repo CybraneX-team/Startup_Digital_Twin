@@ -1,15 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Activity, BarChart3, TrendingUp, TrendingDown, Database, Pencil, Radio,
-  ChevronDown, ChevronUp, Target,
+  ChevronDown, ChevronUp, Target, Plug, RefreshCw,
   FlaskConical, Play, RotateCcw, GitBranch,
 } from 'lucide-react';
 import {
   BarChart, Bar, LineChart, Line as RLine, AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis,
   CartesianGrid, Legend, ComposedChart, Line,
 } from 'recharts';
+import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader';
-import { trackedMetrics, simulationScenarios, decisionTree, monteCarloData } from '../data/mockData';
+import { trackedMetrics as mockMetrics, simulationScenarios, decisionTree, monteCarloData } from '../data/mockData';
+import { fetchAnalyticsData } from '../lib/integrations/service';
+import type { AnalyticsTrackedMetric } from '../lib/integrations/service';
 import type { MetricCategory, TrackedMetric, DecisionNode } from '../types';
 
 /* ------------------------------------------------------------------ */
@@ -19,9 +22,9 @@ import type { MetricCategory, TrackedMetric, DecisionNode } from '../types';
 const CATEGORIES: { key: MetricCategory; color: string; accent: string }[] = [
   { key: 'Growth',     color: 'text-emerald-400', accent: '#34d399' },
   { key: 'Product',    color: 'text-cyan-400',    accent: '#22d3ee' },
-  { key: 'Sales',      color: 'text-sky-400',  accent: '#818cf8' },
+  { key: 'Sales',      color: 'text-sky-400',     accent: '#818cf8' },
   { key: 'Finance',    color: 'text-amber-400',   accent: '#fbbf24' },
-  { key: 'Ops/People', color: 'text-sky-400',  accent: '#38bdf8' },
+  { key: 'Ops/People', color: 'text-sky-400',     accent: '#38bdf8' },
 ];
 
 const SOURCE_CFG: Record<string, { icon: typeof Database; label: string; color: string }> = {
@@ -38,6 +41,21 @@ const monteCarloBand = monteCarloData.map((d) => ({
   band: d.p90 - d.p10,
 }));
 
+function toTrackedMetric(m: AnalyticsTrackedMetric): TrackedMetric {
+  return {
+    id: m.id,
+    name: m.name,
+    category: m.category,
+    value: m.value,
+    unit: m.unit,
+    change: m.change,
+    dataSource: m.dataSource,
+    integration: m.integration,
+    trend: m.trend,
+    description: m.description,
+  };
+}
+
 type AnalyticsView = 'metrics' | 'simulation';
 
 /* ------------------------------------------------------------------ */
@@ -46,6 +64,32 @@ type AnalyticsView = 'metrics' | 'simulation';
 
 export default function Analytics() {
   const [view, setView] = useState<AnalyticsView>('metrics');
+  const [liveMetrics, setLiveMetrics] = useState<TrackedMetric[]>([]);
+  const [connectedIntegrations, setConnectedIntegrations] = useState<string[]>([]);
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const loadAnalyticsData = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await fetchAnalyticsData();
+      setLiveMetrics(data.metrics.map(toTrackedMetric));
+      setConnectedIntegrations(data.connectedIntegrations);
+      setLastUpdated(data.lastUpdated);
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { void loadAnalyticsData(); }, []);
+
+  const hasRealData = liveMetrics.length > 0;
+  const displayMetrics = hasRealData ? liveMetrics : mockMetrics;
+  const isUsingMock = !hasRealData;
 
   return (
     <div>
@@ -53,7 +97,7 @@ export default function Analytics() {
         title="Analytics"
         subtitle="Track metrics dynamically by industry, and simulate future scenarios"
         icon={<Activity className="w-6 h-6" />}
-        badge={`${trackedMetrics.length} Tracked`}
+        badge={`${displayMetrics.length} Tracked`}
       />
 
       {/* View toggle */}
@@ -80,14 +124,37 @@ export default function Analytics() {
             <FlaskConical className="w-4 h-4" /> Simulation
           </button>
         </div>
-        <span className="text-[10px] text-gray-600 ml-2">
-          {view === 'metrics'
-            ? 'Dynamic metrics — industry-adaptive, multi-source'
-            : 'Bayesian prediction + Monte Carlo projection'}
-        </span>
+
+        {view === 'metrics' && (
+          <div className="flex items-center gap-3 ml-auto">
+            {lastUpdated && (
+              <span className="text-[10px] text-gray-600">
+                Last synced {new Date(lastUpdated).toLocaleString()}
+              </span>
+            )}
+            <button
+              onClick={() => void loadAnalyticsData()}
+              disabled={loading}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs text-gray-400 hover:text-gray-200 border border-gray-800 hover:border-gray-700 rounded-lg transition-all disabled:opacity-40"
+            >
+              <RefreshCw className={`w-3 h-3 ${loading ? 'animate-spin' : ''}`} />
+              Refresh
+            </button>
+          </div>
+        )}
       </div>
 
-      {view === 'metrics' ? <MetricsView /> : <SimulationView />}
+      {view === 'metrics' ? (
+        <MetricsView
+          metrics={displayMetrics}
+          isUsingMock={isUsingMock}
+          loading={loading}
+          error={error}
+          connectedIntegrations={connectedIntegrations}
+        />
+      ) : (
+        <SimulationView />
+      )}
     </div>
   );
 }
@@ -96,25 +163,86 @@ export default function Analytics() {
 /*  METRICS VIEW                                                       */
 /* ================================================================== */
 
-function MetricsView() {
+function MetricsView({
+  metrics,
+  isUsingMock,
+  loading,
+  error,
+  connectedIntegrations,
+}: {
+  metrics: TrackedMetric[];
+  isUsingMock: boolean;
+  loading: boolean;
+  error: string | null;
+  connectedIntegrations: string[];
+}) {
+  const navigate = useNavigate();
   const [activeCategory, setActiveCategory] = useState<MetricCategory | 'All'>('All');
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
 
   const filtered = activeCategory === 'All'
-    ? trackedMetrics
-    : trackedMetrics.filter((m) => m.category === activeCategory);
+    ? metrics
+    : metrics.filter((m) => m.category === activeCategory);
 
   const categoryCounts = CATEGORIES.map((c) => ({
     ...c,
-    count: trackedMetrics.filter((m) => m.category === c.key).length,
+    count: metrics.filter((m) => m.category === c.key).length,
   }));
 
   const activeAccent = activeCategory === 'All'
     ? '#818cf8'
     : CATEGORIES.find((c) => c.key === activeCategory)?.accent ?? '#818cf8';
 
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <div className="w-8 h-8 border-2 border-cyan-500/30 border-t-cyan-500 rounded-full animate-spin" />
+        <p className="text-sm text-gray-500">Loading analytics data from your integrations…</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="glass-card p-8 text-center">
+        <Activity className="w-8 h-8 text-red-400 mx-auto mb-3" />
+        <p className="text-sm text-red-400 mb-1">Failed to load analytics data</p>
+        <p className="text-xs text-gray-600">{error}</p>
+      </div>
+    );
+  }
+
   return (
     <>
+      {/* Data source banner */}
+      {isUsingMock ? (
+        <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl border border-amber-500/20 bg-amber-500/5">
+          <Plug className="w-4 h-4 text-amber-400 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-amber-300 font-medium">Showing sample data</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              No integration snapshots found yet. Connect your tools and load their metrics once to start tracking real data here.
+            </p>
+          </div>
+          <button
+            onClick={() => navigate('/twin/settings')}
+            className="shrink-0 px-3 py-1.5 text-xs bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/20 rounded-lg transition-all"
+          >
+            Connect integrations
+          </button>
+        </div>
+      ) : (
+        <div className="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5">
+          <Database className="w-4 h-4 text-emerald-400 shrink-0" />
+          <div>
+            <p className="text-xs text-emerald-300 font-medium">Live integration data</p>
+            <p className="text-[11px] text-gray-500 mt-0.5">
+              {metrics.length} metrics across {connectedIntegrations.length} connected integration{connectedIntegrations.length !== 1 ? 's' : ''}
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Category tabs */}
       <div className="flex gap-2 mb-6 flex-wrap">
         <button
@@ -124,7 +252,7 @@ function MetricsView() {
               ? 'bg-sky-500/10 border-sky-500/20 text-sky-300 font-medium'
               : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:border-gray-700'
           }`}
-        >All ({trackedMetrics.length})</button>
+        >All ({metrics.length})</button>
         {categoryCounts.map((c) => (
           <button
             key={c.key}
@@ -141,10 +269,10 @@ function MetricsView() {
       {/* Summary row */}
       <div className="grid grid-cols-5 gap-3 mb-6">
         {CATEGORIES.map((c) => {
-          const catMetrics = trackedMetrics.filter((m) => m.category === c.key);
+          const catMetrics = metrics.filter((m) => m.category === c.key);
           const avgChange = catMetrics.length > 0 ? catMetrics.reduce((s, m) => s + m.change, 0) / catMetrics.length : 0;
           const improving = catMetrics.filter((m) => {
-            const lower = ['CAC', 'Churn Rate', 'Monthly Burn', 'Deal Cycle Time', 'Top Churn Driver'];
+            const lower = ['CAC', 'Churn Rate', 'Monthly Burn', 'Deal Cycle Time', 'Top Churn Driver', 'Bounce Rate', 'CPA', 'Open Bugs'];
             return lower.includes(m.name) ? m.change < 0 : m.change > 0;
           }).length;
           return (
@@ -220,7 +348,6 @@ function SimulationView() {
   return (
     <>
       <div className="grid grid-cols-3 gap-6 mb-6">
-        {/* Parameter Controls */}
         <div className="glass-card p-6">
           <h3 className="text-sm font-medium text-gray-300 mb-4">Scenario Parameters</h3>
           <div className="space-y-5">
@@ -262,7 +389,6 @@ function SimulationView() {
           </div>
         </div>
 
-        {/* Scenario Comparison */}
         <div className="col-span-2 glass-card p-6">
           <h3 className="text-sm font-medium text-gray-300 mb-4">Scenario Comparison</h3>
           <div className="flex gap-2 mb-4">
@@ -292,7 +418,6 @@ function SimulationView() {
         </div>
       </div>
 
-      {/* Active Scenario Outcomes */}
       {active && (
         <div className="glass-card p-6 mb-6">
           <h3 className="text-sm font-medium text-gray-300 mb-4">
@@ -319,7 +444,6 @@ function SimulationView() {
         </div>
       )}
 
-      {/* Decision Tree */}
       <div className="glass-card p-6 mb-6">
         <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
           <GitBranch className="w-4 h-4" /> Decision Tree — Strategic Paths
@@ -332,7 +456,6 @@ function SimulationView() {
         </div>
       </div>
 
-      {/* Monte Carlo */}
       <div className="glass-card p-6">
         <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
           <Activity className="w-4 h-4" /> Monte Carlo MRR Projection — 12 Months
@@ -370,12 +493,12 @@ function SimulationView() {
 function MetricTile({ metric, accent, expanded, onToggle }: {
   metric: TrackedMetric; accent: string; expanded: boolean; onToggle: () => void;
 }) {
-  const src = SOURCE_CFG[metric.dataSource];
+  const src = SOURCE_CFG[metric.dataSource] ?? SOURCE_CFG['auto-ingested'];
   const SrcIcon = src.icon;
   const isPositive = metric.change >= 0;
-  const lowerBetter = ['CAC', 'Churn Rate', 'Monthly Burn', 'Deal Cycle Time', 'Top Churn Driver'];
+  const lowerBetter = ['CAC', 'Churn Rate', 'Monthly Burn', 'Deal Cycle Time', 'Top Churn Driver', 'Bounce Rate', 'CPA', 'Open Bugs'];
   const isGood = lowerBetter.includes(metric.name) ? !isPositive : isPositive;
-  const sparkData = metric.trend.map((v, i) => ({ month: MONTH_LABELS[i], value: v }));
+  const sparkData = metric.trend.map((v, i) => ({ month: MONTH_LABELS[i] ?? `T-${metric.trend.length - i}`, value: v }));
   const targetPct = metric.target ? Math.min(100, Math.round((metric.value / metric.target) * 100)) : null;
 
   return (
@@ -390,9 +513,9 @@ function MetricTile({ metric, accent, expanded, onToggle }: {
           </div>
           <div className="flex items-end gap-2">
             <span className="text-xl font-bold text-white">
-              {metric.unit === '$' && '$'}{metric.value.toLocaleString()}{metric.unit === '%' && '%'}
+              {metric.unit === '$' && '$'}{metric.unit === '₹' && '₹'}{metric.value.toLocaleString()}{metric.unit === '%' && '%'}
             </span>
-            {metric.unit !== '$' && metric.unit !== '%' && metric.unit && (
+            {metric.unit !== '$' && metric.unit !== '₹' && metric.unit !== '%' && metric.unit && (
               <span className="text-[10px] text-gray-500 mb-0.5">{metric.unit}</span>
             )}
           </div>
@@ -460,9 +583,9 @@ function MetricTile({ metric, accent, expanded, onToggle }: {
             </ResponsiveContainer>
           </div>
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="py-2 rounded-lg bg-gray-900/50"><p className="text-[10px] text-gray-500">12m Low</p><p className="text-xs font-medium text-white">{Math.min(...metric.trend).toLocaleString()}</p></div>
-            <div className="py-2 rounded-lg bg-gray-900/50"><p className="text-[10px] text-gray-500">12m High</p><p className="text-xs font-medium text-white">{Math.max(...metric.trend).toLocaleString()}</p></div>
-            <div className="py-2 rounded-lg bg-gray-900/50"><p className="text-[10px] text-gray-500">12m Avg</p><p className="text-xs font-medium text-white">{Math.round(metric.trend.reduce((s, v) => s + v, 0) / metric.trend.length).toLocaleString()}</p></div>
+            <div className="py-2 rounded-lg bg-gray-900/50"><p className="text-[10px] text-gray-500">Low</p><p className="text-xs font-medium text-white">{Math.min(...metric.trend).toLocaleString()}</p></div>
+            <div className="py-2 rounded-lg bg-gray-900/50"><p className="text-[10px] text-gray-500">High</p><p className="text-xs font-medium text-white">{Math.max(...metric.trend).toLocaleString()}</p></div>
+            <div className="py-2 rounded-lg bg-gray-900/50"><p className="text-[10px] text-gray-500">Avg</p><p className="text-xs font-medium text-white">{Math.round(metric.trend.reduce((s, v) => s + v, 0) / metric.trend.length).toLocaleString()}</p></div>
           </div>
         </div>
       )}
