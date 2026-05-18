@@ -1,7 +1,9 @@
 import { supabase } from './supabase';
 
-const BASE = import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8080';
-const REQUEST_TIMEOUT_MS = Number(import.meta.env.VITE_BACKEND_TIMEOUT_MS ?? 30000);
+const rawBase = String(import.meta.env.VITE_BACKEND_URL ?? 'http://localhost:8080');
+const BASE = rawBase.replace(/\/+$/, '');
+const rawTimeout = Number(import.meta.env.VITE_BACKEND_TIMEOUT_MS);
+const REQUEST_TIMEOUT_MS = Number.isFinite(rawTimeout) && rawTimeout > 0 ? rawTimeout : 30000;
 
 async function authed<T>(path: string, init: RequestInit = {}): Promise<T> {
   const { data: { session } } = await supabase.auth.getSession();

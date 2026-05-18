@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Database, Upload, PenLine, FileSpreadsheet, Check, AlertCircle,
-  Link2, Globe2, Wifi, WifiOff, Clock,
+  Link2, Globe2, Wifi, WifiOff, Clock, XCircle, RefreshCw,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import { integrations } from '../data/mockData';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
+import type { UserRole } from '../lib/supabase';
 
 type Tab = 'manual' | 'csv' | 'integrations' | 'public';
 
@@ -18,6 +19,25 @@ interface FormData {
   ltv: string;
   churnRate: string;
   nps: string;
+}
+
+interface ReviewDecision {
+  id: string;
+  run_id: string;
+  source_label: string | null;
+  proposed_key: string | null;
+  final_key: string | null;
+  confidence: number | null;
+  stage: string;
+  status: string;
+  reasoning: string | null;
+  source_locator: Record<string, unknown>;
+  original_name: string;
+  sheet_name: string;
+  bbox: string | null;
+  promoted_count: number;
+  impact_value_count?: number;
+  created_at: string;
 }
 
 const statusBadge = {
@@ -36,9 +56,11 @@ const catLabels: Record<string, string> = {
   government: 'Government & Compliance',
 };
 
+const INGESTION_WRITE_ROLES = new Set<UserRole>(['founder', 'co_founder', 'admin', 'super_admin']);
+
 export default function DataIngestion() {
-  const { canWrite } = useAuth();
-  const canUploadExcel = canWrite('data');
+  const { canWrite, role } = useAuth();
+  const canManageExcel = Boolean(role && INGESTION_WRITE_ROLES.has(role) && canWrite('data'));
   const [activeTab, setActiveTab] = useState<Tab>('manual');
   const [formData, setFormData] = useState<FormData>({
     mrr: '8500',
@@ -59,6 +81,11 @@ export default function DataIngestion() {
     record_count?: number | null;
     last_error?: string | null;
   } | null>(null);
+  const [reviewQueue, setReviewQueue] = useState<ReviewDecision[]>([]);
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+  const [overrideInputs, setOverrideInputs] = useState<Record<string, string>>({});
+  const [actingDecisionId, setActingDecisionId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -66,6 +93,48 @@ export default function DataIngestion() {
     setSubmitted(true);
     setTimeout(() => setSubmitted(false), 3000);
   };
+
+  const loadReviewQueue = useCallback(async () => {
+    setReviewLoading(true);
+    setReviewError(null);
+    try {
+      const rows = await api.get<ReviewDecision[]>('/api/ingestion/decisions/pending');
+      setReviewQueue(rows);
+      setOverrideInputs((current) => {
+        const next = { ...current };
+        for (const row of rows) {
+          if (!next[row.id]) next[row.id] = row.proposed_key ?? '';
+        }
+        return next;
+      });
+    } catch (e) {
+      setReviewError(String(e));
+    } finally {
+      setReviewLoading(false);
+    }
+  }, []);
+
+  async function handleDecisionAction(
+    decision: ReviewDecision,
+    action: 'accept' | 'override' | 'reject',
+  ) {
+    setActingDecisionId(decision.id);
+    setReviewError(null);
+    try {
+      await api.post<{ promoted: number; status: string; finalKey?: string }>(
+        `/api/ingestion/decisions/${decision.id}/override`,
+        {
+          action,
+          ...(action === 'override' ? { finalKey: overrideInputs[decision.id] } : {}),
+        },
+      );
+      await loadReviewQueue();
+    } catch (e) {
+      setReviewError(String(e));
+    } finally {
+      setActingDecisionId(null);
+    }
+  }
 
   useEffect(() => {
     if (!jobId) return;
@@ -81,6 +150,7 @@ export default function DataIngestion() {
         setJobState(next);
         if (next.status === 'complete' || next.status === 'failed') {
           clearInterval(timer);
+          if (next.status === 'complete') void loadReviewQueue();
         }
       } catch (e) {
         if (!cancelled) {
@@ -93,10 +163,14 @@ export default function DataIngestion() {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [jobId]);
+  }, [jobId, loadReviewQueue]);
+
+  useEffect(() => {
+    if (activeTab === 'csv') void loadReviewQueue();
+  }, [activeTab, loadReviewQueue]);
 
   async function handleExcelFile(file: File) {
-    if (!canUploadExcel) return;
+    if (!canManageExcel) return;
     setUploading(true);
     setUploadError(null);
     setJobState(null);
@@ -249,12 +323,12 @@ export default function DataIngestion() {
           <button
             type="button"
             className={`w-full border-2 border-dashed rounded-xl p-12 text-center transition-colors ${
-              canUploadExcel
+              canManageExcel
                 ? 'border-gray-700 hover:border-sky-500/50 cursor-pointer'
                 : 'border-gray-800 cursor-not-allowed opacity-60'
             }`}
-            onClick={() => canUploadExcel && fileInputRef.current?.click()}
-            disabled={!canUploadExcel || uploading}
+            onClick={() => canManageExcel && fileInputRef.current?.click()}
+            disabled={!canManageExcel || uploading}
           >
             {uploading ? (
               <div>
@@ -272,7 +346,7 @@ export default function DataIngestion() {
               <div>
                 <FileSpreadsheet className="w-8 h-8 text-gray-600 mx-auto mb-3" />
                 <p className="text-sm text-gray-400">
-                  {canUploadExcel
+                  {canManageExcel
                     ? 'Click to upload filled .xlsx template'
                     : 'You do not have permission to upload data'}
                 </p>
@@ -319,6 +393,133 @@ export default function DataIngestion() {
               )}
             </div>
           )}
+
+          <div className="mt-8 border-t border-gray-800 pt-6">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h4 className="text-xs font-medium text-gray-400 uppercase tracking-wider">
+                  Review Queue
+                </h4>
+                <p className="text-xs text-gray-600 mt-1">
+                  {reviewQueue.length} pending mappings
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void loadReviewQueue()}
+                className="flex items-center gap-2 px-3 py-2 text-xs rounded-lg border border-gray-800 text-gray-400 hover:text-sky-300 hover:border-sky-500/30 transition-colors"
+                disabled={reviewLoading}
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${reviewLoading ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+            </div>
+
+            {!canManageExcel && reviewQueue.length > 0 && (
+              <div className="rounded-lg border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-200 mb-3">
+                Your role can view pending mappings, but only founders, co-founders, admins, and super admins can apply changes.
+              </div>
+            )}
+
+            {reviewError && (
+              <div className="flex items-center gap-2 text-sm text-red-400 mb-3">
+                <AlertCircle className="w-3.5 h-3.5" />
+                {reviewError}
+              </div>
+            )}
+
+            {reviewLoading && reviewQueue.length === 0 ? (
+              <div className="text-sm text-gray-500 py-6">Loading review items...</div>
+            ) : reviewQueue.length === 0 ? (
+              <div className="rounded-lg border border-gray-800 bg-gray-900/40 px-4 py-5 text-sm text-gray-500">
+                No pending mappings.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {reviewQueue.map((decision) => {
+                  const busy = actingDecisionId === decision.id;
+                  const locator = decision.source_locator ?? {};
+                  const locatorText = [
+                    decision.sheet_name,
+                    typeof locator.row_idx === 'number' ? `row ${Number(locator.row_idx) + 1}` : null,
+                    decision.bbox,
+                  ].filter(Boolean).join(' · ');
+
+                  return (
+                    <div
+                      key={decision.id}
+                      className="rounded-lg border border-gray-800 bg-gray-950/40 p-4"
+                    >
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-white truncate">
+                              {decision.source_label ?? 'Unlabeled source'}
+                            </p>
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/10 border border-amber-500/20 text-amber-300">
+                              {Math.round(Number(decision.confidence ?? 0) * 100)}%
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1 truncate">
+                            {decision.original_name} · {locatorText}
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Proposed: <span className="text-gray-400">{decision.proposed_key ?? 'none'}</span>
+                          </p>
+                          <p className="text-xs text-gray-600 mt-1">
+                            Impact: <span className="text-gray-400">
+                              promotes up to {decision.impact_value_count ?? 0} source values from this row
+                            </span>
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => void handleDecisionAction(decision, 'reject')}
+                          disabled={busy || !canManageExcel}
+                          className="shrink-0 p-2 rounded-lg border border-gray-800 text-gray-500 hover:text-red-300 hover:border-red-500/30 transition-colors"
+                          title="Reject mapping"
+                        >
+                          <XCircle className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      <div className="mt-4 flex flex-col gap-3 md:flex-row md:items-center">
+                        <input
+                          value={overrideInputs[decision.id] ?? decision.proposed_key ?? ''}
+                          onChange={(e) => setOverrideInputs({
+                            ...overrideInputs,
+                            [decision.id]: e.target.value,
+                          })}
+                          className="min-w-0 flex-1 px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-sky-500 transition-colors"
+                          placeholder="metric_key"
+                        />
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleDecisionAction(decision, 'accept')}
+                            disabled={busy || !canManageExcel || !decision.proposed_key}
+                            className="flex items-center gap-2 px-3 py-2 bg-emerald-600/15 border border-emerald-500/25 text-emerald-300 text-xs font-medium rounded-lg hover:bg-emerald-600/25 disabled:opacity-50 transition-colors"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            Accept
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void handleDecisionAction(decision, 'override')}
+                            disabled={busy || !canManageExcel || !(overrideInputs[decision.id] ?? '').trim()}
+                            className="flex items-center gap-2 px-3 py-2 bg-sky-600/15 border border-sky-500/25 text-sky-300 text-xs font-medium rounded-lg hover:bg-sky-600/25 disabled:opacity-50 transition-colors"
+                          >
+                            <Upload className="w-3.5 h-3.5" />
+                            Apply
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

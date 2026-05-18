@@ -14,14 +14,22 @@ export function useCompanyMetrics(companyId: string | null | undefined) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     if (!companyId) {
-      setMetrics({});
-      setLoading(false);
-      return;
+      queueMicrotask(() => {
+        if (cancelled) return;
+        setMetrics({});
+        setLoading(false);
+      });
+      return () => {
+        cancelled = true;
+      };
     }
 
-    let cancelled = false;
-    setLoading(true);
+    queueMicrotask(() => {
+      if (!cancelled) setLoading(true);
+    });
     api.get<LatestMetric[]>(`/api/metrics/${companyId}/latest`)
       .then((rows) => {
         if (cancelled) return;
@@ -50,4 +58,3 @@ export function useCompanyMetrics(companyId: string | null | undefined) {
 
   return { metrics, loading, error };
 }
-
