@@ -1,12 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Database, Upload, PenLine, FileSpreadsheet, Check, AlertCircle,
-  Link2, Globe2, Wifi, WifiOff, Clock,
+  Link2, Globe2, Wifi, WifiOff, Clock, RefreshCw,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
+import IntegrationModal from '../components/IntegrationModal';
 import { integrations } from '../data/mockData';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
+import { fetchConnections } from '../lib/integrations/service';
+import type { IntegrationConnection } from '../lib/integrations/types';
+import type { Integration } from '../types';
 
 type Tab = 'manual' | 'csv' | 'integrations' | 'public';
 
@@ -40,6 +44,27 @@ export default function DataIngestion() {
   const { canWrite } = useAuth();
   const canUploadExcel = canWrite('data');
   const [activeTab, setActiveTab] = useState<Tab>('manual');
+
+  // ── Integration state ──────────────────────────────────────────────────────
+  const [connections, setConnections]       = useState<Record<string, IntegrationConnection>>({});
+  const [loadingConns, setLoadingConns]     = useState(false);
+  const [selectedInt, setSelectedInt]       = useState<Integration | null>(null);
+
+  const loadConnections = useCallback(async () => {
+    setLoadingConns(true);
+    try {
+      const c = await fetchConnections();
+      setConnections(c);
+    } catch { /* backend may not be running */ }
+    finally { setLoadingConns(false); }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'integrations') void loadConnections();
+  }, [activeTab, loadConnections]);
+
+  // ──────────────────────────────────────────────────────────────────────────
+
   const [formData, setFormData] = useState<FormData>({
     mrr: '8500',
     burnRate: '45000',
@@ -326,18 +351,21 @@ export default function DataIngestion() {
       {activeTab === 'integrations' && (
         <div className="space-y-6">
           <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center justify-between">
               <div>
                 <h3 className="text-sm font-medium text-gray-300">Connected Integrations</h3>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  {integrations.filter((i) => i.status === 'connected').length} connected,{' '}
-                  {integrations.filter((i) => i.status === 'available').length} available
+                  {Object.keys(connections).length} live · click any card to connect or view metrics
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 status-pulse" />
-                <span className="text-xs text-gray-400">Auto-sync every 15min</span>
-              </div>
+              <button
+                onClick={() => void loadConnections()}
+                disabled={loadingConns}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+                title="Refresh"
+              >
+                <RefreshCw className={`w-4 h-4 ${loadingConns ? 'animate-spin' : ''}`} />
+              </button>
             </div>
           </div>
 
@@ -351,28 +379,60 @@ export default function DataIngestion() {
                 </h4>
                 <div className="grid grid-cols-3 gap-3">
                   {items.map((int) => {
-                    const badge = statusBadge[int.status];
-                    const Icon = badge.icon;
+                    const liveConn = connections[int.id];
+                    const isConnected = !!liveConn;
+                    const isComingSoon = int.status === 'coming-soon';
+
                     return (
-                      <div
+                      <button
                         key={int.id}
-                        className="glass-card p-4 flex items-start justify-between"
+                        onClick={() => !isComingSoon && setSelectedInt(int)}
+                        disabled={isComingSoon}
+                        className={`glass-card p-4 flex items-start justify-between text-left transition-all ${
+                          isComingSoon
+                            ? 'opacity-50 cursor-not-allowed'
+                            : 'hover:border-sky-500/30 hover:bg-sky-500/5 cursor-pointer'
+                        }`}
                       >
                         <div>
                           <h5 className="text-sm font-medium text-white">{int.name}</h5>
                           <p className="text-[10px] text-gray-500 mt-0.5">{int.description}</p>
+                          {isConnected && (
+                            <p className="text-[10px] text-gray-600 mt-1 truncate max-w-[120px]">
+                              {liveConn.accountName}
+                            </p>
+                          )}
                         </div>
-                        <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border ${badge.bg} ${badge.color}`}>
-                          <Icon className="w-3 h-3" />
-                          {int.status === 'connected' ? 'Live' : int.status === 'available' ? 'Connect' : 'Soon'}
-                        </span>
-                      </div>
+                        {isConnected ? (
+                          <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border bg-emerald-500/10 border-emerald-500/20 text-emerald-400 flex-shrink-0">
+                            <Wifi className="w-3 h-3" /> Live
+                          </span>
+                        ) : isComingSoon ? (
+                          <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border bg-amber-500/10 border-amber-500/20 text-amber-400 flex-shrink-0">
+                            <Clock className="w-3 h-3" /> Soon
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border bg-gray-800 border-gray-700 text-gray-400 flex-shrink-0">
+                            <WifiOff className="w-3 h-3" /> Connect
+                          </span>
+                        )}
+                      </button>
                     );
                   })}
                 </div>
               </div>
             );
           })}
+
+          {/* Modal */}
+          {selectedInt && (
+            <IntegrationModal
+              integration={selectedInt}
+              connection={connections[selectedInt.id] ?? null}
+              onClose={() => setSelectedInt(null)}
+              onConnectionChange={() => void loadConnections()}
+            />
+          )}
         </div>
       )}
 

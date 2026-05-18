@@ -39,10 +39,11 @@ async function authed<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  get: <T>(path: string) => authed<T>(path),
-  post: <T>(path: string, body?: FormData | object) =>
+  get:    <T>(path: string) => authed<T>(path),
+  post:   <T>(path: string, body?: FormData | object) =>
     authed<T>(path, {
       method: 'POST',
       body: body instanceof FormData ? body : JSON.stringify(body ?? {}),
     }),
+  delete: <T>(path: string) => authed<T>(path, { method: 'DELETE' }),
 };
