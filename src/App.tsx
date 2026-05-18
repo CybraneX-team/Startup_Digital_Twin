@@ -71,6 +71,15 @@ function AppRoutes() {
   const location = useLocation();
   const { user, profile } = useAuth();
 
+  // /landing — custom nav, no default TopBar
+  if (location.pathname === '/landing') {
+    return (
+      <Routes>
+        <Route path="/landing" element={<LandingNew />} />
+      </Routes>
+    );
+  }
+
   // Auth + onboarding pages are full-screen without TopBar
   if (location.pathname === '/auth' || location.pathname === '/auth/vc' || location.pathname === '/auth/incubator') {
     return (
