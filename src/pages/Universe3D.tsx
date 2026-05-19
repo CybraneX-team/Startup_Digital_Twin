@@ -8,6 +8,7 @@ import { UniverseController, type NavPathEntry, type ZoomLevel, type HoverTarget
 import type { UniverseIndustry, UniverseSubdomain } from '../data/universeGraph';
 import CreateCompanyModal from '../components/CreateCompanyModal';
 import type { LocalCompany } from '../lib/localCompanies';
+import OrganisationPolytope from '../components/OrganisationPolytope';
 
 // ── Side Panel ───────────────────────────────────────────────────────────────
 
@@ -221,6 +222,10 @@ export default function Universe3DPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Derived state for Polytope rendering
+  const isCompanyLevel = currentLevel === ZOOM_LEVELS.COMPANY;
+  const companyName = isCompanyLevel ? navPath[2]?.data?.name : null;
+
   // ── Create Company modal state ──
   const [createModal, setCreateModal] = useState<{
     industry: UniverseIndustry;
@@ -338,6 +343,16 @@ export default function Universe3DPage() {
           onCreateCompany={handleCreateFromSun}
           controllerRef={controllerRef}
         />
+      )}
+
+      {/* ── Organisation Polytope (Company Level) ── */}
+      {isCompanyLevel && companyName && (
+        <div className="absolute inset-0 z-30" style={{ pointerEvents: 'auto' }}>
+          <OrganisationPolytope
+            companyName={companyName}
+            onClose={() => controllerRef.current?.goBack()}
+          />
+        </div>
       )}
 
       {/* ── Create Company Floating Panel ── */}

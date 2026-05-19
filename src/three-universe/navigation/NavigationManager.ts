@@ -72,7 +72,14 @@ export class NavigationManager {
 
   _onMove(e) { this._setMouse(e); this._hover(); }
   _onClick(e) { if (!this.cameraCtrl.isTransitioning) { this._setMouse(e); this._click(); } }
-  _onKey(e) { if (e.key === 'Escape') { e.preventDefault(); this.goBack(); } }
+  _onKey(e) { 
+    if (e.key === 'Escape') { 
+      // Allow OrganisationPolytope to handle Escape internally at this level
+      if (this.currentLevel === ZOOM_LEVELS.COMPANY) return;
+      e.preventDefault(); 
+      this.goBack(); 
+    } 
+  }
 
   _hover() {
     this.raycaster.setFromCamera(this.mouse, this.camera);
