@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { LayoutDashboard, Activity, Zap, Shield, Bot, User, Clock, CheckCircle2, Loader2, CircleDot } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -11,6 +11,7 @@ import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/db/companies';
 import { useCompanyMetrics } from '../lib/db/metrics';
 import { INDUSTRIES } from '../db/industries';
+import { supabase } from '../lib/supabase';
 import type { Metric } from '../types';
 
 const statusConfig = {
@@ -32,31 +33,93 @@ export default function Overview() {
   const displayName = company?.name ?? 'Your Company';
   const displayStage = company?.stage ?? 'Seed';
 
+  const [simSnapshot, setSimSnapshot] = useState<Record<string, number> | null>(null);
+
+  useEffect(() => {
+    if (!profile?.company_id) return;
+    supabase
+      .from('metric_snapshots')
+      .select('metrics')
+      .eq('company_id', profile.company_id)
+      .eq('integration_id', 'simulator')
+      .order('snapshot_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.metrics) setSimSnapshot(data.metrics as Record<string, number>);
+      });
+  }, [profile?.company_id]);
+
   const liveKeyMetrics = useMemo<Metric[]>(() => {
     const ordered = [
-      { key: 'revenue', name: 'Revenue', unit: '$' },
-      { key: 'burn', name: 'Burn', unit: '$' },
-      { key: 'cash', name: 'Cash', unit: '$' },
-      { key: 'headcount', name: 'Team', unit: 'people' },
-      { key: 'ad_spend', name: 'Ad Spend', unit: '$' },
-      { key: 'signups', name: 'Signups', unit: 'count' },
-    ] as const;
+      // Financial summary
+      { key: 'revenue',             name: 'Monthly Revenue',      unit: '$' },
+      { key: 'burn',                name: 'Monthly Burn',         unit: '$' },
+      { key: 'rent',                name: 'Monthly Rent',         unit: '$' },
+      { key: 'salaries',            name: 'Salaries',             unit: '$' },
+      // Team & acquisition
+      { key: 'headcount',           name: 'Team Size',            unit: 'people' },
+      { key: 'signups',             name: 'User Acquisition',     unit: '/mo' },
+      { key: 'ad_spend',            name: 'Ad Spend',             unit: '$' },
+      { key: 'cost_of_sales',       name: 'Cost of Sales',        unit: '$' },
+      // Core startup metrics
+      { key: 'buyer_count',         name: 'Buyers',               unit: 'count' },
+      { key: 'conversion_rate',     name: 'Conversion Rate',      unit: '%' },
+      { key: 'avg_order_value',     name: 'Avg Order Value',      unit: '$' },
+      { key: 'cogs',                name: 'COGS',                 unit: '$' },
+      { key: 'avg_payment_count',   name: 'Avg Payment Count',    unit: 'x' },
+      { key: 'customer_ltv',        name: 'Customer LTV',         unit: '$' },
+      { key: 'arpu',                name: 'ARPU',                 unit: '$' },
+      { key: 'cpa',                 name: 'CPA',                  unit: '$' },
+      { key: 'contribution_margin', name: 'Contribution Margin',  unit: '$' },
+    ];
 
     return ordered
       .map(({ key, name, unit }) => {
         const m = metrics[key];
         if (!m) return null;
+        // Use the unit stored in DB (real currency code/symbol) for monetary fields,
+        // fall back to the hardcoded label for non-monetary fields.
+        const displayUnit = m.unit && m.unit !== 'count' ? m.unit : unit;
         return {
           name,
           value: Number(m.value),
-          unit,
+          unit: displayUnit,
           change: 0,
         } as Metric;
       })
       .filter(Boolean) as Metric[];
   }, [metrics]);
 
-  const displayMetrics = liveKeyMetrics.length > 0 ? liveKeyMetrics : keyMetrics.slice(0, 8);
+  // Fall back to company record data when no normalized metrics exist yet
+  const companyFallbackMetrics = useMemo<Metric[]>(() => {
+    if (!company) return [];
+    const result: Metric[] = [];
+    if (company.mrr_usd)       result.push({ name: 'Monthly Revenue',  value: company.mrr_usd,       unit: '$', change: 0 });
+    if (company.burn_rate_usd) result.push({ name: 'Monthly Burn',     value: company.burn_rate_usd, unit: '$', change: 0 });
+    if (company.employees)     result.push({ name: 'Team Size',        value: company.employees,     unit: 'people', change: 0 });
+    if (company.runway_months) result.push({ name: 'Runway',           value: company.runway_months, unit: 'months', change: 0 });
+    return result;
+  }, [company]);
+
+  const displayMetrics = useMemo<Metric[]>(() => {
+    if (simSnapshot) {
+      const mockByName = Object.fromEntries(keyMetrics.map(m => [m.name, m]));
+      return [
+        { name: 'MRR',        value: simSnapshot.revenue   ?? 0, unit: '$',      change: 0 },
+        { name: 'CAC',        value: simSnapshot.cpa        ?? 0, unit: '$',      change: 0 },
+        { name: 'LTV',        value: simSnapshot.cltv       ?? 0, unit: '$',      change: 0 },
+        { name: 'Churn Rate', value: mockByName['Churn Rate']?.value ?? 4.2, unit: '%', change: mockByName['Churn Rate']?.change ?? -0.3 },
+        { name: 'Burn Rate',  value: simSnapshot.burn       ?? 0, unit: '$',      change: 0 },
+        { name: 'NPS Score',  value: mockByName['NPS Score']?.value ?? 67,  unit: '',   change: mockByName['NPS Score']?.change ?? 5 },
+        { name: 'Runway',     value: mockByName['Runway']?.value ?? 8,      unit: 'months', change: 0 },
+        { name: 'Team Size',  value: simSnapshot.headcount  ?? 0, unit: 'people', change: 0 },
+      ];
+    }
+    if (liveKeyMetrics.length > 0) return liveKeyMetrics;
+    if (companyFallbackMetrics.length > 0) return companyFallbackMetrics;
+    return keyMetrics.slice(0, 8);
+  }, [simSnapshot, liveKeyMetrics, companyFallbackMetrics]);
 
   return (
     <div>
@@ -90,7 +153,7 @@ export default function Overview() {
       </div>
 
       {/* Key Metrics Grid */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
         {displayMetrics.map((m) => (
           <MetricCard key={m.name} metric={m} />
         ))}
