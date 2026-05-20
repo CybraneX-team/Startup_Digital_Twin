@@ -350,6 +350,7 @@ export default function Universe3DPage() {
         <div className="absolute inset-0 z-30" style={{ pointerEvents: 'auto' }}>
           <OrganisationPolytope
             companyName={companyName}
+            is3DRoute={true}
             onClose={() => controllerRef.current?.goBack()}
           />
         </div>

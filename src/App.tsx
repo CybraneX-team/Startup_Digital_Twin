@@ -24,6 +24,7 @@ import VCManage from './pages/VCManage';
 import VCAuthPage from './pages/VCAuthPage';
 import IncubatorAuthPage from './pages/IncubatorAuthPage';
 import LandingNew from './pages/LandingNew';
+import PolytopePage from './pages/PolytopePage';
 
 function FullPageLoader() {
   return (
@@ -240,6 +241,13 @@ function AppRoutes() {
 
                 {/* /3d — redirect unauthenticated users to /auth via AuthGuard */}
                 <Route path="/3d" element={<AuthGuard><></></AuthGuard>} />
+
+                {/* /polytope — standalone polytope viewer */}
+                <Route path="/polytope" element={
+                  <AuthGuard requireOnboarding>
+                    <PolytopePage />
+                  </AuthGuard>
+                } />
 
                 {/* /landing — public liquid-glass landing page */}
                 <Route path="/landing" element={<LandingNew />} />

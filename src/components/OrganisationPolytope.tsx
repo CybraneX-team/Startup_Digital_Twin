@@ -6,6 +6,7 @@
  */
 import { useRef, useState, useMemo, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Search, Command, ArrowLeft } from 'lucide-react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls } from '@react-three/drei/core/OrbitControls';
 import { Stars } from '@react-three/drei/core/Stars';
@@ -203,28 +204,22 @@ function UnifiedShell({ selectedIdx, positions, activeDomain }: {
 const CORE_SPHERE_RADIUS = 1.8; // must match HoloCoreSphere radius
 
 function createCoreCurve(end: THREE.Vector3) {
-  // Start at the sphere surface in the SAME direction as the dept node,
-  // so the line goes outward from the core — never through it.
+  // Start exactly at the sphere surface in the node's radial direction.
+  // NO lateral bow — straight radial line so the DomainPlane boundary
+  // matches the rendered connection line perfectly.
   const dir = end.clone().normalize();
   const actualStart = dir.clone().multiplyScalar(CORE_SPHERE_RADIUS);
 
-  const mid = actualStart.clone().add(end).multiplyScalar(0.5);
-  
-  const up = Math.abs(dir.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
-  const perp = dir.clone().cross(up).normalize();
-  
-  const arcStrength = actualStart.distanceTo(end) * 0.18;
-  mid.addScaledVector(perp, arcStrength);
+  // Use a midpoint on the straight radial path — no perpendicular offset.
+  const mid = actualStart.clone().lerp(end, 0.5);
 
   return new THREE.QuadraticBezierCurve3(actualStart, mid, end);
 }
 
 function createPeerCurve(start: THREE.Vector3, end: THREE.Vector3) {
-  const mid = start.clone().add(end).multiplyScalar(0.5);
-  const inDir = mid.clone().normalize().negate();
-  const dist = start.distanceTo(end);
-  const arcStrength = dist * 0.25;
-  mid.addScaledVector(inDir, arcStrength);
+  // Straight midpoint — no inward bow — so the plane top-edge
+  // lies exactly on the rendered peer connection line.
+  const mid = start.clone().lerp(end, 0.5);
 
   return new THREE.QuadraticBezierCurve3(start, mid, end);
 }
@@ -281,18 +276,10 @@ void main() {
 `;
 
 /* ─────────────────────────────────
-   DOMAIN PLANE — Coons-patch petal mesh.
-   u axis (0→1): lateral, A side → B side (along peer arc)
-   v axis (0→1): radial,  sphere surface → outer nodes
-   Boundary curves:
-     left(v)  = coreA curve  (sphere surface → nodeA)
-     right(v) = coreB curve  (sphere surface → nodeB)
-     top(u)   = peer curve   (nodeA → nodeB, outer arc)
-     bot(u)   = linear lerp  (sphere surface A → sphere surface B)
-   Coons patch exactly reproduces all four boundaries.
-   Points inside the core sphere are projected outward so the
-   petal drapes over/under the ball, not through it.
-   Sinusoidal arch gives genuine 3D curvature.
+   DOMAIN PLANE — Coons-patch petals (core→pair) + peer triangle fills.
+   Petals:    one per pair of domain nodes.
+   Triangles: one per triple of domain nodes (inter-dept fill).
+   Both surfaces get a gentle 3-D arch for depth.
 ───────────────────────────────── */
 function DomainPlane({ domainIndices, domainColor, nodePositionsRef }: {
   domainIndices: number[];
@@ -302,21 +289,32 @@ function DomainPlane({ domainIndices, domainColor, nodePositionsRef }: {
   const shaderRef = useRef<THREE.ShaderMaterial>(null);
   const opRef     = useRef(0);
 
-  const SU = 24; // lateral segments (u)
-  const SV = 24; // radial  segments (v)
+  const SU = 18; // Coons lateral segs
+  const SV = 18; // Coons radial  segs
+  const ST = 14; // peer-triangle edge subdivisions
 
-  const VERTS  = (SU + 1) * (SV + 1);
-  const TRIS   = SU * SV * 2;
-  const NPETAL = Math.max(1, domainIndices.length * (domainIndices.length - 1) / 2);
+  const VERTS_P = (SU + 1) * (SV + 1);
+  const TRIS_P  = SU * SV * 2;
+  const VERTS_T = (ST + 1) * (ST + 2) / 2;
+  const TRIS_T  = ST * ST;
+
+  const N      = domainIndices.length;
+  const NPETAL = Math.max(1, N * (N - 1) / 2);
+  const NTRI   = Math.max(1, N * (N - 1) * (N - 2) / 6);
+  const TOTAL_V = NPETAL * VERTS_P + NTRI * VERTS_T;
+  const TOTAL_T = NPETAL * TRIS_P  + NTRI * TRIS_T;
+
+  // Flat index inside a barycentric-subdivided triangle (row i, col j)
+  const triIdx = (i: number, j: number) => i * (ST + 1) - (i * (i - 1)) / 2 + j;
 
   const geo = useMemo(() => {
     const g = new THREE.BufferGeometry();
-    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(VERTS * NPETAL * 3), 3));
-    g.setAttribute('uv',       new THREE.BufferAttribute(new Float32Array(VERTS * NPETAL * 2), 2));
-    g.setIndex(new THREE.BufferAttribute(new Uint32Array(TRIS * NPETAL * 3), 1));
+    g.setAttribute('position', new THREE.BufferAttribute(new Float32Array(TOTAL_V * 3), 3));
+    g.setAttribute('uv',       new THREE.BufferAttribute(new Float32Array(TOTAL_V * 2), 2));
+    g.setIndex(new THREE.BufferAttribute(new Uint32Array(TOTAL_T * 3), 1));
     return g;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [NPETAL]);
+  }, [NPETAL, NTRI]);
 
   const col = useMemo(() => new THREE.Color(domainColor), [domainColor]);
 
@@ -332,92 +330,122 @@ function DomainPlane({ domainIndices, domainColor, nodePositionsRef }: {
     const posArr = geo.attributes.position.array as Float32Array;
     const uvArr  = geo.attributes.uv.array       as Float32Array;
     const idxArr = geo.index!.array              as Uint32Array;
-    let   petals = 0;
 
+    // ── Part 1: Core petals (one per pair) ────────────────────────
+    let petals = 0;
     for (let a = 0; a < domainIndices.length; a++) {
       for (let b = a + 1; b < domainIndices.length; b++) {
         const pA = pos[domainIndices[a]];
         const pB = pos[domainIndices[b]];
 
-        const coreA = createCoreCurve(pA);
-        const coreB = createCoreCurve(pB);
-        const peer  = createPeerCurve(pA, pB);
+        const leftPts  = createCoreCurve(pA).getPoints(SV);
+        const rightPts = createCoreCurve(pB).getPoints(SV);
+        const topPts   = createPeerCurve(pA, pB).getPoints(SU);
 
-        // Pre-sample boundary curves
-        const leftPts  = coreA.getPoints(SV); // [0]=sphere surface A, [SV]=nodeA
-        const rightPts = coreB.getPoints(SV); // [0]=sphere surface B, [SV]=nodeB
-        const topPts   = peer.getPoints(SU);  // [0]=nodeA, [SU]=nodeB
+        const P00 = leftPts[0]; const P10 = rightPts[0];
+        const P01 = leftPts[SV]; const P11 = rightPts[SV];
 
-        // Corners
-        const P00 = leftPts[0];    // sphere surface A
-        const P10 = rightPts[0];   // sphere surface B
-        const P01 = leftPts[SV];   // nodeA
-        const P11 = rightPts[SV];  // nodeB
+        // 3-D arch: perpendicular to petal plane
+        const aN  = new THREE.Vector3().crossVectors(pA, pB).normalize();
+        const aAmp = pA.distanceTo(pB) * 0.12;
 
-        // Arch normal for 3D bow (cross of petal diagonals)
-        const dAB = new THREE.Vector3().subVectors(P11, P00).normalize();
-        const dBA = new THREE.Vector3().subVectors(P10, P01).normalize();
-        const aN  = new THREE.Vector3().crossVectors(dAB, dBA).normalize();
-        if (aN.lengthSq() < 0.001) aN.copy(P00).normalize();
-        const aAmp = P00.distanceTo(P11) * 0.15;
-
-        const vBase = petals * VERTS;
-        const iBase = petals * TRIS;
+        const vBase = petals * VERTS_P;
+        const iBase = petals * TRIS_P;
 
         for (let iu = 0; iu <= SU; iu++) {
           const u   = iu / SU;
-          const bot = P00.clone().lerp(P10, u); // bottom boundary at u
-          const top = topPts[iu];               // top    boundary at u
-
+          const bot = P00.clone().lerp(P10, u);
+          const top = topPts[iu];
           for (let iv = 0; iv <= SV; iv++) {
-            const v     = iv / SV;
-            const left  = leftPts[iv];
-            const right = rightPts[iv];
-
-            // Coons patch
+            const v = iv / SV;
             const pt = new THREE.Vector3();
-            pt.addScaledVector(bot,  1 - v);
-            pt.addScaledVector(top,  v);
-            pt.addScaledVector(left, 1 - u);
-            pt.addScaledVector(right, u);
+            pt.addScaledVector(bot,       1 - v);
+            pt.addScaledVector(top,       v);
+            pt.addScaledVector(leftPts[iv],  1 - u);
+            pt.addScaledVector(rightPts[iv], u);
             pt.addScaledVector(P00, -(1 - u) * (1 - v));
             pt.addScaledVector(P10, -u * (1 - v));
             pt.addScaledVector(P01, -(1 - u) * v);
             pt.addScaledVector(P11, -u * v);
-
-            // Sinusoidal arch: 3D bow, zero at all four edges, max at centre
             pt.addScaledVector(aN, Math.sin(u * Math.PI) * Math.sin(v * Math.PI) * aAmp);
-
-            // Sphere clamp: petal goes around ball not through it
             const d = pt.length();
-            if (d < CORE_SPHERE_RADIUS + 0.10) pt.multiplyScalar((CORE_SPHERE_RADIUS + 0.10) / d);
-
+            if (d < CORE_SPHERE_RADIUS + 0.05) pt.multiplyScalar((CORE_SPHERE_RADIUS + 0.05) / d);
             const vi = vBase + iu * (SV + 1) + iv;
-            posArr[vi * 3]     = pt.x;
-            posArr[vi * 3 + 1] = pt.y;
-            posArr[vi * 3 + 2] = pt.z;
-            uvArr[vi * 2]     = v; // radial  UV: 0=inner, 1=outer
-            uvArr[vi * 2 + 1] = u; // lateral UV: 0=A, 1=B
+            posArr[vi*3]=pt.x; posArr[vi*3+1]=pt.y; posArr[vi*3+2]=pt.z;
+            uvArr[vi*2]=v; uvArr[vi*2+1]=u;
           }
         }
-
         for (let iu = 0; iu < SU; iu++) {
           for (let iv = 0; iv < SV; iv++) {
-            const v00 = vBase + iu       * (SV + 1) + iv;
-            const v10 = vBase + (iu + 1) * (SV + 1) + iv;
-            const v01 = vBase + iu       * (SV + 1) + iv + 1;
-            const v11 = vBase + (iu + 1) * (SV + 1) + iv + 1;
-            const qi  = (iBase + iu * SV + iv) * 6;
-            idxArr[qi]     = v00; idxArr[qi + 1] = v10; idxArr[qi + 2] = v11;
-            idxArr[qi + 3] = v00; idxArr[qi + 4] = v11; idxArr[qi + 5] = v01;
+            const v00=vBase+iu*(SV+1)+iv, v10=vBase+(iu+1)*(SV+1)+iv;
+            const v01=vBase+iu*(SV+1)+iv+1, v11=vBase+(iu+1)*(SV+1)+iv+1;
+            const qi=(iBase+iu*SV+iv)*6;
+            idxArr[qi]=v00; idxArr[qi+1]=v10; idxArr[qi+2]=v11;
+            idxArr[qi+3]=v00; idxArr[qi+4]=v11; idxArr[qi+5]=v01;
           }
         }
-
         petals++;
       }
     }
 
-    geo.setDrawRange(0, petals * TRIS * 3);
+    // ── Part 2: Peer triangles (one per triple — inter-dept fill) ──
+    let tris = 0;
+    for (let a = 0; a < domainIndices.length; a++) {
+      for (let b = a + 1; b < domainIndices.length; b++) {
+        for (let c = b + 1; c < domainIndices.length; c++) {
+          const pA = pos[domainIndices[a]];
+          const pB = pos[domainIndices[b]];
+          const pC = pos[domainIndices[c]];
+
+          const aN = new THREE.Vector3().crossVectors(
+            new THREE.Vector3().subVectors(pB, pA),
+            new THREE.Vector3().subVectors(pC, pA)
+          ).normalize();
+          const centroid = pA.clone().add(pB).add(pC).divideScalar(3);
+          if (aN.dot(centroid) < 0) aN.negate();
+          const aAmp = centroid.length() * 0.18;
+
+          const vBase = NPETAL * VERTS_P + tris * VERTS_T;
+          const iBase = NPETAL * TRIS_P  + tris * TRIS_T;
+
+          for (let i = 0; i <= ST; i++) {
+            for (let j = 0; j <= ST - i; j++) {
+              const alpha = i / ST, beta = j / ST, gamma = 1 - alpha - beta;
+              const pt = new THREE.Vector3()
+                .addScaledVector(pA, alpha)
+                .addScaledVector(pB, beta)
+                .addScaledVector(pC, gamma);
+              // 27αβγ peaks at 1 when α=β=γ=1/3 (centroid), 0 at edges
+              pt.addScaledVector(aN, 27 * alpha * beta * gamma * aAmp);
+              const d = pt.length();
+              if (d < CORE_SPHERE_RADIUS + 0.05) pt.multiplyScalar((CORE_SPHERE_RADIUS + 0.05) / d);
+              const vi = vBase + triIdx(i, j);
+              posArr[vi*3]=pt.x; posArr[vi*3+1]=pt.y; posArr[vi*3+2]=pt.z;
+              const minB = Math.min(alpha, beta, gamma);
+              uvArr[vi*2] = Math.min(1, minB * 3); // fades at all 3 edges
+              uvArr[vi*2+1] = 0.5;
+            }
+          }
+
+          let qi = iBase * 3;
+          for (let i = 0; i < ST; i++) {
+            for (let j = 0; j <= ST - i - 1; j++) {
+              idxArr[qi++]=vBase+triIdx(i,j);
+              idxArr[qi++]=vBase+triIdx(i+1,j);
+              idxArr[qi++]=vBase+triIdx(i,j+1);
+              if (i + j + 1 < ST) {
+                idxArr[qi++]=vBase+triIdx(i+1,j);
+                idxArr[qi++]=vBase+triIdx(i+1,j+1);
+                idxArr[qi++]=vBase+triIdx(i,j+1);
+              }
+            }
+          }
+          tris++;
+        }
+      }
+    }
+
+    geo.setDrawRange(0, (petals * TRIS_P + tris * TRIS_T) * 3);
     (geo.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     (geo.attributes.uv       as THREE.BufferAttribute).needsUpdate = true;
     (geo.index!              as THREE.BufferAttribute).needsUpdate = true;
@@ -626,11 +654,15 @@ function OrgCore({ dimmed, companyName }: { dimmed: boolean; companyName: string
     if (ringMat.current)  ringMat.current.opacity = dimmed ? 0.04 : 0.22 + Math.sin(t * 0.9) * 0.06;
   });
 
-  let fontSize = 20;
-  let lineHeight = 1.25;
-  if (companyName.length > 28) { fontSize = 11; lineHeight = 1.15; }
-  else if (companyName.length > 18) { fontSize = 14; lineHeight = 1.2; }
-  else if (companyName.length > 12) { fontSize = 17; lineHeight = 1.2; }
+  // Dynamically scale font to fit within the ball regardless of name length
+  const nameLen = companyName.length;
+  let fontSize: number;
+  let lineHeight: number;
+  if      (nameLen > 40) { fontSize = 8;  lineHeight = 1.1; }
+  else if (nameLen > 28) { fontSize = 10; lineHeight = 1.15; }
+  else if (nameLen > 18) { fontSize = 13; lineHeight = 1.2; }
+  else if (nameLen > 12) { fontSize = 16; lineHeight = 1.2; }
+  else                   { fontSize = 19; lineHeight = 1.25; }
 
   return (
     <group>
@@ -650,22 +682,30 @@ function OrgCore({ dimmed, companyName }: { dimmed: boolean; companyName: string
       {/* company name — lower z so dept labels float above it */}
       <Html center distanceFactor={18} style={{ pointerEvents:'none', userSelect:'none' }} zIndexRange={[5, 0]}>
         <div style={{ 
-          textAlign:'center', 
-          transition:'opacity 0.5s', 
+          textAlign: 'center', 
+          transition: 'opacity 0.5s', 
           opacity: dimmed ? 0.25 : 1,
-          width: '160px',
+          /* Width is tuned against the ball's projected size at distanceFactor=18 */
+          width: '120px',
+          maxWidth: '120px',
           display: 'flex',
           flexDirection: 'column',
-          alignItems: 'center'
+          alignItems: 'center',
+          padding: '0 4px',
+          boxSizing: 'border-box',
         }}>
           <div style={{
-            color:'#e0f2fe',
+            color: '#e0f2fe',
             fontSize,
             fontWeight: 900,
-            letterSpacing: 1,
+            letterSpacing: 0.5,
             lineHeight,
-            textWrap: 'balance',
-            wordWrap: 'break-word',
+            /* Aggressive word-wrap so single long words break mid-character */
+            overflowWrap: 'break-word',
+            wordBreak: 'break-word',
+            hyphens: 'auto',
+            width: '100%',
+            textAlign: 'center',
             textShadow: '0 0 24px #0284c7, 0 0 8px #0ea5e9, 0 2px 4px #000',
           }}>
             {companyName}
@@ -1321,8 +1361,7 @@ function PositionGuard({ basePositions, nodePositionsRef, onLinesUpdate, selecte
 /* ─────────────────────────────────
    SCENE
 ───────────────────────────────── */
-function Scene({ onEscNoSelection, companyName }: { onEscNoSelection: () => void; companyName: string }) {
-  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+function Scene({ onEscNoSelection, companyName, selectedIdx, onSelect }: { onEscNoSelection: () => void; companyName: string; selectedIdx: number | null; onSelect: (idx: number | null) => void }) {
   const [hoveredIdx,  setHoveredIdx]  = useState<number | null>(null);
   const orbitRef  = useRef<any>(null);
   const coreRef   = useRef<THREE.Mesh>(null);
@@ -1352,7 +1391,7 @@ function Scene({ onEscNoSelection, companyName }: { onEscNoSelection: () => void
         // Stop the event here — don't let NavigationManager or Universe3D also handle it
         e.stopImmediatePropagation();
         e.preventDefault();
-        setSelectedIdx(null);
+        onSelect(null);
         setHoveredIdx(null);
       } else {
         onEscNoSelection();
@@ -1361,9 +1400,9 @@ function Scene({ onEscNoSelection, companyName }: { onEscNoSelection: () => void
     // useCapture=true so this fires BEFORE other listeners (NavigationManager uses bubble phase)
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [selectedIdx, onEscNoSelection]);
+  }, [selectedIdx, onEscNoSelection, onSelect]);
 
-  const select = useCallback((i: number | null) => setSelectedIdx(i), []);
+  const select = useCallback((i: number | null) => onSelect(i), [onSelect]);
   const hover  = useCallback((i: number | null) => setHoveredIdx(i),  []);
 
   return (
@@ -1457,6 +1496,150 @@ const DOMAIN_LABELS: Record<Domain, string> = {
   leadership: 'Leadership', people: 'People', tech: 'Product & Tech',
   delivery: 'Delivery', commercial: 'Commercial', governance: 'Governance',
 };
+function PolytopeSidePanel({ onClose, selectedIdx, onSelectDept }: { onClose?: () => void; selectedIdx: number | null; onSelectDept: (idx: number) => void }) {
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === ' ')) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+      if (e.key === 'Escape') {
+        setSearchQuery('');
+        searchInputRef.current?.blur();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+  
+  const filteredDepts = DEPTS.filter(d => 
+    d.label.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    d.domain.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3 pointer-events-auto">
+      {/* Search Bar */}
+      <div 
+        className="relative rounded-2xl overflow-hidden shadow-xl"
+        style={{
+          width: '196px',
+          background: 'rgba(0, 0, 0, 0.72)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.07)',
+        }}
+      >
+        <div className="flex items-center px-3 py-2.5">
+          <Search className="w-3.5 h-3.5 text-gray-400 mr-2 shrink-0" />
+          <input 
+            ref={searchInputRef}
+            type="text" 
+            placeholder="Search departments..." 
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="bg-transparent border-none outline-none text-xs text-white w-full placeholder:text-gray-500"
+          />
+          <div className="flex items-center gap-0.5 ml-2 opacity-50 shrink-0 bg-white/10 px-1.5 py-0.5 rounded">
+            <Command className="w-2.5 h-2.5 text-gray-300" />
+            <span className="text-[9px] text-gray-300 font-medium">K</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Side nav panel */}
+      <div
+        className="rounded-2xl overflow-hidden flex flex-col"
+        style={{
+          width: '196px',
+          maxHeight: '420px',
+          background: 'rgba(0, 0, 0, 0.72)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.07)',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04)',
+        }}
+      >
+        <div
+          className="flex items-center gap-2 px-3 pt-3 pb-2 shrink-0"
+          style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
+        >
+          <button
+            onClick={onClose}
+            className="flex items-center gap-1.5 text-[11px] font-medium transition-colors hover:text-white"
+            style={{ color: '#C1AEFF' }}
+          >
+            <ArrowLeft className="w-3 h-3" />
+            Back
+          </button>
+        </div>
+
+        <div className="px-3 pt-3 pb-1 shrink-0">
+          <span className="text-[10px] font-semibold tracking-widest" style={{ color: '#5E5E5E' }}>
+            {searchQuery ? 'SEARCH RESULTS' : 'DEPARTMENTS'}
+          </span>
+        </div>
+
+        <div
+          className="overflow-y-auto pb-2"
+          style={{ scrollbarWidth: 'none' }}
+        >
+          {filteredDepts.map((item, i) => {
+            const originalIdx = DEPTS.findIndex(d => d.id === item.id);
+            const isSelected = selectedIdx === originalIdx;
+
+            return (
+            <button
+              key={item.id}
+              onClick={() => onSelectDept(originalIdx)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors group ${isSelected ? 'bg-white/[0.12]' : 'hover:bg-white/[0.06]'}`}
+            >
+              <span
+                className="w-2 h-2 rounded-full shrink-0 transition-transform group-hover:scale-125"
+                style={{
+                  background: DOMAIN_COLOR[item.domain],
+                  boxShadow: `0 0 8px ${DOMAIN_COLOR[item.domain]}70`,
+                }}
+              />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[12px] text-gray-300 group-hover:text-white transition-colors leading-tight truncate">
+                  {item.label}
+                </span>
+                <span className="block text-[10px] leading-tight mt-0.5" style={{ color: '#4b5563' }}>
+                  {item.headcount} emp
+                </span>
+              </span>
+            </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Ecosystem pills */}
+      <div className="flex flex-col gap-2 w-full">
+        <button
+          onClick={() => navigate('/ecosystem/vc-connect')}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-sky-500/30"
+          style={{ background: 'rgba(0,0,0,0.55)', borderColor: 'rgba(148,163,184,0.1)' }}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+          VC &amp; Mentors
+        </button>
+        <button
+          onClick={() => navigate('/ecosystem/network')}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-teal-500/30"
+          style={{ background: 'rgba(0,0,0,0.55)', borderColor: 'rgba(148,163,184,0.1)' }}
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+          Startup Network
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function Legend() {
   return (
@@ -1480,12 +1663,17 @@ function Legend() {
 /* ─────────────────────────────────
    EXPORT
 ───────────────────────────────── */
-export default function OrganisationPolytope({ companyName = 'Your Organisation', onClose }: { companyName?: string; onClose?: () => void }) {
+export default function OrganisationPolytope({ companyName = 'Your Organisation', is3DRoute = false, onClose }: { companyName?: string; is3DRoute?: boolean; onClose?: () => void }) {
   const navigate = useNavigate();
   const overlayRef = useRef<HTMLDivElement>(null);
+  const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
 
   // Called by Scene when ESC is pressed and nothing is selected → navigate back
   const handleEscBack = useCallback(() => {
+    if (selectedIdx !== null) {
+      setSelectedIdx(null);
+      return;
+    }
     const el = overlayRef.current;
     const executeClose = () => {
       if (onClose) onClose();
@@ -1501,7 +1689,7 @@ export default function OrganisationPolytope({ companyName = 'Your Organisation'
         onComplete: executeClose,
       }
     );
-  }, [navigate, onClose]);
+  }, [navigate, onClose, selectedIdx]);
 
   // Fade-in on mount
   useEffect(() => {
@@ -1516,7 +1704,7 @@ export default function OrganisationPolytope({ companyName = 'Your Organisation'
         dpr={[1,1.5]} gl={{ antialias:true, alpha:false }}
         style={{ background:'#05040f' }}
       >
-        <Scene onEscNoSelection={handleEscBack} companyName={companyName} />
+        <Scene onEscNoSelection={handleEscBack} companyName={companyName} selectedIdx={selectedIdx} onSelect={setSelectedIdx} />
       </Canvas>
 
       {/* Full-screen black overlay for fade in/out transitions */}
@@ -1533,23 +1721,22 @@ export default function OrganisationPolytope({ companyName = 'Your Organisation'
 
       {/* ESC hint badge — appears only when a node is selected */}
       <div id="esc-hint" style={{
-        position:'absolute', top:20, right:20, zIndex:10,
+        position:'absolute', top:820, right:20, zIndex:10,
         background:'rgba(8,5,20,0.85)', border:'1px solid rgba(255,255,255,0.07)',
         borderRadius:8, padding:'5px 12px',
         backdropFilter:'blur(12px)',
         display:'flex', alignItems:'center', gap:7,
         pointerEvents:'none',
       }}>
-        <div style={{ marginTop:100 }}>
           <kbd style={{
           background:'rgba(255,255,255,0.08)', border:'1px solid rgba(255,255,255,0.15)',
           borderRadius:4, padding:'1px 6px', fontSize:9, color:'#94a3b8', fontFamily:'monospace',
         }}>ESC</kbd>
         <span style={{ color:'#475569', fontSize:9 }}>Deselect / Go back</span>
-        </div>
       </div>
 
       <Legend />
+      {is3DRoute && <PolytopeSidePanel onClose={handleEscBack} selectedIdx={selectedIdx} onSelectDept={setSelectedIdx} />}
     </div>
   );
 }
