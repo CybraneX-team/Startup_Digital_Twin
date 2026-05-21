@@ -25,6 +25,7 @@ import VCAuthPage from './pages/VCAuthPage';
 import IncubatorAuthPage from './pages/IncubatorAuthPage';
 import LandingNew from './pages/LandingNew';
 import PolytopePage from './pages/PolytopePage';
+import UniversalPage from './pages/UniversalPage';
 
 function FullPageLoader() {
   return (
@@ -166,7 +167,7 @@ function AppRoutes() {
               />
             </Routes>
           ) : (
-            <main className="pt-14 px-8 pb-8 overflow-y-auto">
+            <main className="pt-14  pb-8 overflow-y-auto">
               <Routes>
                 {/* Root: redirect authenticated+onboarded users to dashboard */}
                 <Route path="/" element={<RootRoute />} />
@@ -246,6 +247,13 @@ function AppRoutes() {
                 <Route path="/polytope" element={
                   <AuthGuard requireOnboarding>
                     <PolytopePage />
+                  </AuthGuard>
+                } />
+
+                {/* /universal — universal polytope viewer based on spec */}
+                <Route path="/universal" element={
+                  <AuthGuard requireOnboarding>
+                    <UniversalPage />
                   </AuthGuard>
                 } />
 

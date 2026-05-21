@@ -62,7 +62,7 @@ export default function TopBar() {
             {(isBypassUser ? (
               [
                 { path: '/3d',           label: '3D Twin',        active: is3D },
-                { path: '/twin',         label: 'Twin',           active: location.pathname === '/twin' },
+                // { path: '/twin',         label: 'Twin',           active: location.pathname === '/twin' },
                 { path: '/vc/find',      label: 'Find Startups',  active: location.pathname === '/vc/find' },
                 { path: '/vc/manage',    label: 'Manage',         active: location.pathname === '/vc/manage' },
                 { path: '/vc/portfolio', label: 'My Portfolio',   active: location.pathname === '/vc/portfolio' },
@@ -71,8 +71,9 @@ export default function TopBar() {
               [
                 { path: '/overview',   label: 'Home',     active: isOverview },
                 { path: '/3d',         label: '3D Twin',  active: is3D },
-                { path: '/twin',       label: 'Twin',     active: location.pathname === '/twin' || (location.pathname.startsWith('/twin') && !isData) },
+                // { path: '/twin',       label: 'Twin',     active: location.pathname === '/twin' || (location.pathname.startsWith('/twin') && !isData) },
                 { path: '/polytope',   label: 'BDT',      active: location.pathname === '/polytope' },
+                // { path: '/universal',  label: 'Universal', active: location.pathname === '/universal' },
                 ...(canRead('data')     ? [{ path: '/twin/data' as const,  label: 'Data' as const,     active: isData }] : []),
                 ...(canRead('settings') ? [{ path: '/settings' as const,   label: 'Settings' as const, active: location.pathname === '/settings' }] : []),
               ]

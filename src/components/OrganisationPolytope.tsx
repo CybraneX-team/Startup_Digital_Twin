@@ -53,6 +53,13 @@ const DEPTS: Dept[] = [
   { id:'risk',       label:'Risk',         domain:'governance',  score:73, trend:'-', headcount:6,  metrics:{performance:73,maturity:68,risk:30,alignment:74} },
   { id:'compliance', label:'Compliance',   domain:'governance',  score:81, trend:'+', headcount:4,  metrics:{performance:81,maturity:78,risk:16,alignment:83} },
 ];
+const FEATURES = [
+  { id:'strategy',   label:'Strategy',       domain:'leadership', route: '/twin/strategy' },
+  { id:'team',       label:'Team & RBAC',    domain:'people',     route: '/twin/team' },
+  { id:'data',       label:'Data Ingestion', domain:'tech',       route: '/twin/data' },
+  { id:'analytics',  label:'Analytics',      domain:'tech',       route: '/twin/analytics' },
+  { id:'benchmarks', label:'Benchmarks',     domain:'governance', route: '/twin/benchmarks' },
+];
 
 /* ── Fibonacci sphere distribution ── */
 function fibSphere(n: number, r: number): THREE.Vector3[] {
@@ -1499,6 +1506,7 @@ const DOMAIN_LABELS: Record<Domain, string> = {
 function PolytopeSidePanel({ onClose, selectedIdx, onSelectDept }: { onClose?: () => void; selectedIdx: number | null; onSelectDept: (idx: number) => void }) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [activeTab, setActiveTab] = useState<'departments' | 'info'>('departments');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1540,7 +1548,10 @@ function PolytopeSidePanel({ onClose, selectedIdx, onSelectDept }: { onClose?: (
             type="text" 
             placeholder="Search departments..." 
             value={searchQuery}
-            onChange={e => setSearchQuery(e.target.value)}
+            onChange={e => {
+              setSearchQuery(e.target.value);
+              if (e.target.value) setActiveTab('departments');
+            }}
             className="bg-transparent border-none outline-none text-xs text-white w-full placeholder:text-gray-500"
           />
           <div className="flex items-center gap-0.5 ml-2 opacity-50 shrink-0 bg-white/10 px-1.5 py-0.5 rounded">
@@ -1577,44 +1588,99 @@ function PolytopeSidePanel({ onClose, selectedIdx, onSelectDept }: { onClose?: (
           </button>
         </div>
 
-        <div className="px-3 pt-3 pb-1 shrink-0">
-          <span className="text-[10px] font-semibold tracking-widest" style={{ color: '#5E5E5E' }}>
+        <div className="flex px-3 pt-2 gap-2 shrink-0" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+          <button
+            onClick={() => setActiveTab('departments')}
+            className={`flex-1 text-[10px] font-semibold tracking-widest pb-1.5 border-b-2 transition-colors ${activeTab === 'departments' ? 'border-[#C1AEFF] text-[#C1AEFF]' : 'border-transparent text-[#5E5E5E] hover:text-gray-300'}`}
+          >
             {searchQuery ? 'SEARCH RESULTS' : 'DEPARTMENTS'}
-          </span>
+          </button>
+          <button
+            onClick={() => setActiveTab('info')}
+            className={`flex-1 text-[10px] font-semibold tracking-widest pb-1.5 border-b-2 transition-colors ${activeTab === 'info' ? 'border-[#C1AEFF] text-[#C1AEFF]' : 'border-transparent text-[#5E5E5E] hover:text-gray-300'}`}
+          >
+            INFORMATION
+          </button>
         </div>
 
-        <div
-          className="overflow-y-auto pb-2"
-          style={{ scrollbarWidth: 'none' }}
+        <div 
+          className="transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] grid"
+          style={{ 
+            gridTemplateRows: activeTab === 'departments' ? '1fr' : '0fr',
+            opacity: activeTab === 'departments' ? 1 : 0,
+          }}
         >
-          {filteredDepts.map((item, i) => {
-            const originalIdx = DEPTS.findIndex(d => d.id === item.id);
-            const isSelected = selectedIdx === originalIdx;
-
-            return (
-            <button
-              key={item.id}
-              onClick={() => onSelectDept(originalIdx)}
-              className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors group ${isSelected ? 'bg-white/[0.12]' : 'hover:bg-white/[0.06]'}`}
+          <div className="overflow-hidden">
+            <div
+              className="overflow-y-auto pb-2 mt-1"
+              style={{ scrollbarWidth: 'none', maxHeight: '320px' }}
             >
-              <span
-                className="w-2 h-2 rounded-full shrink-0 transition-transform group-hover:scale-125"
-                style={{
-                  background: DOMAIN_COLOR[item.domain],
-                  boxShadow: `0 0 8px ${DOMAIN_COLOR[item.domain]}70`,
-                }}
-              />
-              <span className="flex-1 min-w-0">
-                <span className="block text-[12px] text-gray-300 group-hover:text-white transition-colors leading-tight truncate">
-                  {item.label}
-                </span>
-                <span className="block text-[10px] leading-tight mt-0.5" style={{ color: '#4b5563' }}>
-                  {item.headcount} emp
-                </span>
-              </span>
-            </button>
-            );
-          })}
+              {filteredDepts.map((item, i) => {
+                const originalIdx = DEPTS.findIndex(d => d.id === item.id);
+                const isSelected = selectedIdx === originalIdx;
+
+                return (
+                <button
+                  key={item.id}
+                  onClick={() => onSelectDept(originalIdx)}
+                  className={`w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors group ${isSelected ? 'bg-white/[0.12]' : 'hover:bg-white/[0.06]'}`}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0 transition-transform group-hover:scale-125"
+                    style={{
+                      background: DOMAIN_COLOR[item.domain],
+                      boxShadow: `0 0 8px ${DOMAIN_COLOR[item.domain]}70`,
+                    }}
+                  />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[12px] text-gray-300 group-hover:text-white transition-colors leading-tight truncate">
+                      {item.label}
+                    </span>
+                    <span className="block text-[10px] leading-tight mt-0.5" style={{ color: '#4b5563' }}>
+                      {item.headcount} emp
+                    </span>
+                  </span>
+                </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        <div 
+          className="transition-all duration-500 ease-[cubic-bezier(0.25,1,0.5,1)] grid"
+          style={{ 
+            gridTemplateRows: activeTab === 'info' ? '1fr' : '0fr',
+            opacity: activeTab === 'info' ? 1 : 0,
+          }}
+        >
+          <div className="overflow-hidden">
+            <div
+              className="overflow-y-auto pb-2 mt-1"
+              style={{ scrollbarWidth: 'none', maxHeight: '200px' }}
+            >
+              {FEATURES.map((item) => (
+                <button
+                  key={item.id}
+                  onClick={() => navigate(item.route)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group"
+                >
+                  <span
+                    className="w-2 h-2 rounded-full shrink-0 transition-transform group-hover:scale-125"
+                    style={{
+                      background: DOMAIN_COLOR[item.domain as Domain] || '#64748b',
+                      boxShadow: `0 0 8px ${(DOMAIN_COLOR[item.domain as Domain] || '#64748b')}70`,
+                    }}
+                  />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-[12px] text-gray-300 group-hover:text-white transition-colors leading-tight truncate">
+                      {item.label}
+                    </span>
+                  </span>
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1677,7 +1743,7 @@ export default function OrganisationPolytope({ companyName = 'Your Organisation'
     const el = overlayRef.current;
     const executeClose = () => {
       if (onClose) onClose();
-      else navigate(-1);
+      else navigate('/overview');
     };
 
     if (!el) { executeClose(); return; }
