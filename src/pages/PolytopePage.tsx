@@ -15,7 +15,8 @@ export default function PolytopePage() {
     <div className="fixed inset-0 pt-14 bg-[#05040f]">
       <OrganisationPolytope 
         companyName={companyName}
-        onClose={() => navigate(-1)} 
+        is3DRoute={true}
+        onClose={() => navigate('/overview')} 
       />
     </div>
   );
