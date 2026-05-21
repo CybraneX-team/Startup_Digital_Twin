@@ -111,7 +111,22 @@ export default function LandingNew() {
               willChange: 'transform, opacity',
             }}
           >
-            <Orb hoverIntensity={0} rotateOnHover={false} hue={0} forceHoverState={false} />
+            {/* Hero background SVG — base beneath orb */}
+            <img
+              src="/hero_bg.svg"
+              alt=""
+              style={{
+                position: 'absolute',
+                bottom: -140, left: '50%',
+                transform: 'translateX(-50%)',
+                width: '100%',
+                pointerEvents: 'none',
+                zIndex: -1,
+              }}
+            />
+            <div style={{ position: 'relative', width: '100%', height: '100%', zIndex: 1 }}>
+              <Orb hoverIntensity={0} rotateOnHover={false} hue={0} forceHoverState={false} />
+            </div>
 
             {/* Hero text — fades out fast */}
             <div style={{

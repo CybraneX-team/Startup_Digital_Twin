@@ -76,6 +76,7 @@ export default function RolesSection() {
           background: 'rgba(17,17,17,0.70)',
           borderRadius: '15px',
           padding: '62px 32px',
+          height: '759px',
           display: 'flex', gap: '36px',
           width: '100%', boxSizing: 'border-box',
           fontWeight: 500,
