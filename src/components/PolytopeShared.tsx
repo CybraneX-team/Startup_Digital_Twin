@@ -1,12 +1,12 @@
 import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
+import { Html, Text, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 
 /* ─────────────────────────────────
    ORG CORE — large luminous nucleus with company name
 ───────────────────────────────── */
-export function OrgCore({ dimmed, companyName }: { dimmed: boolean; companyName: string }) {
+export function OrgCore({ dimmed, companyName, isDeepDrillDown = false }: { dimmed: boolean; companyName: string; isDeepDrillDown?: boolean }) {
   const meshRef  = useRef<THREE.Group>(null);
   const ringMat  = useRef<THREE.MeshBasicMaterial>(null);
 
@@ -31,7 +31,7 @@ export function OrgCore({ dimmed, companyName }: { dimmed: boolean; companyName:
       {/* equatorial ring */}
       <mesh rotation={[Math.PI / 2, 0, 0]}>
         <ringGeometry args={[2.05, 2.25, 64]} />
-        <meshBasicMaterial ref={ringMat} color="#38bdf8" transparent opacity={0.22}
+        <meshBasicMaterial ref={ringMat} color="#FFE6B3" transparent opacity={0.22}
           depthWrite={false} side={THREE.DoubleSide} />
       </mesh>
       {/* Holographic Sphere Core */}
@@ -41,42 +41,40 @@ export function OrgCore({ dimmed, companyName }: { dimmed: boolean; companyName:
          opacity={dimmed ? 0.06 : 1.0} 
         />
       </group>
-      {/* company name — lower z so dept labels float above it */}
-      <Html center distanceFactor={18} style={{ pointerEvents:'none', userSelect:'none' }} zIndexRange={[5, 0]}>
-        <div style={{ 
-          textAlign: 'center', 
-          transition: 'opacity 0.5s', 
-          opacity: dimmed ? 0.25 : 1,
-          /* Width is tuned against the ball's projected size at distanceFactor=18 */
-          width: '120px',
-          maxWidth: '120px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          padding: '0 4px',
-          boxSizing: 'border-box',
-        }}>
-          <div style={{
-            color: '#e0f2fe',
-            fontSize,
-            fontWeight: 900,
-            letterSpacing: 0.5,
-            lineHeight,
-            /* Aggressive word-wrap so single long words break mid-character */
-            overflowWrap: 'break-word',
-            wordBreak: 'break-word',
-            hyphens: 'auto',
-            width: '100%',
-            textAlign: 'center',
-            textShadow: '0 0 24px #0284c7, 0 0 8px #0ea5e9, 0 2px 4px #000',
-          }}>
+      
+      {/* 3D Text perfectly hugging the front surface of the core */}
+      <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
+        <group position={[0, 0, 1.9]}>
+          <Text
+            color="#ffffff"
+            fontSize={0.35}
+            maxWidth={3.2}
+            lineHeight={1.1}
+            letterSpacing={0.05}
+            textAlign="center"
+            anchorX="center"
+            anchorY="middle"
+            fillOpacity={isDeepDrillDown ? 0 : (dimmed ? 0.25 : 0.95)}
+            outlineWidth={0.02}
+            outlineColor="#0284c7"
+            outlineOpacity={isDeepDrillDown ? 0 : (dimmed ? 0.15 : 0.6)}
+          >
             {companyName}
-          </div>
-
-          <div style={{ color:'#38bdf8', fontSize:8, letterSpacing:4, marginTop:6,
-            textTransform:'uppercase', opacity:0.7 }}>Org Core</div>
-        </div>
-      </Html>
+          </Text>
+          <Text
+            position={[0, -0.4, 0]}
+            color="#FFE6B3"
+            fontSize={0.12}
+            letterSpacing={0.3}
+            textAlign="center"
+            anchorX="center"
+            anchorY="middle"
+            fillOpacity={isDeepDrillDown ? 0 : (dimmed ? 0.15 : 0.7)}
+          >
+            ORG CORE
+          </Text>
+        </group>
+      </Billboard>
     </group>
   );
 }
@@ -405,7 +403,7 @@ export function HoloParticles({ count, radius }: { count: number; radius: number
   return (
     <points ref={pointsRef} geometry={particlesGeo}>
       <pointsMaterial 
-        color="#cffafe" 
+        color="#FFE6B3" 
         size={0.05} 
         transparent 
         opacity={0.8} 
@@ -440,9 +438,9 @@ export function HoloCoreSphere({ radius, opacity = 1 }: { radius: number; opacit
           fragmentShader={holoFragmentShader} 
           uniforms={{
             uOpacity: { value: opacity },
-            uColorTop: { value: new THREE.Color("#0f172a") }, // deep dark blue
-            uColorBottom: { value: new THREE.Color("#06b6d4") }, // cyan
-            uRimColor: { value: new THREE.Color("#ffffff") }, // white/cyan rim
+            uColorTop: { value: new THREE.Color("#4a2b10") }, // warm dark brown
+            uColorBottom: { value: new THREE.Color("#FFE6B3") }, // warm bright emission
+            uRimColor: { value: new THREE.Color("#ffffff") }, // white rim
             uRadius: { value: radius }
           }}
           transparent 
@@ -460,7 +458,7 @@ export function HoloCoreSphere({ radius, opacity = 1 }: { radius: number; opacit
           vertexShader={glowVertexShader} 
           fragmentShader={glowFragmentShader} 
           uniforms={{
-            uColor: { value: new THREE.Color("#0ea5e9") },
+            uColor: { value: new THREE.Color("#FFB347") },
             uOpacity: { value: opacity * 0.3 }
           }}
           transparent 

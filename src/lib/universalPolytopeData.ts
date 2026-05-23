@@ -16,6 +16,7 @@ export interface UInternalNode {
   label: string;
   type: 'team' | 'process' | 'project' | 'resource' | 'decision' | 'risk' | 'metric';
   score: number;
+  children?: UInternalNode[];
 }
 
 export interface UExternalNode {
@@ -34,12 +35,29 @@ export interface UExternalNode {
   internalNodes: UInternalNode[];
 }
 
-// Generate 100 nodes: 80 working departments, 20 inactive/non-department
+// Generate 25 nodes: 13 working departments, 12 inactive/non-department
 const activeDomains: UDomain[] = ['direction', 'build', 'delivery', 'market', 'control', 'people'];
 const activeClusters = ['Direction', 'Build', 'Delivery', 'Market', 'Control', 'People'];
 
-export const U_NODES: UExternalNode[] = Array.from({ length: 100 }).map((_, i) => {
-  const isActive = i < 80;
+function generateChildren(parentId: string, level: number, maxLevel: number): UInternalNode[] {
+  if (level > maxLevel) return [];
+  // Number of children drops as level increases (4 -> 3 -> 2 -> 1)
+  const numChildren = Math.max(1, 5 - level);
+  const types: ('team' | 'process' | 'project' | 'resource' | 'decision' | 'risk' | 'metric')[] = ['process', 'team', 'project', 'risk', 'metric', 'resource', 'decision'];
+  
+  return Array.from({ length: numChildren }).map((_, i) => ({
+    id: `${parentId}_${level}_${i}`,
+    label: level === 1 ? ['Process Alpha', 'Core Team', 'Data Pipeline', 'Security Risk', 'Key Metrics'][i] || `Level ${level}-${i+1}` : `Sub-Level ${level}-${i+1}`,
+    type: types[i % types.length],
+    score: 60 + Math.random() * 40,
+    children: generateChildren(`${parentId}_${level}_${i}`, level + 1, maxLevel)
+  }));
+}
+
+export const U_NODES: UExternalNode[] = Array.from({ length: 25 }).map((_, i) => {
+  // Alternate active/inactive to evenly distribute them across the fibonacci sphere
+  // Since length is 25, i % 2 === 0 gives exactly 13 active and 12 inactive
+  const isActive = i % 2 === 0;
   
   if (isActive) {
     const domainIdx = i % activeDomains.length;
@@ -56,16 +74,10 @@ export const U_NODES: UExternalNode[] = Array.from({ length: 100 }).map((_, i) =
         alignment: 85 + Math.random() * 15,
         risk: 10 + Math.random() * 20,
       },
-      internalNodes: [
-        { id: `int_${i}_1`, label: 'Process Alpha', type: 'process', score: 85 },
-        { id: `int_${i}_2`, label: 'Core Team', type: 'team', score: 90 },
-        { id: `int_${i}_3`, label: 'Data Pipeline', type: 'project', score: 78 },
-        { id: `int_${i}_4`, label: 'Security Risk', type: 'risk', score: 45 },
-        { id: `int_${i}_5`, label: 'Key Metrics', type: 'metric', score: 92 },
-      ]
+      internalNodes: generateChildren(`int_${i}`, 1, 4)
     };
   } else {
-    // 20 inactive nodes
+    // 12 inactive nodes
     return {
       id: `node_${i}`,
       label: `Unallocated Node ${i + 1}`,
