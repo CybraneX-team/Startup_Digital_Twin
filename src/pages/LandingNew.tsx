@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Lenis from 'lenis';
 import Orb from '../components/Orb';
 import OrbConstellation from '../components/OrbConstellation';
@@ -69,7 +70,32 @@ export default function LandingNew() {
     return Math.sqrt(x * x + y * y) <= orbRadius;
   }
 
-  const navButtons = ['3D Twin', 'Dashboard', 'Data'];
+  const navigate = useNavigate();
+
+  const ROLE_CARDS = [
+    {
+      label: 'VC',
+      sub: 'Portfolio & deal flow intelligence',
+      route: '/auth/vc',
+    },
+    {
+      label: 'Investor',
+      sub: 'Institutional capital allocation',
+      route: '/auth/incubator',
+    },
+    {
+      label: 'Company',
+      sub: 'Build & track your digital twin',
+      route: '/auth',
+    },
+    // {
+    //   label: 'Unicorn Simulator',
+    //   sub: 'Explore the 3D galaxy universe',
+    //   route: 'https://unicornsimulator.com',
+    //   highlight: true,
+    //   external: true,
+    // },
+  ];
 
   return (
     <div style={{ width: '100%', background: '#111111', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
@@ -83,12 +109,14 @@ export default function LandingNew() {
       }}>
         <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.45)', letterSpacing: '0.04em' }}>Company</span>
         <span style={{ fontSize: '1rem', fontWeight: 600, color: '#ffffff', letterSpacing: '0.18em' }}>WORK OS</span>
-        <button style={{
-          padding: '10px 24px', borderRadius: '999px', border: 'none',
-          background: '#ffffff', color: '#0a0a0a', fontSize: '0.8rem',
-          fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em',
-          fontFamily: "'Plus Jakarta Sans', sans-serif",
-        }}>Try Demo</button>
+        <button
+          onClick={() => navigate('/auth')}
+          style={{
+            padding: '10px 24px', borderRadius: '999px', border: 'none',
+            background: '#ffffff', color: '#0a0a0a', fontSize: '0.8rem',
+            fontWeight: 600, cursor: 'pointer', letterSpacing: '0.02em',
+            fontFamily: "'Plus Jakarta Sans', sans-serif",
+          }}>Try Demo</button>
       </header>
 
       {/* ── Orb scroll zone ── */}
@@ -145,22 +173,37 @@ export default function LandingNew() {
             </div>
           </div>
 
-          {/* Nav buttons — fade out fast */}
+          {/* Role entry cards — fade out fast */}
           <div style={{
             display: 'flex', gap: '12px', paddingBottom: '40px',
             opacity: uiOpacity,
             pointerEvents: uiOpacity < 0.05 ? 'none' : 'auto',
           }}>
-            {navButtons.map((label) => (
-              <button key={label} style={{
-                width: '160px', padding: '16px 0',
-                background: 'rgba(255,255,255,0.07)',
-                border: '1px solid rgba(255,255,255,0.08)',
-                borderRadius: '8px', color: 'rgba(255,255,255,0.75)',
-                fontSize: '0.85rem', fontWeight: 500,
-                fontFamily: "'Plus Jakarta Sans', sans-serif",
-                letterSpacing: '0.03em', cursor: 'pointer',
-              }}>{label}</button>
+            {ROLE_CARDS.map((card) => (
+              <button
+                key={card.label}
+                onClick={() => card.external ? window.open(card.route, '_blank', 'noopener,noreferrer') : navigate(card.route)}
+                style={{
+                  width: '160px', padding: '16px 12px',
+                  background: card.highlight ? '#ffffff' : 'rgba(255,255,255,0.07)',
+                  border: card.highlight ? 'none' : '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: '8px',
+                  color: card.highlight ? '#0a0a0a' : 'rgba(255,255,255,0.75)',
+                  fontSize: '0.85rem', fontWeight: card.highlight ? 600 : 500,
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  letterSpacing: '0.03em', cursor: 'pointer',
+                  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px',
+                  transition: 'background 0.2s, transform 0.2s',
+                }}
+              >
+                <span>{card.label}</span>
+                <span style={{
+                  fontSize: '0.7rem', fontWeight: 400,
+                  color: card.highlight ? 'rgba(10,10,10,0.55)' : 'rgba(255,255,255,0.38)',
+                  letterSpacing: '0.01em', lineHeight: 1.3,
+                  textAlign: 'center',
+                }}>{card.sub}</span>
+              </button>
             ))}
           </div>
 
