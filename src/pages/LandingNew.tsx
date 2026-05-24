@@ -272,15 +272,15 @@ export default function LandingNew() {
       voiceHint: 'Venture capital mode. Access portfolio intelligence and deal flow analytics.',
     },
     {
-      label: 'Investor',
-      sub: 'Institutional capital allocation',
+      label: 'Incubator',
+      sub: 'Build & track your digital twin',
       route: '/auth/incubator',
-      voiceHint: 'Investor mode. Manage institutional capital allocation and investment tracking.',
+      voiceHint: 'Incubator mode. Manage institutional capital allocation and investment tracking.',
     },
     {
       label: 'Company',
       sub: 'Build & track your digital twin',
-      route: '/auth',
+      route: '/3d',
       voiceHint: 'Company mode. Build and monitor your digital twin in real time.',
     },
     // { label: 'Unicorn Simulator', sub: 'Explore the 3D galaxy universe', route: 'https://unicornsimulator.com', voiceHint: 'Explore the unicorn galaxy universe.', highlight: true, external: true },
@@ -421,92 +421,216 @@ export default function LandingNew() {
         </div>
       </div>
 
-      {/* ── Cards overlay — shown after orb minimized ── */}
+      {/* ── Choose-path overlay ── */}
       {showCards && (
         <>
           <style>{`
-            @keyframes orbCardIn {
-              from { opacity: 0; transform: translateY(28px) scale(0.95); }
-              to   { opacity: 1; transform: translateY(0)   scale(1);    }
+            @keyframes cpFadeIn   { from { opacity:0 } to { opacity:1 } }
+            @keyframes cpSlideUp  { from { opacity:0; transform:translateY(32px) } to { opacity:1; transform:translateY(0) } }
+            @keyframes cpCardIn   {
+              from { opacity:0; transform:translateY(40px) scale(0.94) }
+              to   { opacity:1; transform:translateY(0)   scale(1)     }
             }
-            @keyframes orbOverlayIn { from { opacity: 0; } to { opacity: 1; } }
-            @keyframes orbTitleIn   { from { opacity: 0; transform: translateY(-14px); } to { opacity: 1; transform: translateY(0); } }
-            .orb-card-btn:hover {
-              transform: translateY(-4px) scale(1.04) !important;
-              box-shadow: 0 16px 40px rgba(0,0,0,0.4) !important;
+            @keyframes cpPulse {
+              0%,100% { opacity:0.5; transform:scale(1) }
+              50%      { opacity:1;   transform:scale(1.15) }
+            }
+            .cp-card {
+              position: relative;
+              background: rgba(255,255,255,0.035);
+              border: 1px solid rgba(255,255,255,0.09);
+              border-radius: 20px;
+              width: 210px;
+              padding: 32px 24px 28px;
+              cursor: pointer;
+              display: flex; flex-direction: column; align-items: flex-start; gap: 0;
+              backdrop-filter: blur(20px);
+              transition: transform 0.3s cubic-bezier(0.34,1.56,0.64,1),
+                          box-shadow 0.3s ease,
+                          border-color 0.3s ease,
+                          background 0.3s ease;
+              font-family: 'Plus Jakarta Sans', sans-serif;
+              text-align: left;
+              color: #fff;
+              outline: none;
+            }
+            .cp-card::before {
+              content: '';
+              position: absolute; inset: 0;
+              border-radius: 20px;
+              padding: 1px;
+              background: linear-gradient(135deg, rgba(168,85,247,0) 0%, rgba(168,85,247,0) 100%);
+              -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+              -webkit-mask-composite: xor;
+              mask-composite: exclude;
+              transition: background 0.3s ease;
+              pointer-events: none;
+            }
+            .cp-card:hover {
+              transform: translateY(-6px) scale(1.02);
+              background: rgba(120,50,220,0.12);
+              border-color: rgba(168,85,247,0.4);
+              box-shadow: 0 20px 60px rgba(100,30,200,0.25), 0 0 0 1px rgba(168,85,247,0.2);
+            }
+            .cp-card:hover::before {
+              background: linear-gradient(135deg, rgba(168,85,247,0.6) 0%, rgba(236,72,153,0.3) 100%);
+            }
+            .cp-card-arrow {
+              opacity: 0;
+              transform: translateX(-6px);
+              transition: opacity 0.25s ease, transform 0.25s ease;
+            }
+            .cp-card:hover .cp-card-arrow {
+              opacity: 1;
+              transform: translateX(0);
             }
           `}</style>
+
+          {/* Backdrop */}
           <div
             onClick={(e) => { if (e.target === e.currentTarget) triggerRestore(); }}
             style={{
               position: 'fixed', inset: 0, zIndex: 300,
-              display: 'flex', flexDirection: 'column',
-              alignItems: 'center', justifyContent: 'center', gap: '32px',
-              background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-              animation: 'orbOverlayIn 0.4s ease forwards',
+              // background: 'radial-gradient(ellipse at 50% 45%, rgba(70,15,110,0.45) 0%, rgba(8,4,16,0.92) 55%, rgba(4,2,8,0.97) 100%)',
+              backdropFilter: 'blur(6px)',
+              animation: 'cpFadeIn 0.5s ease forwards',
+              overflow: 'hidden',
             }}
           >
-            {/* Title */}
-            <div style={{ textAlign: 'center', animation: 'orbTitleIn 0.5s ease 0.05s both' }}>
-              <p style={{ margin: 0, fontSize: 'clamp(1.2rem, 2.5vw, 1.8rem)', fontWeight: 300, color: 'rgba(255,255,255,0.9)', letterSpacing: '0.06em', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                Choose your path
-              </p>
-              <p style={{ margin: '6px 0 0', fontSize: '0.8rem', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.04em', fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-                Work OS — One System. Infinite Opportunities.
-              </p>
-            </div>
+            {/* Subtle grid lines */}
+            <div style={{
+              position: 'absolute', inset: 0, pointerEvents: 'none',
+              backgroundImage: 'linear-gradient(rgba(168,85,247,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(168,85,247,0.04) 1px, transparent 1px)',
+              backgroundSize: '60px 60px',
+            }} />
 
-            {/* Cards */}
-            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center', padding: '0 24px' }}>
-              {ROLE_CARDS.map((card, i) => (
-                <button
-                  key={card.label}
-                  className="orb-card-btn"
-                  onMouseEnter={() => speakWithOrb(card.voiceHint)}
-                  onClick={() => card.external
-                    ? window.open(card.route, '_blank', 'noopener,noreferrer')
-                    : navigate(card.route)}
-                  style={{
-                    width: '172px', padding: '22px 16px',
-                    background: card.highlight ? '#ffffff' : 'rgba(255,255,255,0.08)',
-                    border: card.highlight ? 'none' : '1px solid rgba(255,255,255,0.12)',
-                    borderRadius: '14px',
-                    color: card.highlight ? '#0a0a0a' : 'rgba(255,255,255,0.85)',
-                    fontSize: '0.88rem', fontWeight: card.highlight ? 700 : 500,
-                    fontFamily: "'Plus Jakarta Sans', sans-serif",
-                    letterSpacing: '0.03em', cursor: 'pointer',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px',
-                    backdropFilter: 'blur(16px)',
-                    boxShadow: card.highlight ? '0 8px 32px rgba(255,255,255,0.2)' : '0 8px 24px rgba(0,0,0,0.3)',
-                    animation: `orbCardIn 0.55s cubic-bezier(0.16,1,0.3,1) ${0.12 + i * 0.08}s both`,
-                    transition: 'transform 0.25s ease, box-shadow 0.25s ease',
-                  }}
-                >
-                  <span style={{ fontSize: '0.95rem', fontWeight: 700 }}>{card.label}</span>
-                  <span style={{ fontSize: '0.72rem', fontWeight: 400, color: card.highlight ? 'rgba(10,10,10,0.5)' : 'rgba(255,255,255,0.4)', letterSpacing: '0.01em', lineHeight: 1.4, textAlign: 'center' }}>
-                    {card.sub}
-                  </span>
-                </button>
-              ))}
-            </div>
+            {/* Center glow */}
+            {/* <div style={{
+              position: 'absolute', left: '50%', top: '42%',
+              width: '600px', height: '400px',
+              transform: 'translate(-50%,-50%)',
+              background: 'radial-gradient(ellipse, rgba(120,40,200,0.18) 0%, transparent 70%)',
+              pointerEvents: 'none',
+            }} /> */}
 
-            {/* Back button */}
-            <button
-              onClick={triggerRestore}
-              style={{
-                marginTop: '8px', padding: '10px 28px',
-                background: 'transparent', border: '1px solid rgba(255,255,255,0.2)',
-                borderRadius: '999px', color: 'rgba(255,255,255,0.45)',
-                fontSize: '0.78rem', fontWeight: 500, cursor: 'pointer',
-                fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: '0.06em',
-                animation: `orbCardIn 0.5s ease ${0.12 + ROLE_CARDS.length * 0.08 + 0.05}s both`,
-                transition: 'color 0.2s, border-color 0.2s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.8)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.5)'; }}
-              onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'; }}
-            >
-              ← back
-            </button>
+            {/* Content */}
+            <div style={{
+              position: 'relative', zIndex: 1,
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              height: '100%', gap: '0', padding: '0 24px',
+            }}>
+
+
+              {/* Title */}
+              <div style={{ textAlign: 'center', marginBottom: '8px', animation: 'cpSlideUp 0.5s ease 0.1s both' }}>
+                <h2 style={{
+                  margin: 0, fontFamily: "'Plus Jakarta Sans', sans-serif",
+                  fontSize: 'clamp(1.8rem, 3.5vw, 2.8rem)', fontWeight: 300,
+                  color: '#ffffff', letterSpacing: '-0.01em', lineHeight: 1.1,
+                }}>
+                  Select your role
+                </h2>
+                <p style={{
+                  margin: '10px 0 0', fontSize: '0.82rem', fontWeight: 400,
+                  color: 'rgba(255,255,255,0.38)', letterSpacing: '0.06em',
+                  fontFamily: "'Plus Jakarta Sans', sans-serif",
+                }}>
+                  Each path unlocks a tailored Work OS experience
+                </p>
+              </div>
+
+              {/* Cards row */}
+              <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap', justifyContent: 'center', marginTop: '36px' }}>
+                {ROLE_CARDS.map((card, i) => (
+                  <button
+                    key={card.label}
+                    className="cp-card"
+                    onMouseEnter={() => speakWithOrb(card.voiceHint)}
+                    onClick={() => card.external
+                      ? window.open(card.route, '_blank', 'noopener,noreferrer')
+                      : navigate(card.route)}
+                    style={{ animation: `cpCardIn 0.6s cubic-bezier(0.16,1,0.3,1) ${0.18 + i * 0.1}s both` }}
+                  >
+                    {/* Icon */}
+                    <div style={{
+                      width: '44px', height: '44px', borderRadius: '12px',
+                      // background: 'rgba(168,85,247,0.12)',
+                      // border: '1px solid rgba(168,85,247,0.2)',
+                      position: 'absolute', bottom: '15%', right: '15%',
+                      opacity: 0.5,
+                      transition: 'opacity 0.2s ease',
+                    }}>
+                      {card.label === 'VC' && (
+                        <svg width="60" height="60" viewBox="0 0 22 22" fill="none">
+                          <polyline points="2,16 8,9 13,13 20,5" stroke="url(#vc-g)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                          <circle cx="20" cy="5" r="2" fill="url(#vc-g)"/>
+                          <defs><linearGradient id="vc-g" x1="2" y1="16" x2="20" y2="5" gradientUnits="userSpaceOnUse"><stop stopColor="#a855f7"/><stop offset="1" stopColor="#ec4899"/></linearGradient></defs>
+                        </svg>
+                      )}
+                      {card.label === 'Incubator' && (
+                        <svg width="60" height="60" viewBox="0 0 22 22" fill="none">
+                          <rect x="2" y="13" width="5" height="7" rx="1.5" fill="url(#inv-g)" opacity="0.5"/>
+                          <rect x="8.5" y="9" width="5" height="11" rx="1.5" fill="url(#inv-g)" opacity="0.75"/>
+                          <rect x="15" y="4" width="5" height="16" rx="1.5" fill="url(#inv-g)"/>
+                          <defs><linearGradient id="inv-g" x1="2" y1="20" x2="20" y2="4" gradientUnits="userSpaceOnUse"><stop stopColor="#a855f7"/><stop offset="1" stopColor="#818cf8"/></linearGradient></defs>
+                        </svg>
+                      )}
+                      {card.label === 'Company' && (
+                        <svg width="60" height="60" viewBox="0 0 22 22" fill="none">
+                          <path d="M11 2L20 7V15L11 20L2 15V7L11 2Z" stroke="url(#co-g)" strokeWidth="1.5" strokeLinejoin="round"/>
+                          <path d="M11 2V20M2 7L11 12L20 7" stroke="url(#co-g)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                          <defs><linearGradient id="co-g" x1="2" y1="2" x2="20" y2="20" gradientUnits="userSpaceOnUse"><stop stopColor="#a855f7"/><stop offset="1" stopColor="#22d3ee"/></linearGradient></defs>
+                        </svg>
+                      )}
+                    </div>
+
+                    {/* Label */}
+                    <span style={{ fontSize: '1.5rem', fontWeight: 700, color: '#ffffff', letterSpacing: '-0.01em', marginBottom: '6px', display: 'block' }}>
+                      {card.label}
+                    </span>
+
+                    {/* Sub */}
+                    <span style={{ fontSize: '1rem', fontWeight: 400, color: 'rgba(255,255,255,0.38)', lineHeight: 1.5, letterSpacing: '0.01em', display: 'block', marginBottom: '24px' }}>
+                      {card.sub}
+                    </span>
+
+                    {/* Enter link */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: 'auto' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: 'rgba(168,85,247,0.8)', letterSpacing: '0.04em' }}>Enter</span>
+                      <svg className="cp-card-arrow" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path d="M2 7h10M8 3.5L11.5 7 8 10.5" stroke="rgba(168,85,247,0.8)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Back */}
+              <button
+                onClick={triggerRestore}
+                style={{
+                  marginTop: '36px',
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  padding: '9px 22px', borderRadius: '999px',
+                  background: 'transparent',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  color: 'rgba(255,255,255,0.35)',
+                  fontSize: '0.75rem', fontWeight: 500, cursor: 'pointer',
+                  fontFamily: "'Plus Jakarta Sans', sans-serif", letterSpacing: '0.05em',
+                  animation: `cpSlideUp 0.5s ease ${0.2 + ROLE_CARDS.length * 0.1}s both`,
+                  transition: 'color 0.2s, border-color 0.2s, background 0.2s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.color='rgba(255,255,255,0.7)'; e.currentTarget.style.borderColor='rgba(255,255,255,0.3)'; }}
+                onMouseLeave={e => { e.currentTarget.style.color='rgba(255,255,255,0.35)'; e.currentTarget.style.borderColor='rgba(255,255,255,0.12)'; }}
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                  <path d="M9 6H3M5.5 3L2 6l3.5 3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+                Go back
+              </button>
+
+            </div>
           </div>
         </>
       )}

@@ -131,6 +131,16 @@ export class UniverseController {
       this.polytopeRenderer = new PolytopeRenderer(this.engine.scene);
       this.polytopeRenderer.renderPolytope("Work OS Orbit", industries, "#4ade80");
 
+      // Black-hole interior callbacks (wired after both deps exist)
+      this.galaxyParticles.onEnterBH = () => {
+        this.systemParticles?.setVisible(false);
+        this.polytopeRenderer?.setVisible(false);
+      };
+      this.galaxyParticles.onExitBH = () => {
+        this.systemParticles?.setVisible(true);
+        // polytopeRenderer restored by zoom-level / navigation logic
+      };
+
       // 6. Post-Processing
       this.postProcessing = new PostProcessing(
         this.engine.renderer,
@@ -387,7 +397,7 @@ export class UniverseController {
     else if (this.cameraCtrl.currentLevel === ZOOM_LEVELS.COMPANY) zoomLevelFactor = 0.03;
     else if (this.cameraCtrl.currentLevel === ZOOM_LEVELS.DEPARTMENT) zoomLevelFactor = 0.01;
 
-    this.galaxyParticles.update(elapsed, 0.0);
+    this.galaxyParticles.update(elapsed, 0.0, this.engine.camera.position);
     this.systemParticles.update(elapsed, zoomLevelFactor);
 
     if (this.cameraCtrl.currentLevel === ZOOM_LEVELS.GALAXY) {
