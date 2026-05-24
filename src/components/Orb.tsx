@@ -1,5 +1,5 @@
 import { Mesh, Program, Renderer, Triangle, Vec3 } from 'ogl';
-import { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 
 interface OrbProps {
   hue?: number;
@@ -7,6 +7,8 @@ interface OrbProps {
   rotateOnHover?: boolean;
   forceHoverState?: boolean;
   backgroundColor?: string;
+  /** Mutable ref 0-1 — voice intensity drives boundary ripple, no re-renders */
+  intensityRef?: React.MutableRefObject<number>;
 }
 
 export default function Orb({
@@ -14,7 +16,8 @@ export default function Orb({
   hoverIntensity = 0.2,
   rotateOnHover = true,
   forceHoverState = false,
-  backgroundColor = '#000000'
+  backgroundColor = '#000000',
+  intensityRef,
 }: OrbProps) {
   const ctnDom = useRef<HTMLDivElement>(null);
 
@@ -39,6 +42,7 @@ export default function Orb({
     uniform float rot;
     uniform float hoverIntensity;
     uniform vec3 backgroundColor;
+    uniform float voiceIntensity;
     varying vec2 vUv;
 
     vec3 rgb2yiq(vec3 c) {
@@ -133,14 +137,28 @@ export default function Orb({
 
       float bgLuminance = dot(backgroundColor, vec3(0.299, 0.587, 0.114));
 
-      float n0 = snoise3(vec3(uv * noiseScale, iTime * 0.5)) * 0.5 + 0.5;
+      // Noise churns faster during voice
+float noiseSpeed = 0.5 + voiceIntensity * 1.5;
+      float n0 = snoise3(vec3(uv * noiseScale, iTime * noiseSpeed)) * 0.5 + 0.5;
       float r0 = mix(mix(innerRadius, 1.0, 0.4), mix(innerRadius, 1.0, 0.6), n0);
+
+      // Angular ripple on boundary — multiple harmonics give organic speech feel
+      float vWarp = voiceIntensity * 0.07 * sin(ang * 7.0 + iTime * 14.0)
+            + voiceIntensity * 0.05 * sin(ang * 4.0 - iTime * 10.0)
+            + voiceIntensity * 0.04 * sin(ang * 11.0 + iTime * 7.0)
+            + voiceIntensity * 0.02 * sin(ang * 2.0 - iTime * 5.0);
+
+      r0 = clamp(r0 + vWarp, 0.35, 1.35);
+
       float d0 = distance(uv, (r0 * invLen) * uv);
       float v0 = light1(1.0, 10.0, d0);
 
       v0 *= smoothstep(r0 * 1.05, r0, len);
       float innerFade = smoothstep(r0 * 0.8, r0 * 0.95, len);
       v0 *= mix(innerFade, 1.0, bgLuminance * 0.7);
+      // Boost glow intensity with voice
+      v0 *= 1.0 + voiceIntensity * 0.25;
+
       float cl = cos(ang + iTime * 2.0) * 0.5 + 0.5;
 
       float a = iTime * -1.0;
@@ -213,7 +231,8 @@ export default function Orb({
         hover: { value: 0 },
         rot: { value: 0 },
         hoverIntensity: { value: hoverIntensity },
-        backgroundColor: { value: hexToVec3(backgroundColor) }
+        backgroundColor: { value: hexToVec3(backgroundColor) },
+        voiceIntensity: { value: 0 }
       }
     });
 
@@ -264,6 +283,7 @@ export default function Orb({
       program.uniforms.iTime.value = t * 0.001;
       program.uniforms.hue.value = hue;
       program.uniforms.hoverIntensity.value = hoverIntensity;
+      program.uniforms.voiceIntensity.value = intensityRef ? intensityRef.current : 0;
 
       const effectiveHover = forceHoverState ? 1 : targetHover;
       program.uniforms.hover.value += (effectiveHover - program.uniforms.hover.value) * 0.1;
