@@ -10,8 +10,8 @@ export default function UniversalPage() {
   const companyName = company?.name || (profile?.company_id ? profile?.first_name ? `${profile.first_name}'s workspace` : 'My workspace' : 'Universal Polytope');
 
   return (
-    <div className="w-full h-screen bg-[#05040f] overflow-hidden">
-      <div className="w-full h-[110vh] -mt-[10vh]">
+    <div className="w-full h-[calc(100vh-56px)] -mb-8 bg-[#05040f] overflow-hidden">
+      <div className="w-full h-full relative">
         <UniversalPolytope companyName={companyName} />
       </div>
     </div>
