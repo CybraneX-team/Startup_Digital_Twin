@@ -28,8 +28,6 @@ export default function LandingNew() {
   const [orbMinimized, setOrbMinimized]     = useState(false);
   const [orbAnimating, setOrbAnimating]     = useState(false);
   const [showCards, setShowCards]           = useState(false);
-  const [welcomeActive, setWelcomeActive]   = useState(false);
-  const [welcomeOpacity, setWelcomeOpacity] = useState(0);
 
   const orbSectionRef    = useRef<HTMLDivElement>(null);
   const orbDivRef        = useRef<HTMLDivElement>(null);
@@ -110,12 +108,9 @@ export default function LandingNew() {
 
     lenisRef.current?.stop();
 
-    // 1. Show welcome effect + fade it in
-    setWelcomeActive(true);
     welcomeIntensity.current = 0;
-    requestAnimationFrame(() => setWelcomeOpacity(1));
 
-    // 2. Speak "Welcome to Work OS"
+    // Speak "Welcome to Work OS"
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
       const utter = new SpeechSynthesisUtterance('Welcome to Work OS');
@@ -174,9 +169,6 @@ export default function LandingNew() {
           onComplete: () => {
             setOrbAnimating(false);
             setOrbMinimized(true);
-            // Fade out welcome effect
-            setWelcomeOpacity(0);
-            setTimeout(() => setWelcomeActive(false), 650);
             setTimeout(() => setShowCards(true), CARDS_APPEAR_DELAY);
           },
         }
@@ -192,8 +184,6 @@ export default function LandingNew() {
     intensityDriverRef.current = 0;
     welcomeIntensity.current = 0;
     window.speechSynthesis?.cancel();
-    setWelcomeActive(false);
-    setWelcomeOpacity(0);
     setShowCards(false);
     setOrbMinimized(false);
     setOrbAnimating(true);
@@ -305,9 +295,9 @@ export default function LandingNew() {
         height: '62px', display: 'flex', alignItems: 'center',
         justifyContent: 'space-between', padding: '30px 80px',
         background: 'rgba(10,10,10,0.7)', backdropFilter: 'blur(12px)',
-        opacity: targetUiOpacity,
-        transition: dynamicTransition,
-        pointerEvents: showOptions ? 'none' : 'auto',
+        opacity: effectiveUiOpacity,
+        transition: isOrbBusy ? 'opacity 0.3s ease' : 'none',
+        pointerEvents: showCards ? 'none' : 'auto',
       }}>
         <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.45)', letterSpacing: '0.04em' }}>Company</span>
         <span style={{ fontSize: '1rem', fontWeight: 600, color: '#ffffff', letterSpacing: '0.18em' }}>WORK OS</span>
@@ -346,7 +336,6 @@ export default function LandingNew() {
             ref={orbDivRef}
             onMouseMove={(e) => setInsideOrb(isInOrb(e))}
             onMouseLeave={() => setInsideOrb(false)}
-            onClick={handleOrbClick}
             onClick={handleOrbClick}
             style={{
               width: '100%', flex: 1, position: 'relative',
@@ -527,119 +516,6 @@ export default function LandingNew() {
       <ResearchSection />
       <TextRevealSection />
       <FooterSection />
-
-      {/* Options Overlay */}
-      <div
-        style={{
-          position: 'fixed',
-          inset: 0,
-          zIndex: 9999,
-          background: 'rgba(5, 5, 5, 0.85)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          opacity: showOptions ? 1 : 0,
-          pointerEvents: showOptions ? 'auto' : 'none',
-          backdropFilter: showOptions ? 'blur(20px)' : 'blur(0px)',
-          transition: 'all 0.4s ease 0.3s', // delayed fade in so orb scales first
-        }}
-      >
-        <button
-          onClick={closeOptions}
-          style={{
-            position: 'absolute',
-            top: '40px',
-            right: '40px',
-            background: 'rgba(255,255,255,0.1)',
-            border: '1px solid rgba(255,255,255,0.2)',
-            color: '#fff',
-            width: '40px',
-            height: '40px',
-            borderRadius: '50%',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            fontSize: '1.2rem',
-            transition: 'all 0.2s ease',
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
-            e.currentTarget.style.transform = 'scale(1.1)';
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
-        >
-          ✕
-        </button>
-        
-        <h2
-          style={{
-            fontSize: '2rem',
-            fontWeight: 300,
-            color: '#fff',
-            marginBottom: '3rem',
-            letterSpacing: '0.05em',
-            transform: showOptions ? 'translateY(0)' : 'translateY(-20px)',
-            opacity: showOptions ? 1 : 0,
-            transition: 'all 0.4s cubic-bezier(0.16, 1, 0.3, 1) 0.4s', // delayed further
-          }}
-        >
-          Select Your Role
-        </h2>
-
-        <div style={{
-          display: 'flex', gap: '24px', flexWrap: 'wrap', justifyContent: 'center', padding: '0 20px'
-        }}>
-          {ROLE_CARDS.map((card, idx) => (
-            <button
-              key={card.label}
-              onClick={() => navigate(card.route)}
-              style={{
-                width: '240px', padding: '32px 24px',
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '16px',
-                color: '#fff',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px',
-                cursor: 'pointer',
-                position: 'relative',
-                overflow: 'hidden',
-                transform: showOptions ? 'translateY(0)' : 'translateY(30px)',
-                opacity: showOptions ? 1 : 0,
-                transition: `transform 0.4s cubic-bezier(0.16, 1, 0.3, 1) ${0.5 + idx * 0.1}s, opacity 0.4s ease ${0.5 + idx * 0.1}s, background 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease`,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.08)';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.3)';
-                e.currentTarget.style.boxShadow = '0 10px 40px rgba(0,0,0,0.5)';
-                // Maintain the translate Y state if any, just scale up slightly
-                e.currentTarget.style.transform = 'translateY(-4px)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.background = 'rgba(255,255,255,0.03)';
-                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-                e.currentTarget.style.boxShadow = 'none';
-                e.currentTarget.style.transform = 'translateY(0)';
-              }}
-            >
-              <span style={{
-                fontSize: '1.25rem', fontWeight: 600,
-                letterSpacing: '0.03em',
-              }}>{card.label}</span>
-              <span style={{
-                fontSize: '0.85rem', fontWeight: 400,
-                color: 'rgba(255,255,255,0.5)',
-                lineHeight: 1.4,
-                textAlign: 'center',
-              }}>{card.sub}</span>
-            </button>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }
