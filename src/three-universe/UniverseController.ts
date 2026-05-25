@@ -42,6 +42,8 @@ export interface UniverseCallbacks {
   onCreateCompany?: (industry: any, subdomain: any) => void;
   onEnterBH?: () => void;
   onExitBH?: () => void;
+  /** Fired when user clicks a live (user-created) company planet — show polytope overlay */
+  onEnterCompanyPolytope?: (company: any) => void;
 }
 
 const _orbitPos = new THREE.Vector3();
@@ -245,6 +247,7 @@ export class UniverseController {
           founded: c.founded,
           funding: c.funding,
           employees: c.employees,
+          isLive: c.isLive,
           departments: c.departments || [],
         })),
       })),
@@ -301,6 +304,9 @@ export class UniverseController {
     };
     this.navigation.onHover = (target) => {
       this._callbacks?.onHover?.(target);
+    };
+    this.navigation.onEnterCompanyPolytope = (company) => {
+      this._callbacks?.onEnterCompanyPolytope?.(company);
     };
   }
 
@@ -604,6 +610,11 @@ export class UniverseController {
       ctrl.controls.update();
       this._exitingBH = false;
     }, 3500);
+  }
+
+  /** Called by React when the user scrolls out of a live-company polytope overlay */
+  exitCompanyPolytope(): void {
+    this.navigation?.goBack();
   }
 
   goBack(): void {

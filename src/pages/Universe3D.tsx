@@ -8,7 +8,6 @@ import { UniverseController, type NavPathEntry, type ZoomLevel, type HoverTarget
 import type { UniverseIndustry, UniverseSubdomain } from '../data/universeGraph';
 import CreateCompanyModal from '../components/CreateCompanyModal';
 import type { LocalCompany } from '../lib/localCompanies';
-import OrganisationPolytope from '../components/OrganisationPolytope';
 import UniversalPolytope from '../components/UniversalPolytope';
 
 // ── Side Panel ───────────────────────────────────────────────────────────────
@@ -241,9 +240,24 @@ export default function Universe3DPage() {
     controllerRef.current?.exitBlackHole();
   }, []);
 
-  // Derived state for Polytope rendering
-  const isCompanyLevel = currentLevel === ZOOM_LEVELS.COMPANY;
-  const companyName = isCompanyLevel ? navPath[2]?.data?.name : null;
+  // ── Company Polytope (live/user-created company) ──────────────────────────
+  const [insideCompanyPolytope, setInsideCompanyPolytope] = useState(false);
+  const [companyPolytopeMounted, setCompanyPolytopeMounted] = useState(false);
+  const [companyPolytopeEntryCount, setCompanyPolytopeEntryCount] = useState(0);
+  const [activeCompany, setActiveCompany] = useState<any>(null);
+
+  const handleEnterCompanyPolytope = useCallback((company: any) => {
+    setActiveCompany(company);
+    setCompanyPolytopeMounted(true);
+    setInsideCompanyPolytope(true);
+    setCompanyPolytopeEntryCount(c => c + 1);
+  }, []);
+
+  const handleCompanyPolytopeExitIntent = useCallback(() => {
+    setInsideCompanyPolytope(false);
+    setActiveCompany(null);
+    controllerRef.current?.exitCompanyPolytope();
+  }, []);
 
   // ── Create Company modal state ──
   const [createModal, setCreateModal] = useState<{
@@ -362,6 +376,7 @@ export default function Universe3DPage() {
           onCreateCompany={handleCreateFromSun}
           onEnterBH={handleEnterBH}
           onExitBH={handleExitBH}
+          onEnterCompanyPolytope={handleEnterCompanyPolytope}
           controllerRef={controllerRef}
         />
       )}
@@ -394,16 +409,30 @@ export default function Universe3DPage() {
         )}
       </div>
 
-      {/* ── Organisation Polytope (Company Level) ── */}
-      {isCompanyLevel && companyName && (
-        <div className="absolute inset-0 z-30" style={{ pointerEvents: 'auto' }}>
-          <OrganisationPolytope
-            companyName={companyName}
-            is3DRoute={true}
-            onClose={() => controllerRef.current?.goBack()}
+      {/* ── Company Polytope overlay (live / user-created companies only) ──
+           Same visibility:hidden pattern as BH overlay — children stay event-dead
+           while fading out so the 3D canvas underneath is interactive. */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 5,
+          opacity: insideCompanyPolytope ? 1 : 0,
+          visibility: insideCompanyPolytope ? 'visible' : 'hidden',
+          transition: insideCompanyPolytope
+            ? 'opacity 1.2s ease-in-out'
+            : 'opacity 1.2s ease-in-out, visibility 0s 1.2s',
+        }}
+      >
+        {companyPolytopeMounted && (
+          <UniversalPolytope
+            companyName={activeCompany?.name ?? 'My Company'}
+            onExitIntent={handleCompanyPolytopeExitIntent}
+            transparent={true}
+            cameraResetTrigger={companyPolytopeEntryCount}
           />
-        </div>
-      )}
+        )}
+      </div>
 
       {/* ── Create Company Floating Panel ── */}
       {createModal && (

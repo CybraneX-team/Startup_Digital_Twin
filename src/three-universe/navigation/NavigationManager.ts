@@ -35,6 +35,7 @@ export class NavigationManager {
     this.onNavigateBegin = null; // fires immediately at nav start — for early label/UI updates
     this.onHover = null;
     this.onSelect = null;
+    this.onEnterCompanyPolytope = null; // fires after zooming into a live (user-created) company
 
     this._afterNextNavigate = null;
 
@@ -386,7 +387,11 @@ export class NavigationManager {
       ? this._subdomainSolarSystem.getCompanyWorldPosition(company.id)
       : this.systemParticles.getCompanyPosition(industry.id, subdomain.id, company.id);
 
-    this.cameraCtrl.flyTo(wp, 50, ZOOM_LEVELS.COMPANY, () => {
+    // Live (user-created) company: zoom close then show polytope overlay
+    // Catalog company: zoom just outside planet surface so it fills screen — then stop
+    const flyDist = company.isLive ? 20 : 28;
+
+    this.cameraCtrl.flyTo(wp, flyDist, ZOOM_LEVELS.COMPANY, () => {
       this.currentLevel = ZOOM_LEVELS.COMPANY;
       this.navigationPath = [
         { level: ZOOM_LEVELS.INDUSTRY, id: industry.id, name: industry.name, data: industry },
@@ -394,6 +399,10 @@ export class NavigationManager {
         { level: ZOOM_LEVELS.COMPANY, id: company.id, name: company.name, data: company },
       ];
       if (this.onNavigate) this.onNavigate(this.navigationPath, this.currentLevel);
+      // Only fire polytope for live companies
+      if (company.isLive && this.onEnterCompanyPolytope) {
+        this.onEnterCompanyPolytope(company);
+      }
     });
   }
 
