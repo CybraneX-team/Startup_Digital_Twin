@@ -40,6 +40,8 @@ export interface UniverseCallbacks {
   onNavigate?: (path: NavPathEntry[], level: ZoomLevel) => void;
   onHover?: (target: HoverTarget | null) => void;
   onCreateCompany?: (industry: any, subdomain: any) => void;
+  onEnterBH?: () => void;
+  onExitBH?: () => void;
 }
 
 const _orbitPos = new THREE.Vector3();
@@ -69,6 +71,7 @@ export class UniverseController {
     container.style.overflow = 'hidden';
     this._data = data;
     this._callbacks = callbacks ?? {};
+    this._exitingBH = false;
 
     this._init(data);
   }
@@ -133,12 +136,17 @@ export class UniverseController {
 
       // Black-hole interior callbacks (wired after both deps exist)
       this.galaxyParticles.onEnterBH = () => {
+        this._exitingBH = false; // allow exit to work if user re-enters
         this.systemParticles?.setVisible(false);
         this.polytopeRenderer?.setVisible(false);
+        this._callbacks?.onEnterBH?.();
       };
       this.galaxyParticles.onExitBH = () => {
         this.systemParticles?.setVisible(true);
+        // Force-restore galaxy visibility — setSubdomainLevel(true) may have hidden it
+        this.galaxyParticles?.setVisible(true);
         // polytopeRenderer restored by zoom-level / navigation logic
+        this._callbacks?.onExitBH?.();
       };
 
       // 6. Post-Processing
@@ -557,6 +565,45 @@ export class UniverseController {
     } finally {
       (this as any)._isRouting = false;
     }
+  }
+
+  /**
+   * Fly vanilla Three.js camera back to galaxy overview after BH exit.
+   * _exitingBH prevents duplicate calls from rapid wheel events.
+   */
+  exitBlackHole(): void {
+    if (this._exitingBH) return;
+    this._exitingBH = true;
+
+    const ctrl = this.cameraCtrl;
+    const cam  = this.engine?.camera;
+    if (!ctrl || !cam) { this._exitingBH = false; return; }
+
+    // Force-clear any in-progress transition so goToGalaxy() doesn't early-return.
+    gsap.killTweensOf(cam.position);
+    gsap.killTweensOf(ctrl.controls.target);
+    if (ctrl._flyTimeline) { ctrl._flyTimeline.kill(); ctrl._flyTimeline = null; }
+    ctrl.isTransitioning = false;
+
+    // Disable zoom only — prevents user scroll fighting the fly animation.
+    // Orbit rotation stays enabled so it doesn't feel frozen.
+    ctrl.controls.enableZoom = false;
+
+    // Force-restore galaxy geometry visibility.
+    this.galaxyParticles?.setVisible(true);
+
+    // goToGalaxy handles: zoom cap restore, industry particles, flyToGalaxy
+    // GSAP, level/navigationPath reset, auto-rotate re-enable.
+    this.navigation?.goToGalaxy();
+
+    // Re-enable zoom + clean up flag well after flyToGalaxy (2.8s) completes.
+    setTimeout(() => {
+      ctrl.controls.enableZoom = true;
+      ctrl.controls.enabled    = true;
+      ctrl.isTransitioning     = false;
+      ctrl.controls.update();
+      this._exitingBH = false;
+    }, 3500);
   }
 
   goBack(): void {

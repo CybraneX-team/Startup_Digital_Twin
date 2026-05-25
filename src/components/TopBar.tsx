@@ -72,8 +72,8 @@ export default function TopBar() {
                 { path: '/overview',   label: 'Home',     active: isOverview },
                 { path: '/3d',         label: '3D Twin',  active: is3D },
                 // { path: '/twin',       label: 'Twin',     active: location.pathname === '/twin' || (location.pathname.startsWith('/twin') && !isData) },
-                { path: '/polytope',   label: 'BDT',      active: location.pathname === '/polytope' },
-                // { path: '/universal',  label: 'Universal', active: location.pathname === '/universal' },
+                // { path: '/polytope',   label: 'BDT',      active: location.pathname === '/polytope' },
+                { path: '/universal',  label: 'BDT', active: location.pathname === '/universal' },
                 ...(canRead('data')     ? [{ path: '/twin/data' as const,  label: 'Data' as const,     active: isData }] : []),
                 ...(canRead('settings') ? [{ path: '/settings' as const,   label: 'Settings' as const, active: location.pathname === '/settings' }] : []),
               ]

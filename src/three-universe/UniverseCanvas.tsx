@@ -7,10 +7,12 @@ interface UniverseCanvasProps {
   onNavigate?: (path: NavPathEntry[], level: ZoomLevel) => void;
   onHover?: (target: HoverTarget | null) => void;
   onCreateCompany?: (industry: any, subdomain: any) => void;
+  onEnterBH?: () => void;
+  onExitBH?: () => void;
   controllerRef?: React.MutableRefObject<UniverseController | null>;
 }
 
-export default function UniverseCanvas({ data, onNavigate, onHover, onCreateCompany, controllerRef }: UniverseCanvasProps) {
+export default function UniverseCanvas({ data, onNavigate, onHover, onCreateCompany, onEnterBH, onExitBH, controllerRef }: UniverseCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const ctrlRef = useRef<UniverseController | null>(null);
 
@@ -20,6 +22,10 @@ export default function UniverseCanvas({ data, onNavigate, onHover, onCreateComp
   stableOnHover.current = onHover;
   const stableOnCreateCompany = useRef(onCreateCompany);
   stableOnCreateCompany.current = onCreateCompany;
+  const stableOnEnterBH = useRef(onEnterBH);
+  stableOnEnterBH.current = onEnterBH;
+  const stableOnExitBH = useRef(onExitBH);
+  stableOnExitBH.current = onExitBH;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -31,6 +37,8 @@ export default function UniverseCanvas({ data, onNavigate, onHover, onCreateComp
         onNavigate: (path, level) => stableOnNavigate.current?.(path, level),
         onHover: (target) => stableOnHover.current?.(target),
         onCreateCompany: (industry, subdomain) => stableOnCreateCompany.current?.(industry, subdomain),
+        onEnterBH: () => stableOnEnterBH.current?.(),
+        onExitBH: () => stableOnExitBH.current?.(),
       },
     );
     ctrlRef.current = ctrl;

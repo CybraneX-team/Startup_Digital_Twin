@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import galaxyVertexShader from '../shaders/galaxy/vertex.glsl';
 import galaxyFragmentShader from '../shaders/galaxy/fragment.glsl';
+import { U_NODES, U_DOMAIN_COLOR } from '../../lib/universalPolytopeData';
 
 const PERSISTED_ANGLES: Record<string, number> = {};
 
@@ -62,6 +63,7 @@ export class GalaxyParticles {
     this.onEnterBH = null;
     this.onExitBH  = null;
     this._insideBH = false;
+    this._insideEH = false;
   }
 
   _detectPerf() {
@@ -331,6 +333,23 @@ export class GalaxyParticles {
     ehMesh.renderOrder = 999;
     group.add(ehMesh);
 
+    // ── BackSide occluder (always-on) ──────────────────────────────────
+    // BackSide → invisible from outside, auto-visible once camera enters EH.
+    // depthTest:false + renderOrder 998 → paints solid black over all
+    // external geometry the moment camera crosses the event horizon.
+    const occluder = new THREE.Mesh(
+      new THREE.SphereGeometry(EH_R * 0.99, 32, 32),
+      new THREE.MeshBasicMaterial({
+        color: 0x000000,
+        side: THREE.BackSide,
+        transparent: true,
+        opacity: 1.0,
+        depthWrite: false,
+        depthTest: false,
+      }),
+    );
+    occluder.renderOrder = 998;
+    group.add(occluder);
 
     this._bhGroup = group;
     this.scene.add(group);
@@ -475,110 +494,211 @@ export class GalaxyParticles {
   }
 
   _createBlackHoleInterior() {
-    const EH_R = 900;
-    const group = new THREE.Group();
+    // Pure vanilla Three.js — no ConvexGeometry, no custom shaders, no three-stdlib
+    // MeshBasicMaterial + AdditiveBlending — opacity tweened directly by GSAP
+    const SCALE  = 32;   // node orbit radius = 12 * SCALE = 384 BH units
+    const NODE_R = 18;   // node sphere radius
+    const CORE_R = 26;   // central core radius
+    const group  = new THREE.Group();
 
-    // ── BackSide occluder ──────────────────────────────────────────────
-    // Rendered only from inside (back faces face inward toward camera).
-    // depthTest:false + renderOrder 998 → paints solid black over every
-    // external object (disk, stars, industries) when camera is inside.
-    const occluder = new THREE.Mesh(
-      new THREE.SphereGeometry(EH_R * 0.99, 32, 32),
-      new THREE.MeshBasicMaterial({
-        color: 0x000000,
-        side: THREE.BackSide,
-        transparent: true,
-        opacity: 1.0,
-        depthWrite: false,
-        depthTest: false,
-      }),
-    );
-    occluder.renderOrder = 998;
-    group.add(occluder);
+    // ── Symmetric dir helpers ─────────────────────────────────────────────
+    const PHI = (1 + Math.sqrt(5)) / 2;
+    const icoDirs = () => {
+      const t = PHI;
+      return [[-1,t,0],[1,t,0],[-1,-t,0],[1,-t,0],[0,-1,t],[0,1,t],
+              [0,-1,-t],[0,1,-t],[t,0,-1],[t,0,1],[-t,0,-1],[-t,0,1]]
+        .map(([x,y,z]) => new THREE.Vector3(x,y,z).normalize());
+    };
+    const dodDirs = () => {
+      const p = PHI, q = 1/p;
+      return [[1,1,1],[1,1,-1],[1,-1,1],[1,-1,-1],[-1,1,1],[-1,1,-1],[-1,-1,1],[-1,-1,-1],
+              [0,q,p],[0,q,-p],[0,-q,p],[0,-q,-p],[q,p,0],[q,-p,0],[-q,p,0],[-q,-p,0],
+              [p,0,q],[p,0,-q],[-p,0,q],[-p,0,-q]]
+        .map(([x,y,z]) => new THREE.Vector3(x,y,z).normalize());
+    };
+    const geoDirs = (n) => {
+      const base = icoDirs();
+      const pool = [...base];
+      for (let a=0;a<base.length;a++)
+        for (let b=a+1;b<base.length;b++)
+          pool.push(base[a].clone().add(base[b]).normalize());
+      const chosen = [pool[0]];
+      while (chosen.length < n) {
+        let bi=0, bd=-1;
+        for (let i=0;i<pool.length;i++) {
+          const d = Math.min(...chosen.map(c => pool[i].distanceTo(c)));
+          if (d > bd) { bd=d; bi=i; }
+        }
+        chosen.push(pool[bi]);
+      }
+      return chosen;
+    };
+    const symDirs = (n) => n===12 ? icoDirs() : n===20 ? dodDirs() : geoDirs(n);
+    const shuffle = (arr, seed=42) => {
+      const a=[...arr]; let s=seed;
+      const rng=()=>{ s=(s*1664525+1013904223)&0xffffffff; return (s>>>0)/0xffffffff; };
+      for (let i=a.length-1;i>0;i--) { const j=Math.floor(rng()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+      return a;
+    };
 
-    // ── Pulsing edge shader ────────────────────────────────────────────
-    const makeEdgeMat = (r: number, g: number, b: number) =>
-      new THREE.ShaderMaterial({
-        uniforms: { uTime: { value: 0 }, uAlpha: { value: 0.0 } },
-        vertexShader: `
-          uniform float uTime;
-          varying float vGlow;
-          void main() {
-            float phase = position.x * 0.003 + position.y * 0.002 + position.z * 0.003;
-            vGlow = 0.5 + 0.5 * sin(phase * 6.283 + uTime * 2.2);
-            gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-          }
-        `,
-        fragmentShader: `
-          uniform float uAlpha;
-          varying float vGlow;
-          void main() {
-            gl_FragColor = vec4(${r.toFixed(2)}, ${g.toFixed(2)}, ${b.toFixed(2)},
-                                uAlpha * (0.55 + 0.45 * vGlow));
-          }
-        `,
-        transparent: true,
-        depthWrite: false,
-        blending: THREE.AdditiveBlending,
-      });
+    // ── Data: same layout as UniversalPolytope ────────────────────────────
+    const departments  = U_NODES.filter(n => n.domain !== 'inactive');
+    const N            = departments.length;
+    const nodePositions= shuffle(symDirs(N), 137).map(d => d.clone().multiplyScalar(12 * SCALE));
+    const nodeColors   = departments.map(n => new THREE.Color(U_DOMAIN_COLOR[n.domain]));
+    const ORBIT_R      = 12 * SCALE;
 
-    // Outer icosahedron (detail=1 → denser edge mesh)
-    const icoMat = makeEdgeMat(0.50, 0.20, 1.00); // purple
-    const ico = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.IcosahedronGeometry(670, 1)), icoMat);
-    ico.renderOrder = 1001;
-    group.add(ico);
+    // All materials — GSAP tweens .opacity directly on MeshBasicMaterial
+    const allMats: { mat: THREE.MeshBasicMaterial; target: number }[] = [];
 
-    // Middle dodecahedron
-    const dodMat = makeEdgeMat(0.10, 0.80, 1.00); // cyan
-    const dod = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.DodecahedronGeometry(440)), dodMat);
-    dod.renderOrder = 1001;
-    group.add(dod);
+    // ── Hull faces: IcosahedronGeometry colored by nearest node ──────────
+    const hullGeo = new THREE.IcosahedronGeometry(ORBIT_R * 0.97, 2).toNonIndexed();
+    const hPosAttr = hullGeo.getAttribute('position') as THREE.BufferAttribute;
+    const hColors  = new Float32Array(hPosAttr.count * 3);
+    for (let i = 0; i < hPosAttr.count; i++) {
+      const v = new THREE.Vector3().fromBufferAttribute(hPosAttr, i);
+      let nearIdx = 0, nearDist = Infinity;
+      for (let j = 0; j < N; j++) {
+        const d = nodePositions[j].distanceTo(v);
+        if (d < nearDist) { nearDist = d; nearIdx = j; }
+      }
+      const c = nodeColors[nearIdx];
+      hColors[i*3]=c.r; hColors[i*3+1]=c.g; hColors[i*3+2]=c.b;
+    }
+    hullGeo.setAttribute('color', new THREE.BufferAttribute(hColors, 3));
+    const hullMat = new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      opacity: 0.0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      side: THREE.DoubleSide,
+    });
+    const hull = new THREE.Mesh(hullGeo, hullMat);
+    hull.renderOrder = 1000;
+    group.add(hull);
+    allMats.push({ mat: hullMat, target: 0.07 });
 
-    // Inner octahedron
-    const octMat = makeEdgeMat(1.00, 0.25, 0.65); // magenta-pink
-    const oct = new THREE.LineSegments(
-      new THREE.EdgesGeometry(new THREE.OctahedronGeometry(230)), octMat);
-    oct.renderOrder = 1001;
-    group.add(oct);
+    // ── Edges: connect nearest-neighbor pairs (same threshold as UniversalPolytope) ─
+    let minEdgeLen = Infinity;
+    for (let i = 0; i < N; i++)
+      for (let j = i+1; j < N; j++) {
+        const d = nodePositions[i].distanceTo(nodePositions[j]);
+        if (d < minEdgeLen) minEdgeLen = d;
+      }
+    const edgeThreshold = minEdgeLen * 1.05;
 
-    // Central singularity glow
-    const coreMat = new THREE.MeshBasicMaterial({
-      color: 0xaa33ff,
+    const edgePts: THREE.Vector3[]  = [];
+    const edgeCols: number[]        = [];
+    for (let i = 0; i < N; i++) {
+      for (let j = i+1; j < N; j++) {
+        if (nodePositions[i].distanceTo(nodePositions[j]) <= edgeThreshold) {
+          edgePts.push(nodePositions[i].clone(), nodePositions[j].clone());
+          edgeCols.push(
+            nodeColors[i].r, nodeColors[i].g, nodeColors[i].b,
+            nodeColors[j].r, nodeColors[j].g, nodeColors[j].b,
+          );
+        }
+      }
+    }
+    const edgesGeo = new THREE.BufferGeometry().setFromPoints(edgePts);
+    edgesGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(edgeCols), 3));
+    const edgeMat = new THREE.LineBasicMaterial({
+      vertexColors: true,
       transparent: true,
       opacity: 0.0,
       depthWrite: false,
       blending: THREE.AdditiveBlending,
     });
-    const core = new THREE.Mesh(new THREE.SphereGeometry(55, 16, 16), coreMat);
-    core.renderOrder = 1002;
-    group.add(core);
+    const edges = new THREE.LineSegments(edgesGeo, edgeMat);
+    edges.renderOrder = 1001;
+    group.add(edges);
+    allMats.push({ mat: edgeMat, target: 0.85 });
 
-    this._bhInteriorGroup  = group;
-    this._bhIcoMesh = ico;  this._bhDodMesh = dod;  this._bhOctMesh = oct;
-    this._bhInteriorMats   = [icoMat, dodMat, octMat];
-    this._bhSingularityMat = coreMat;
+    // ── Node spheres: glow halo + solid core ─────────────────────────────
+    const nodeGeo  = new THREE.SphereGeometry(NODE_R, 16, 16);
+    const haloGeo  = new THREE.SphereGeometry(NODE_R * 2.8, 12, 12);
+    for (let i = 0; i < N; i++) {
+      const col = nodeColors[i];
+
+      const haloMat = new THREE.MeshBasicMaterial({
+        color: col,
+        transparent: true,
+        opacity: 0.0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const halo = new THREE.Mesh(haloGeo, haloMat);
+      halo.position.copy(nodePositions[i]);
+      halo.renderOrder = 1003;
+      group.add(halo);
+      allMats.push({ mat: haloMat, target: 0.12 });
+
+      const coreMat = new THREE.MeshBasicMaterial({
+        color: col,
+        transparent: true,
+        opacity: 0.0,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+      });
+      const core = new THREE.Mesh(nodeGeo, coreMat);
+      core.position.copy(nodePositions[i]);
+      core.renderOrder = 1002;
+      group.add(core);
+      allMats.push({ mat: coreMat, target: 0.95 });
+    }
+
+    // ── OrgCore: navy central sphere + halo ──────────────────────────────
+    const orgColor = new THREE.Color('#3b82f6');
+
+    const orgHaloMat = new THREE.MeshBasicMaterial({
+      color: orgColor,
+      transparent: true,
+      opacity: 0.0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const orgHalo = new THREE.Mesh(new THREE.SphereGeometry(CORE_R * 3.0, 16, 16), orgHaloMat);
+    orgHalo.renderOrder = 1003;
+    group.add(orgHalo);
+    allMats.push({ mat: orgHaloMat, target: 0.15 });
+
+    const orgCoreMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color('#1e3a8a'),
+      transparent: true,
+      opacity: 0.0,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const orgCore = new THREE.Mesh(new THREE.SphereGeometry(CORE_R, 16, 16), orgCoreMat);
+    orgCore.renderOrder = 1002;
+    group.add(orgCore);
+    allMats.push({ mat: orgCoreMat, target: 0.9 });
+
+    group.visible = false;
+    this._bhInteriorGroup = group;
+    this._bhAllMats       = allMats;
+    this._bhInteriorMats  = []; // legacy
 
     this.scene.add(group);
   }
 
   _transitionBHInterior(enter: boolean) {
-    const dur = 1.2;
-    const ease = 'power2.inOut';
-
+    // The visual interior is now handled by the R3F UniversalPolytope overlay
+    // in Universe3D.tsx — just fire the React callbacks; no vanilla Three.js
+    // geometry is shown to avoid a double-polytope glitch.
     if (enter) {
-      this._bhInteriorGroup.visible = true;
-      for (const m of this._bhInteriorMats) {
-        gsap.killTweensOf(m.uniforms.uAlpha);
-        gsap.to(m.uniforms.uAlpha, { value: 0.80, duration: dur, ease });
-      }
-      gsap.killTweensOf(this._bhSingularityMat);
-      gsap.to(this._bhSingularityMat, {
-        opacity: 0.75, duration: dur, ease,
-        onUpdate: () => { this._bhSingularityMat.needsUpdate = true; },
-      });
-      // Fade out galaxy elements
+      this.onEnterBH?.();
+    } else {
+      this.onExitBH?.();
+    }
+  }
+
+  /** Called when camera crosses event horizon — fades galaxy in/out separately from polytope */
+  _fadeGalaxyForBH(entering: boolean) {
+    const dur  = 1.0;
+    const ease = 'power2.inOut';
+    if (entering) {
       if (this.material)
         gsap.to(this.material.uniforms.uSize, { value: 0, duration: dur * 0.5, ease });
       if (this.backgroundStars?.material) {
@@ -591,33 +711,28 @@ export class GalaxyParticles {
         gsap.to(m, { opacity: 0, duration: dur * 0.5, ease,
           onUpdate: () => { m.needsUpdate = true; } });
       }
-      this.onEnterBH?.();
     } else {
-      for (const m of this._bhInteriorMats) {
-        gsap.killTweensOf(m.uniforms.uAlpha);
-        gsap.to(m.uniforms.uAlpha, {
-          value: 0, duration: dur * 0.5, ease,
-          onComplete: () => { this._bhInteriorGroup.visible = false; },
-        });
-      }
-      gsap.to(this._bhSingularityMat, {
-        opacity: 0, duration: dur * 0.5, ease,
-        onUpdate: () => { this._bhSingularityMat.needsUpdate = true; },
-      });
-      // Restore galaxy elements
-      if (this.material)
+      // Force-show before fading in — setSubdomainLevel(true) may have set visible=false
+      if (this.particles)        this.particles.visible       = true;
+      if (this.backgroundStars) this.backgroundStars.visible  = true;
+      if (this.universeSphere)  this.universeSphere.visible   = true;
+
+      if (this.material) {
+        gsap.killTweensOf(this.material.uniforms.uSize);
         gsap.to(this.material.uniforms.uSize, { value: 3.5, duration: dur, ease });
+      }
       if (this.backgroundStars?.material) {
         const m = this.backgroundStars.material as THREE.PointsMaterial;
+        gsap.killTweensOf(m);
         gsap.to(m, { opacity: 0.40, duration: dur, ease,
           onUpdate: () => { m.needsUpdate = true; } });
       }
       if (this.universeSphere?.material) {
         const m = this.universeSphere.material as THREE.PointsMaterial;
+        gsap.killTweensOf(m);
         gsap.to(m, { opacity: 0.90, duration: dur, ease,
           onUpdate: () => { m.needsUpdate = true; } });
       }
-      this.onExitBH?.();
     }
   }
 
@@ -648,22 +763,24 @@ export class GalaxyParticles {
     // Animate accretion particle disk
     if (this._bhAccretionMat) this._bhAccretionMat.uniforms.uTime.value = elapsed;
 
-    // Black hole interior — camera-inside detection
-    if (camPos && this._bhInteriorGroup) {
-      const EH_R = 900;
-      const inside = camPos.lengthSq() < EH_R * EH_R;
+    // Black hole — two-stage camera detection
+    if (camPos) {
+      const distSq = camPos.lengthSq();
+      const EH_R   = 900;
+      const POLY_R_TRIGGER = 750; // appears ~150 units after crossing EH at 900
+
+      // ── Stage 1: entered event horizon → fade galaxy, stay dark ───────
+      const insideEH = distSq < EH_R * EH_R;
+      if (insideEH !== this._insideEH) {
+        this._insideEH = insideEH;
+        this._fadeGalaxyForBH(insideEH);
+      }
+
+      // ── Stage 2: deep inside → show R3F polytope overlay via callback ────
+      const inside = distSq < POLY_R_TRIGGER * POLY_R_TRIGGER;
       if (inside !== this._insideBH) {
         this._insideBH = inside;
         this._transitionBHInterior(inside);
-      }
-      if (inside && this._bhInteriorMats) {
-        for (const m of this._bhInteriorMats) m.uniforms.uTime.value = elapsed;
-        this._bhIcoMesh.rotation.y += 0.0007;
-        this._bhIcoMesh.rotation.x += 0.0003;
-        this._bhDodMesh.rotation.y -= 0.0005;
-        this._bhDodMesh.rotation.z += 0.00020;
-        this._bhOctMesh.rotation.x += 0.0015;
-        this._bhOctMesh.rotation.y += 0.0010;
       }
     }
   }
@@ -742,6 +859,7 @@ export class GalaxyParticles {
     if (this._bhAccretionMat)  this._bhAccretionMat.dispose();
     if (this._bhAccretionGeo)  this._bhAccretionGeo.dispose();
     if (this._bhInteriorGroup) this.scene.remove(this._bhInteriorGroup);
+    if (this._bhAllMats)       this._bhAllMats.forEach(({ mat }) => mat.dispose());
     if (this._bhInteriorMats)  this._bhInteriorMats.forEach(m => m.dispose());
   }
 }

@@ -9,6 +9,7 @@ import type { UniverseIndustry, UniverseSubdomain } from '../data/universeGraph'
 import CreateCompanyModal from '../components/CreateCompanyModal';
 import type { LocalCompany } from '../lib/localCompanies';
 import OrganisationPolytope from '../components/OrganisationPolytope';
+import UniversalPolytope from '../components/UniversalPolytope';
 
 // ── Side Panel ───────────────────────────────────────────────────────────────
 
@@ -221,6 +222,24 @@ export default function Universe3DPage() {
   const [hoverTarget, setHoverTarget] = useState<HoverTarget | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [insideBH, setInsideBH] = useState(false);
+  // Mount once on first BH entry — never unmount (avoids R3F OrbitControls null-connect error)
+  const [bhMounted, setBhMounted] = useState(false);
+  // Increments each entry so UniversalPolytope resets camera to initial view
+  const [bhEntryCount, setBhEntryCount] = useState(0);
+
+  const handleEnterBH = useCallback(() => {
+    setBhMounted(true);
+    setInsideBH(true);
+    setBhEntryCount(c => c + 1);
+  }, []);
+  const handleExitBH  = useCallback(() => setInsideBH(false), []);
+
+  // Called from within R3F overlay when user scrolls out past OrbitControls maxDistance
+  const handleBHExitIntent = useCallback(() => {
+    setInsideBH(false);
+    controllerRef.current?.exitBlackHole();
+  }, []);
 
   // Derived state for Polytope rendering
   const isCompanyLevel = currentLevel === ZOOM_LEVELS.COMPANY;
@@ -341,9 +360,39 @@ export default function Universe3DPage() {
           onNavigate={handleNavigate}
           onHover={handleHover}
           onCreateCompany={handleCreateFromSun}
+          onEnterBH={handleEnterBH}
+          onExitBH={handleExitBH}
           controllerRef={controllerRef}
         />
       )}
+
+      {/* ── Black Hole Interior: UniversalPolytope overlay ──
+           visibility:hidden cascades to ALL children (including R3F canvas) so
+           THREE.js canvas underneath receives events when overlay is not active.
+           pointer-events:none alone does NOT cascade — children keep auto.
+           Pattern: fade opacity first (1.4s), THEN flip visibility to hidden
+           so the canvas is event-dead only after the visual fade completes. */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 5,
+          opacity: insideBH ? 1 : 0,
+          visibility: insideBH ? 'visible' : 'hidden',
+          transition: insideBH
+            ? 'opacity 1.4s ease-in-out'                          // entering: fade in, visible immediately
+            : 'opacity 1.4s ease-in-out, visibility 0s 1.4s',    // exiting: fade then hide
+        }}
+      >
+        {bhMounted && (
+          <UniversalPolytope
+            companyName="Work OS Orbit"
+            onExitIntent={handleBHExitIntent}
+            transparent={true}
+            cameraResetTrigger={bhEntryCount}
+          />
+        )}
+      </div>
 
       {/* ── Organisation Polytope (Company Level) ── */}
       {isCompanyLevel && companyName && (

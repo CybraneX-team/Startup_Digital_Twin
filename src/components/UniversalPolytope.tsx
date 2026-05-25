@@ -692,8 +692,8 @@ void main() {
 }
 `;
 
-function Scene({ 
-  selectedId, 
+function Scene({
+  selectedId,
   setSelectedId,
   onPathChange,
   setBackInfo,
@@ -701,8 +701,10 @@ function Scene({
   hoveredId,
   setHoveredId,
   departments,
-}: { 
-  selectedId: string | null, 
+  onExitIntent,
+  cameraResetTrigger,
+}: {
+  selectedId: string | null,
   setSelectedId: (id: string | null) => void,
   onPathChange: (path: string[]) => void,
   setBackInfo: (info: { label: string, onClick: () => void } | null) => void,
@@ -710,6 +712,8 @@ function Scene({
   hoveredId: string | null,
   setHoveredId: (id: string | null) => void,
   departments: UExternalNode[],
+  onExitIntent?: () => void,
+  cameraResetTrigger?: number,
 }) {
   // ── Derive geometry data from live departments prop ──────────────────────
   const { ACTIVE_NODES, ACTIVE_NODE_POSITIONS, SHUFFLED_ACTIVE_DIRS, NODE_COLORS, INITIAL_CAMERA_DISTANCE } = useMemo(() => {
@@ -731,7 +735,33 @@ function Scene({
   // Alias for refs used deep in the component
   const EXTERNAL_NODE_POSITIONS = ACTIVE_NODE_POSITIONS;
   const orbitRef = useRef<any>(null);
-  const { camera } = useThree();
+  const { camera, gl } = useThree();
+
+  // When embedded inside BH overlay — scroll-out at maxDistance triggers exit
+  const onExitIntentRef = useRef(onExitIntent);
+  onExitIntentRef.current = onExitIntent;
+  useEffect(() => {
+    if (!onExitIntentRef.current) return;
+    // Fire on ANY scroll-out — no distance check.
+    // OrbitControls damping means camera reaches maxDistance only AFTER user
+    // stops; checking position would delay exit until scrolling stops.
+    const handleWheel = (e: WheelEvent) => {
+      if (e.deltaY > 0) onExitIntentRef.current?.();
+    };
+    gl.domElement.addEventListener('wheel', handleWheel, { passive: true });
+    return () => gl.domElement.removeEventListener('wheel', handleWheel);
+  }, [gl.domElement]);
+
+  // Reset R3F camera to initial view each time user enters BH (cameraResetTrigger increments)
+  useEffect(() => {
+    if (!cameraResetTrigger) return; // skip value=0 (first mount)
+    camera.position.set(0, 0, BASE_CAMERA_DISTANCE);
+    if (orbitRef.current) {
+      orbitRef.current.target.set(0, 0, 0);
+      orbitRef.current.update();
+    }
+  }, [cameraResetTrigger]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const facesMatRef = useRef<THREE.ShaderMaterial>(null);
   const coreGroupRef = useRef<THREE.Group>(null);
   const cameraPosRef = useRef(new THREE.Vector3());
@@ -1086,7 +1116,7 @@ function AnalyticHoverCard({ hoveredId, departments }: { hoveredId: string | nul
   );
 }
 
-export default function UniversalPolytope({ companyName = "Universal Polytope" }: { companyName?: string }) {
+export default function UniversalPolytope({ companyName = "Universal Polytope", onExitIntent, transparent = false, cameraResetTrigger = 0 }: { companyName?: string; onExitIntent?: () => void; transparent?: boolean; cameraResetTrigger?: number }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [backInfo, setBackInfo] = useState<{ label: string, onClick: () => void } | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -1097,24 +1127,26 @@ export default function UniversalPolytope({ companyName = "Universal Polytope" }
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <Canvas camera={{ position: [0, 0, BASE_CAMERA_DISTANCE], fov: 45, near: 0.1, far: 300 }}
-        dpr={[1, 1.5]} gl={{ antialias: true, alpha: false }}
+        dpr={[1, 1.5]} gl={{ antialias: true, alpha: transparent }}
       >
-        <Scene 
-          selectedId={selectedId} 
-          setSelectedId={setSelectedId} 
-          onPathChange={() => {}} 
-          setBackInfo={setBackInfo} 
-          companyName={companyName} 
+        <Scene
+          selectedId={selectedId}
+          setSelectedId={setSelectedId}
+          onPathChange={() => {}}
+          setBackInfo={setBackInfo}
+          companyName={companyName}
           hoveredId={hoveredId}
           setHoveredId={setHoveredId}
           departments={store.departments}
+          onExitIntent={onExitIntent}
+          cameraResetTrigger={cameraResetTrigger}
         />
       </Canvas>
 
       {/* Floating Analytic Info Card */}
       <AnalyticHoverCard hoveredId={hoveredId} departments={store.departments} />
 
-      {/* Back Button */}
+      {/* Back Button — hidden when embedded in BH overlay (transparent mode) */}
       <button
         onClick={() => {
           if (backInfo) {
@@ -1125,6 +1157,7 @@ export default function UniversalPolytope({ companyName = "Universal Polytope" }
             navigate('/');
           }
         }}
+        style={{ display: transparent ? 'none' : undefined }}
         style={{
           position: 'fixed', top: '80px', left: '24px',
           background: 'linear-gradient(135deg, rgba(20,10,40,0.8) 0%, rgba(5,4,15,0.9) 100%)',
@@ -1155,17 +1188,19 @@ export default function UniversalPolytope({ companyName = "Universal Polytope" }
         {backInfo ? `Back to ${backInfo.label}` : (selectedId ? 'Back to Polytope' : 'Back to Home')}
       </button>
 
-      {/* Department CRUD Manager */}
-      <PolytopeManager
-        departments={store.departments}
-        onAddDepartment={store.addDepartment}
-        onUpdateDepartment={store.updateDepartment}
-        onDeleteDepartment={store.deleteDepartment}
-        onAddNode={store.addNode}
-        onUpdateNode={store.updateNode}
-        onDeleteNode={store.deleteNode}
-        onReset={store.resetToDefaults}
-      />
+      {/* Department CRUD Manager — hidden when embedded in BH overlay */}
+      {!transparent && (
+        <PolytopeManager
+          departments={store.departments}
+          onAddDepartment={store.addDepartment}
+          onUpdateDepartment={store.updateDepartment}
+          onDeleteDepartment={store.deleteDepartment}
+          onAddNode={store.addNode}
+          onUpdateNode={store.updateNode}
+          onDeleteNode={store.deleteNode}
+          onReset={store.resetToDefaults}
+        />
+      )}
     </div>
   );
 }
