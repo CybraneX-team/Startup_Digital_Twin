@@ -64,6 +64,7 @@ export class GalaxyParticles {
     this.onExitBH  = null;
     this._insideBH = false;
     this._insideEH = false;
+    this._bhEnabled = true;  // disabled during subdomain/solar-system view
   }
 
   _detectPerf() {
@@ -763,8 +764,8 @@ export class GalaxyParticles {
     // Animate accretion particle disk
     if (this._bhAccretionMat) this._bhAccretionMat.uniforms.uTime.value = elapsed;
 
-    // Black hole — two-stage camera detection
-    if (camPos) {
+    // Black hole — two-stage camera detection (disabled during subdomain solar-system view)
+    if (camPos && this._bhEnabled) {
       const distSq = camPos.lengthSq();
       const EH_R   = 900;
       const POLY_R_TRIGGER = 750; // appears ~150 units after crossing EH at 900
@@ -782,6 +783,20 @@ export class GalaxyParticles {
         this._insideBH = inside;
         this._transitionBHInterior(inside);
       }
+    }
+  }
+
+  /** Enable/disable the BH proximity trigger AND hide/show the BH mesh group.
+   *  Must be false while the solar-system (subdomain) view is active — otherwise
+   *  the black-hole group (at world origin) overlaps the solar system and the
+   *  camera's distance check fires erroneously. */
+  setBHEnabled(v: boolean) {
+    this._bhEnabled = v;
+    if (this._bhGroup) this._bhGroup.visible = v;
+    if (!v) {
+      // Reset internal state so the trigger fires cleanly on next enable
+      this._insideBH = false;
+      this._insideEH = false;
     }
   }
 

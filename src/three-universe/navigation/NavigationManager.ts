@@ -344,6 +344,9 @@ export class NavigationManager {
       // ── Phase 2: Fade-swap scene ──────────────────────────────────────────
       this._fadeSwap(
         () => {
+          // Disable BH FIRST — its group is at world origin (same as solar system)
+          // and camera will pass within EH radius during the zoom-in animation.
+          this.galaxyParticles.setBHEnabled(false);
           this.galaxyParticles.setVisible(false);
           this.systemParticles.systems.forEach(s => { s.group.visible = false; });
           if (this._subdomainSolarSystem) this._subdomainSolarSystem.build(subdomain, industry);
@@ -481,6 +484,8 @@ export class NavigationManager {
           this._fadeSwap(
             () => {
               if (this._subdomainSolarSystem) this._subdomainSolarSystem.destroy();
+              // Re-enable BH before restoring galaxy (camera is now far from origin)
+              this.galaxyParticles.setBHEnabled(true);
               this.galaxyParticles.setVisible(true);
               // Restore to INDUSTRY level state: spiral dim, bg stars bright, sphere dim
               // setInsideIndustry restores universeSphere visibility + opacity internally
