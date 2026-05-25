@@ -12,49 +12,7 @@ import { ArrowLeft } from 'lucide-react';
 import { ConvexGeometry } from 'three-stdlib';
 import { useNavigate } from 'react-router-dom';
 
-// ── Score → Radius ──────────────────────────────────────────────────────────
-// Critical health score (<60) → close to core   (MIN_RADIUS = 7)
-// Excellent health score (90-100) → far from core (MAX_RADIUS = 13)
-const MIN_RADIUS = 7;
-const MAX_RADIUS = 13;
-const INACTIVE_RADIUS = 10; // inactive nodes always sit at mid-distance
 
-const BAND_COLORS = [
-  '#ff3333', // Band 0 (Critical, <60)
-  '#ff8800', // Band 1 (Warning, 60-69)
-  '#ffdd00', // Band 2 (Average, 70-79)
-  '#77ff33', // Band 3 (Good, 80-89)
-  '#00ff88', // Band 4 (Excellent, 90-100)
-];
-
-function scoreToBandIndex(score: number): number {
-  if (score < 60) return 0;
-  if (score < 70) return 1;
-  if (score < 80) return 2;
-  if (score < 90) return 3;
-  return 4;
-}
-
-function scoreToRadius(score: number): number {
-  return MIN_RADIUS + (score / 100.0) * (MAX_RADIUS - MIN_RADIUS);
-}
-
-// Azimuthal hue sweep (matches 2D reference: green → cyan → blue → magenta → red → orange → yellow)
-const SPECTRAL_HUE_OFFSET = 0.58;
-const SPECTRAL_SAT = 0.9;
-
-function spectralColorFromDirection(dir: THREE.Vector3, out = new THREE.Color()): THREE.Color {
-  const d = dir.lengthSq() > 1e-8 ? dir.clone().normalize() : dir;
-  const angle = Math.atan2(d.x, d.z);
-  let hue = angle / (Math.PI * 2) + SPECTRAL_HUE_OFFSET;
-  hue = hue - Math.floor(hue);
-  const lightness = THREE.MathUtils.clamp(0.52 + d.y * 0.12, 0.42, 0.68);
-  return out.setHSL(hue, SPECTRAL_SAT, lightness);
-}
-
-function spectralColorFromPosition(pos: THREE.Vector3, out = new THREE.Color()): THREE.Color {
-  return spectralColorFromDirection(pos, out);
-}
 
 // ── Symmetric Polytope Vertex Directions ────────────────────────────────────
 // Icosahedron  (12 vertices) — most uniform packing possible for 12 pts
@@ -145,96 +103,7 @@ function seededShuffle<T>(arr: T[], seed = 42): T[] {
 const BASE_CAMERA_DISTANCE = 54;
 
 
-const edgeVertexShader = `
-varying vec3 vColor;
-varying float vAlong;
 
-void main() {
-  vColor = color;
-  vAlong = clamp(position.y * 0.5 + 0.5, 0.0, 1.0);
-  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-}
-`;
-
-const edgeFragmentShader = `
-uniform float uOpacity;
-varying vec3 vColor;
-varying float vAlong;
-
-void main() {
-  vec3 col = vColor * (1.35 + vAlong * 0.35);
-  float alpha = uOpacity * (0.75 + vAlong * 0.25);
-  gl_FragColor = vec4(col, alpha);
-}
-`;
-
-function CylinderEdge({
-  pA,
-  pB,
-  colorA,
-  colorB,
-  targetOpacity,
-}: {
-  pA: THREE.Vector3;
-  pB: THREE.Vector3;
-  colorA: THREE.Color;
-  colorB: THREE.Color;
-  targetOpacity: number;
-}) {
-  const matRef = useRef<THREE.ShaderMaterial>(null);
-
-  const { mesh, position, quaternion } = useMemo(() => {
-    const dir = new THREE.Vector3().subVectors(pB, pA);
-    const len = dir.length();
-    const pos = new THREE.Vector3().addVectors(pA, pB).multiplyScalar(0.5);
-    dir.normalize();
-    const up = new THREE.Vector3(0, 1, 0);
-    const q = new THREE.Quaternion().setFromUnitVectors(up, dir);
-
-    const geo = new THREE.CylinderGeometry(0.03, 0.03, len, 6, 1, false);
-    const posAttr = geo.getAttribute('position') as THREE.BufferAttribute;
-    const colors = new Float32Array(posAttr.count * 3);
-    const halfLen = len * 0.5;
-
-    for (let i = 0; i < posAttr.count; i++) {
-      const y = posAttr.getY(i);
-      const t = (y + halfLen) / len;
-      const c = colorA.clone().lerp(colorB, t);
-      colors[i * 3] = c.r;
-      colors[i * 3 + 1] = c.g;
-      colors[i * 3 + 2] = c.b;
-    }
-    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
-
-    return { mesh: geo, position: pos, quaternion: q };
-  }, [pA, pB, colorA, colorB]);
-
-  useFrame(() => {
-    if (matRef.current) {
-      matRef.current.uniforms.uOpacity.value = THREE.MathUtils.lerp(
-        matRef.current.uniforms.uOpacity.value,
-        targetOpacity,
-        0.08
-      );
-    }
-  });
-
-  return (
-    <mesh position={position} quaternion={quaternion} geometry={mesh} renderOrder={1}>
-      <shaderMaterial
-        ref={matRef}
-        vertexShader={edgeVertexShader}
-        fragmentShader={edgeFragmentShader}
-        uniforms={{ uOpacity: { value: targetOpacity } }}
-        transparent
-        depthWrite={false}
-        depthTest={false}
-        blending={THREE.AdditiveBlending}
-        vertexColors
-      />
-    </mesh>
-  );
-}
 
 
 function InternalNode({ 
@@ -419,7 +288,7 @@ function InternalNode({
   );
 }
 
-function GlowRing({ color, active, isSelected, isHovered, idx }: { color: string, active: boolean, isSelected: boolean, isHovered: boolean, idx: number }) {
+function GlowRing({ color, active, isSelected, idx }: { color: string, active: boolean, isSelected: boolean, idx: number }) {
   const meshRef = useRef<THREE.Mesh>(null);
   useFrame(({ clock }) => {
     if (!meshRef.current) return;
@@ -556,7 +425,7 @@ function ExternalNode({
   return (
     <group>
       <group position={pos}>
-        <GlowRing color={color} active={!isDimmed} isSelected={isSelected} isHovered={isHovered} idx={idx} />
+        <GlowRing color={color} active={!isDimmed} isSelected={isSelected} idx={idx} />
       </group>
       <group 
         ref={meshRef} 
@@ -859,7 +728,7 @@ function Scene({
     }
   });
 
-  const { facesGeometry, edgePairs } = useMemo(() => {
+  const { facesGeometry } = useMemo(() => {
     // Build convex hull first — extract edges directly from its faces
     const baseGeo = new ConvexGeometry(ACTIVE_NODE_POSITIONS);
     const indexedPosAttr = baseGeo.getAttribute('position') as THREE.BufferAttribute;
@@ -1157,14 +1026,14 @@ export default function UniversalPolytope({ companyName = "Universal Polytope", 
             navigate('/');
           }
         }}
-        style={{ display: transparent ? 'none' : undefined }}
         style={{
+          display: transparent ? 'none' : 'flex',
           position: 'fixed', top: '80px', left: '24px',
           background: 'linear-gradient(135deg, rgba(20,10,40,0.8) 0%, rgba(5,4,15,0.9) 100%)',
           border: '1px solid rgba(136, 170, 255, 0.4)',
           boxShadow: '0 0 15px rgba(136, 170, 255, 0.3), inset 0 0 10px rgba(255, 170, 255, 0.1)',
           borderRadius: '12px', padding: '10px 20px', color: '#e0eaff',
-          display: 'flex', alignItems: 'center', gap: '10px',
+          alignItems: 'center', gap: '10px',
           cursor: 'pointer', backdropFilter: 'blur(12px)',
           pointerEvents: 'auto', zIndex: 99999,
           transition: 'all 0.3s ease',

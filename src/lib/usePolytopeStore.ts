@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { U_NODES, U_DOMAIN_COLOR } from './universalPolytopeData';
 import type { UExternalNode, UInternalNode, UDomain } from './universalPolytopeData';
 
