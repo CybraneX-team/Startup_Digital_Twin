@@ -253,6 +253,13 @@ export default function Universe3DPage() {
     setCompanyPolytopeEntryCount(c => c + 1);
   }, []);
 
+  // Called by NavigationManager whenever leaving COMPANY level (back button, ESC, or scroll-out)
+  const handleExitCompanyPolytope = useCallback(() => {
+    setInsideCompanyPolytope(false);
+    setActiveCompany(null);
+  }, []);
+
+  // Called by UniversalPolytope scroll-out: hide overlay AND tell controller to go back
   const handleCompanyPolytopeExitIntent = useCallback(() => {
     setInsideCompanyPolytope(false);
     setActiveCompany(null);
@@ -377,6 +384,7 @@ export default function Universe3DPage() {
           onEnterBH={handleEnterBH}
           onExitBH={handleExitBH}
           onEnterCompanyPolytope={handleEnterCompanyPolytope}
+          onExitCompanyPolytope={handleExitCompanyPolytope}
           controllerRef={controllerRef}
         />
       )}

@@ -44,6 +44,8 @@ export interface UniverseCallbacks {
   onExitBH?: () => void;
   /** Fired when user clicks a live (user-created) company planet — show polytope overlay */
   onEnterCompanyPolytope?: (company: any) => void;
+  /** Fired whenever navigating back from COMPANY level — hide polytope overlay */
+  onExitCompanyPolytope?: () => void;
 }
 
 const _orbitPos = new THREE.Vector3();
@@ -307,6 +309,9 @@ export class UniverseController {
     };
     this.navigation.onEnterCompanyPolytope = (company) => {
       this._callbacks?.onEnterCompanyPolytope?.(company);
+    };
+    this.navigation.onExitCompanyPolytope = () => {
+      this._callbacks?.onExitCompanyPolytope?.();
     };
   }
 

@@ -36,6 +36,7 @@ export class NavigationManager {
     this.onHover = null;
     this.onSelect = null;
     this.onEnterCompanyPolytope = null; // fires after zooming into a live (user-created) company
+    this.onExitCompanyPolytope  = null; // fires whenever leaving COMPANY level (back button or scroll-out)
 
     this._afterNextNavigate = null;
 
@@ -447,6 +448,10 @@ export class NavigationManager {
       const subdomain = this.navigationPath[1]?.data;
       const industry = this.navigationPath[0]?.data;
       if (!company || !subdomain || !industry) return;
+
+      // Always fire exit callback — hides polytope overlay whether back came from
+      // side panel, ESC key, or the polytope's own scroll-out handler.
+      if (this.onExitCompanyPolytope) this.onExitCompanyPolytope();
 
       // Restore all company containers
       const sdMesh2 = this.systemParticles.getSubdomainMesh(industry.id, subdomain.id);

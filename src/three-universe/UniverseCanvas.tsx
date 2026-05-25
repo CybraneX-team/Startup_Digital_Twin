@@ -10,10 +10,11 @@ interface UniverseCanvasProps {
   onEnterBH?: () => void;
   onExitBH?: () => void;
   onEnterCompanyPolytope?: (company: any) => void;
+  onExitCompanyPolytope?: () => void;
   controllerRef?: React.MutableRefObject<UniverseController | null>;
 }
 
-export default function UniverseCanvas({ data, onNavigate, onHover, onCreateCompany, onEnterBH, onExitBH, onEnterCompanyPolytope, controllerRef }: UniverseCanvasProps) {
+export default function UniverseCanvas({ data, onNavigate, onHover, onCreateCompany, onEnterBH, onExitBH, onEnterCompanyPolytope, onExitCompanyPolytope, controllerRef }: UniverseCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const ctrlRef = useRef<UniverseController | null>(null);
 
@@ -29,6 +30,8 @@ export default function UniverseCanvas({ data, onNavigate, onHover, onCreateComp
   stableOnExitBH.current = onExitBH;
   const stableOnEnterCompanyPolytope = useRef(onEnterCompanyPolytope);
   stableOnEnterCompanyPolytope.current = onEnterCompanyPolytope;
+  const stableOnExitCompanyPolytope = useRef(onExitCompanyPolytope);
+  stableOnExitCompanyPolytope.current = onExitCompanyPolytope;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -43,6 +46,7 @@ export default function UniverseCanvas({ data, onNavigate, onHover, onCreateComp
         onEnterBH: () => stableOnEnterBH.current?.(),
         onExitBH: () => stableOnExitBH.current?.(),
         onEnterCompanyPolytope: (company) => stableOnEnterCompanyPolytope.current?.(company),
+        onExitCompanyPolytope: () => stableOnExitCompanyPolytope.current?.(),
       },
     );
     ctrlRef.current = ctrl;
