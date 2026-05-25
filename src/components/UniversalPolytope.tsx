@@ -1,34 +1,330 @@
 import { useRef, useState, useMemo, useEffect } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Text, Stars } from '@react-three/drei';
-import { Html } from '@react-three/drei';
+import { OrbitControls, Stars, Sparkles, Html } from '@react-three/drei';
 import * as THREE from 'three';
-import { U_NODES, U_DOMAIN_COLOR } from '../lib/universalPolytopeData';
-import type { UExternalNode } from '../lib/universalPolytopeData';
-import { OrgCore, PlasmaSphere, GlowRing } from './PolytopeShared';
+import { U_DOMAIN_COLOR } from '../lib/universalPolytopeData';
+import type { UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
+import { usePolytopeStore } from '../lib/usePolytopeStore';
+import { PolytopeManager } from './PolytopeManager';
+import { OrgCore, PlasmaSphere } from './PolytopeShared';
 import { gsap } from 'gsap';
 import { ArrowLeft } from 'lucide-react';
+import { ConvexGeometry } from 'three-stdlib';
+import { useNavigate } from 'react-router-dom';
 
-// Helper to distribute N points on a sphere (Fibonacci lattice)
-function fibSphere(n: number, radius: number): THREE.Vector3[] {
-  const pts: THREE.Vector3[] = [];
-  const phi = Math.PI * (3 - Math.sqrt(5));
-  for (let i = 0; i < n; i++) {
-    const y = 1 - (i / (n - 1)) * 2;
-    const rad = Math.sqrt(1 - y * y);
-    const theta = phi * i;
-    pts.push(new THREE.Vector3(Math.cos(theta) * rad * radius, y * radius, Math.sin(theta) * rad * radius));
-  }
-  return pts;
+// ── Score → Radius ──────────────────────────────────────────────────────────
+// Critical health score (<60) → close to core   (MIN_RADIUS = 7)
+// Excellent health score (90-100) → far from core (MAX_RADIUS = 13)
+const MIN_RADIUS = 7;
+const MAX_RADIUS = 13;
+const INACTIVE_RADIUS = 10; // inactive nodes always sit at mid-distance
+
+const BAND_COLORS = [
+  '#ff3333', // Band 0 (Critical, <60)
+  '#ff8800', // Band 1 (Warning, 60-69)
+  '#ffdd00', // Band 2 (Average, 70-79)
+  '#77ff33', // Band 3 (Good, 80-89)
+  '#00ff88', // Band 4 (Excellent, 90-100)
+];
+
+function scoreToBandIndex(score: number): number {
+  if (score < 60) return 0;
+  if (score < 70) return 1;
+  if (score < 80) return 2;
+  if (score < 90) return 3;
+  return 4;
 }
 
-const EXTERNAL_RADIUS = 10;
-const EXTERNAL_NODE_POSITIONS = fibSphere(U_NODES.length, EXTERNAL_RADIUS);
+function scoreToRadius(score: number): number {
+  return MIN_RADIUS + (score / 100.0) * (MAX_RADIUS - MIN_RADIUS);
+}
 
-function InternalNode({ targetPos, startPos, label, color }: { targetPos: THREE.Vector3, startPos: THREE.Vector3, label: string, color: string }) {
+// Azimuthal hue sweep (matches 2D reference: green → cyan → blue → magenta → red → orange → yellow)
+const SPECTRAL_HUE_OFFSET = 0.58;
+const SPECTRAL_SAT = 0.9;
+
+function spectralColorFromDirection(dir: THREE.Vector3, out = new THREE.Color()): THREE.Color {
+  const d = dir.lengthSq() > 1e-8 ? dir.clone().normalize() : dir;
+  const angle = Math.atan2(d.x, d.z);
+  let hue = angle / (Math.PI * 2) + SPECTRAL_HUE_OFFSET;
+  hue = hue - Math.floor(hue);
+  const lightness = THREE.MathUtils.clamp(0.52 + d.y * 0.12, 0.42, 0.68);
+  return out.setHSL(hue, SPECTRAL_SAT, lightness);
+}
+
+function spectralColorFromPosition(pos: THREE.Vector3, out = new THREE.Color()): THREE.Color {
+  return spectralColorFromDirection(pos, out);
+}
+
+// ── Symmetric Polytope Vertex Directions ────────────────────────────────────
+// Icosahedron  (12 vertices) — most uniform packing possible for 12 pts
+function icosahedronDirs(): THREE.Vector3[] {
+  const t = (1 + Math.sqrt(5)) / 2;
+  const v: [number,number,number][] = [
+    [-1,t,0],[1,t,0],[-1,-t,0],[1,-t,0],
+    [0,-1,t],[0,1,t],[0,-1,-t],[0,1,-t],
+    [t,0,-1],[t,0,1],[-t,0,-1],[-t,0,1],
+  ];
+  return v.map(([x,y,z]) => new THREE.Vector3(x,y,z).normalize());
+}
+
+// Dodecahedron (20 vertices) — dual of icosahedron, perfect 5-fold symmetry
+function dodecahedronDirs(): THREE.Vector3[] {
+  const p = (1 + Math.sqrt(5)) / 2;
+  const q = 1 / p;
+  const v: [number,number,number][] = [
+    [1,1,1],[1,1,-1],[1,-1,1],[1,-1,-1],
+    [-1,1,1],[-1,1,-1],[-1,-1,1],[-1,-1,-1],
+    [0,q,p],[0,q,-p],[0,-q,p],[0,-q,-p],
+    [q,p,0],[q,-p,0],[-q,p,0],[-q,-p,0],
+    [p,0,q],[p,0,-q],[-p,0,q],[-p,0,-q],
+  ];
+  return v.map(([x,y,z]) => new THREE.Vector3(x,y,z).normalize());
+}
+
+// Icosidodecahedron (30 vertices) — edge-midpoints of icosahedron
+function icosidodecahedronDirs(): THREE.Vector3[] {
+  const p = (1 + Math.sqrt(5)) / 2;
+  const v: [number,number,number][] = [
+    [0,1,p],[0,-1,p],[0,1,-p],[0,-1,-p],
+    [1,p,0],[-1,p,0],[1,-p,0],[-1,-p,0],
+    [p,0,1],[p,0,-1],[-p,0,1],[-p,0,-1],
+    [1,p,0],[-1,p,0],[1,-p,0],[-1,-p,0],
+    [0.5,p/2,p*p/2],[0.5,p/2,-p*p/2],[0.5,-p/2,p*p/2],[0.5,-p/2,-p*p/2],
+    [-0.5,p/2,p*p/2],[-0.5,p/2,-p*p/2],[-0.5,-p/2,p*p/2],[-0.5,-p/2,-p*p/2],
+    [p/2,p*p/2,0.5],[p/2,-p*p/2,0.5],[-p/2,p*p/2,0.5],[-p/2,-p*p/2,0.5],
+    [p*p/2,0.5,p/2],[-p*p/2,0.5,p/2],
+  ];
+  return v.slice(0,30).map(([x,y,z]) => new THREE.Vector3(x,y,z).normalize());
+}
+
+// Geodesic fallback — greedy farthest-point sampling from icosahedron midpoints
+function geodesicDirs(n: number): THREE.Vector3[] {
+  const base = icosahedronDirs();
+  const pool: THREE.Vector3[] = [...base];
+  // add all edge midpoints
+  for (let a = 0; a < base.length; a++)
+    for (let b = a + 1; b < base.length; b++)
+      pool.push(base[a].clone().add(base[b]).normalize());
+  // greedy farthest-point sampling
+  const chosen: THREE.Vector3[] = [pool[0]];
+  while (chosen.length < n) {
+    let bestIdx = 0, bestDist = -1;
+    for (let i = 0; i < pool.length; i++) {
+      const d = Math.min(...chosen.map(c => pool[i].distanceTo(c)));
+      if (d > bestDist) { bestDist = d; bestIdx = i; }
+    }
+    chosen.push(pool[bestIdx]);
+  }
+  return chosen;
+}
+
+// Select the most symmetric layout for the exact node count
+function symmetricDirs(n: number): THREE.Vector3[] {
+  if (n === 12) return icosahedronDirs();
+  if (n === 20) return dodecahedronDirs();
+  if (n === 30) return icosidodecahedronDirs();
+  return geodesicDirs(n);
+}
+
+// ── Final Positions — symmetric dirs (shuffled) × score-based radii ─────────
+// Seeded Fisher-Yates shuffle so departments and inactive nodes are randomly
+// intermixed across the symmetric vertex positions deterministically.
+function seededShuffle<T>(arr: T[], seed = 42): T[] {
+  const a = [...arr];
+  let s = seed;
+  const rng = () => { s = (s * 1664525 + 1013904223) & 0xffffffff; return (s >>> 0) / 0xffffffff; };
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(rng() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+// Stable camera distance (no longer module-level since node count can change)
+const BASE_CAMERA_DISTANCE = 54;
+
+
+const edgeVertexShader = `
+varying vec3 vColor;
+varying float vAlong;
+
+void main() {
+  vColor = color;
+  vAlong = clamp(position.y * 0.5 + 0.5, 0.0, 1.0);
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}
+`;
+
+const edgeFragmentShader = `
+uniform float uOpacity;
+varying vec3 vColor;
+varying float vAlong;
+
+void main() {
+  vec3 col = vColor * (1.35 + vAlong * 0.35);
+  float alpha = uOpacity * (0.75 + vAlong * 0.25);
+  gl_FragColor = vec4(col, alpha);
+}
+`;
+
+function CylinderEdge({
+  pA,
+  pB,
+  colorA,
+  colorB,
+  targetOpacity,
+}: {
+  pA: THREE.Vector3;
+  pB: THREE.Vector3;
+  colorA: THREE.Color;
+  colorB: THREE.Color;
+  targetOpacity: number;
+}) {
+  const matRef = useRef<THREE.ShaderMaterial>(null);
+
+  const { mesh, position, quaternion } = useMemo(() => {
+    const dir = new THREE.Vector3().subVectors(pB, pA);
+    const len = dir.length();
+    const pos = new THREE.Vector3().addVectors(pA, pB).multiplyScalar(0.5);
+    dir.normalize();
+    const up = new THREE.Vector3(0, 1, 0);
+    const q = new THREE.Quaternion().setFromUnitVectors(up, dir);
+
+    const geo = new THREE.CylinderGeometry(0.03, 0.03, len, 6, 1, false);
+    const posAttr = geo.getAttribute('position') as THREE.BufferAttribute;
+    const colors = new Float32Array(posAttr.count * 3);
+    const halfLen = len * 0.5;
+
+    for (let i = 0; i < posAttr.count; i++) {
+      const y = posAttr.getY(i);
+      const t = (y + halfLen) / len;
+      const c = colorA.clone().lerp(colorB, t);
+      colors[i * 3] = c.r;
+      colors[i * 3 + 1] = c.g;
+      colors[i * 3 + 2] = c.b;
+    }
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+    return { mesh: geo, position: pos, quaternion: q };
+  }, [pA, pB, colorA, colorB]);
+
+  useFrame(() => {
+    if (matRef.current) {
+      matRef.current.uniforms.uOpacity.value = THREE.MathUtils.lerp(
+        matRef.current.uniforms.uOpacity.value,
+        targetOpacity,
+        0.08
+      );
+    }
+  });
+
+  return (
+    <mesh position={position} quaternion={quaternion} geometry={mesh} renderOrder={1}>
+      <shaderMaterial
+        ref={matRef}
+        vertexShader={edgeVertexShader}
+        fragmentShader={edgeFragmentShader}
+        uniforms={{ uOpacity: { value: targetOpacity } }}
+        transparent
+        depthWrite={false}
+        depthTest={false}
+        blending={THREE.AdditiveBlending}
+        vertexColors
+      />
+    </mesh>
+  );
+}
+
+
+function InternalNode({ 
+  node, 
+  targetPos, 
+  startPos, 
+  color, 
+  depth, 
+  selectedPath, 
+  onSelectPath,
+  pathContext,
+  parentPos,
+  isVisible,
+  parentLabel,
+  setBackInfo
+}: { 
+  node: UInternalNode, 
+  targetPos: THREE.Vector3, 
+  startPos: THREE.Vector3, 
+  color: string, 
+  depth: number, 
+  selectedPath: string[], 
+  onSelectPath: (path: string[], pos: THREE.Vector3) => void,
+  pathContext: string[],
+  parentPos: THREE.Vector3,
+  isVisible: boolean,
+  parentLabel: string,
+  setBackInfo: (info: { label: string, onClick: () => void } | null) => void
+}) {
   const groupRef = useRef<THREE.Group>(null);
   const currentPos = useRef(startPos.clone());
   
+  const radii = [0.25, 0.20, 0.15, 0.12, 0.09];
+  const radius = radii[depth] || 0.05;
+
+  const isMeActiveCenter = selectedPath.length > 0 && selectedPath[selectedPath.length - 1] === node.id;
+  const isMeAncestor = selectedPath.includes(node.id) && !isMeActiveCenter;
+  const myPath = [...pathContext, node.id];
+
+  const childPositions = useMemo(() => {
+    if (!node.children || node.children.length === 0) return [];
+    const pts: THREE.Vector3[] = [];
+    const count = node.children.length;
+    // Shrinking ring radius per level
+    const ringRadius = 1.4 * Math.pow(0.7, depth - 1); 
+    
+    const dir = targetPos.clone().normalize();
+    const localUp = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
+    const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();
+    const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+
+    // Push children further OUTWARD
+    const depthStep = 3.0;
+    const childCenter = targetPos.clone().add(dir.clone().multiplyScalar(depthStep));
+
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const pt = childCenter.clone()
+        .add(right.clone().multiplyScalar(Math.cos(angle) * ringRadius))
+        .add(up.clone().multiplyScalar(Math.sin(angle) * ringRadius));
+      pts.push(pt);
+    }
+    return pts;
+  }, [node, targetPos, depth]);
+
+  const visibleChildIndices = useMemo(() => {
+    if (!node.children) return [];
+    return node.children.map((child, i) => (isMeActiveCenter || selectedPath[selectedPath.length - 1] === child.id) ? i : -1).filter(i => i !== -1);
+  }, [node.children, isMeActiveCenter, selectedPath]);
+
+  const childEdges = useMemo(() => {
+    if (visibleChildIndices.length === 0 || childPositions.length === 0) return null;
+    const pts: THREE.Vector3[] = [];
+    for (let i = 0; i < visibleChildIndices.length; i++) {
+       const idx = visibleChildIndices[i];
+       // Spoke from center
+       pts.push(targetPos.clone());
+       pts.push(childPositions[idx].clone());
+       
+       // Edge to next visible sibling
+       if (visibleChildIndices.length > 1) {
+           const nextIdx = visibleChildIndices[(i + 1) % visibleChildIndices.length];
+           pts.push(childPositions[idx].clone());
+           pts.push(childPositions[nextIdx].clone());
+       }
+    }
+    return new THREE.BufferGeometry().setFromPoints(pts);
+  }, [visibleChildIndices, childPositions, targetPos]);
+
   useEffect(() => {
     if (groupRef.current) {
       groupRef.current.position.copy(startPos);
@@ -36,42 +332,139 @@ function InternalNode({ targetPos, startPos, label, color }: { targetPos: THREE.
     }
   }, [startPos]);
 
-  useFrame(({ clock }) => {
+  useEffect(() => {
+    if (isMeActiveCenter) {
+      setBackInfo({
+        label: parentLabel,
+        onClick: () => onSelectPath(pathContext, parentPos)
+      });
+      return () => setBackInfo(null);
+    }
+  }, [isMeActiveCenter, parentLabel, pathContext, parentPos, onSelectPath, setBackInfo]);
+
+  useFrame(() => {
     if (groupRef.current) {
-      // Smoothly interpolate position from start to target
       currentPos.current.lerp(targetPos, 0.06);
-      
-      // Apply position and add a gentle hovering float
       groupRef.current.position.copy(currentPos.current);
-      groupRef.current.position.y += Math.sin(clock.elapsedTime * 2 + targetPos.x) * 0.15;
       
-      // Smoothly scale up on entrance
-      groupRef.current.scale.lerp(new THREE.Vector3(1, 1, 1), 0.08);
+      const targetScale = isVisible ? (isMeActiveCenter ? 1.5 : 1.0) : 0.0;
+      groupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.08);
     }
   });
 
+  const handleClick = (e: any) => {
+    e.stopPropagation();
+    if (selectedPath[selectedPath.length - 1] === node.id) {
+       onSelectPath(pathContext, parentPos); // pop up
+    } else {
+       onSelectPath(myPath, targetPos); // drill down
+    }
+  };
+
   return (
-    <group ref={groupRef}>
-      <mesh>
-        <sphereGeometry args={[0.3, 16, 16]} />
-        <meshStandardMaterial color={color} emissive={color} emissiveIntensity={0.5} />
-      </mesh>
-      <Text position={[0.02, -0.6, 0]} fontSize={0.3} color="white" anchorX="center" anchorY="middle">
-        {label}
-      </Text>
+    <group>
+      <group ref={groupRef} onClick={handleClick} onPointerOver={() => document.body.style.cursor='pointer'} onPointerOut={() => document.body.style.cursor='auto'}>
+        <PlasmaSphere 
+          color={color}
+          radius={radius}
+          opacity={1.0}
+          glowIntensity={isMeActiveCenter ? 3.5 : 0.2}
+          depthWrite={true}
+          speed={isMeActiveCenter ? 1.5 : 0.2}
+        />
+        {/* Label */}
+        {isVisible && (
+          <Html position={[0, -radius * 2.5, 0]} center zIndexRange={[100, 0]}>
+            <div style={{
+              color: 'white', background: 'rgba(0,0,0,0.6)', padding: '2px 6px', borderRadius: '4px',
+              fontSize: `${Math.max(8, 12 - depth)}px`, fontWeight: 'bold', backdropFilter: 'blur(4px)',
+              border: `1px solid ${color}40`, pointerEvents: 'none', whiteSpace: 'nowrap',
+              opacity: isMeActiveCenter || isMeAncestor ? 1 : 0.7, transition: 'opacity 0.2s'
+            }}>
+              {node.label}
+            </div>
+          </Html>
+        )}
+      </group>
+
+      {/* Children */}
+      {node.children && node.children.map((child, i) => {
+         const isChildVisible = isMeActiveCenter || selectedPath[selectedPath.length - 1] === child.id;
+         return (
+           <InternalNode 
+             key={child.id}
+             node={child}
+             targetPos={childPositions[i]}
+             startPos={targetPos}
+             color={color}
+             depth={depth + 1}
+             selectedPath={selectedPath}
+             onSelectPath={onSelectPath}
+             pathContext={myPath}
+             parentPos={targetPos}
+             isVisible={isChildVisible}
+             parentLabel={node.label}
+             setBackInfo={setBackInfo}
+           />
+         );
+      })}
+
+      {/* Edges to children */}
+      {isMeActiveCenter && childEdges && (
+        <lineSegments geometry={childEdges}>
+           <lineBasicMaterial color={color} transparent opacity={0.4} />
+        </lineSegments>
+      )}
     </group>
   );
 }
 
-function ExternalNode({ node, pos, isSelected, isDimmed, onClick }: { 
+function GlowRing({ color, active, isSelected, isHovered, idx }: { color: string, active: boolean, isSelected: boolean, isHovered: boolean, idx: number }) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  useFrame(({ clock }) => {
+    if (!meshRef.current) return;
+    const t = clock.elapsedTime;
+    const s = 0.5 + Math.sin(t * 2 + idx) * 0.15;
+    meshRef.current.scale.setScalar(s);
+  });
+  return (
+    <mesh ref={meshRef} visible={active}>
+      <ringGeometry args={[0.3, 0.35, 32]} />
+      <meshBasicMaterial color={color} transparent opacity={isSelected ? 0.8 : 0.4} blending={THREE.AdditiveBlending} depthWrite={false} side={THREE.DoubleSide} />
+    </mesh>
+  );
+}
+
+function ExternalNode({ 
+  node, 
+  pos, 
+  isSelected, 
+  isDimmed, 
+  onClick, 
+  color,
+  selectedInternalPath,
+  onSelectInternal,
+  setBackInfo,
+  isDeepDrillDown,
+  onHover,
+  idx,
+  isHovered
+}: { 
   node: UExternalNode, 
   pos: THREE.Vector3, 
   isSelected: boolean,
   isDimmed: boolean,
-  onClick: () => void 
+  onClick: () => void,
+  color: string,
+  selectedInternalPath: string[],
+  onSelectInternal: (path: string[], pos: THREE.Vector3) => void,
+  setBackInfo: (info: { label: string, onClick: () => void } | null) => void,
+  isDeepDrillDown: boolean,
+  onHover: (id: string | null) => void,
+  idx: number,
+  isHovered: boolean
 }) {
   const meshRef = useRef<THREE.Mesh>(null);
-  const color = U_DOMAIN_COLOR[node.domain];
   
   // Calculate internal node positions around this external node
   const internalPositions = useMemo(() => {
@@ -88,13 +481,14 @@ function ExternalNode({ node, pos, isSelected, isDimmed, onClick }: {
       const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();
       const up = new THREE.Vector3().crossVectors(right, dir).normalize();
       
-      // Target position is INSIDE the sphere (closer to center ball)
-      // External radius is 10, center ball is 2. We place them at depth ~6.
-      const depthCenter = dir.clone().multiplyScalar(6.0);
+      // Target position is OUTSIDE the sphere (expanding away from center ball)
+      // We push the children further OUTWARD along the direction vector
+      const depthStep = 3.0; 
+      const childCenter = pos.clone().add(dir.clone().multiplyScalar(depthStep));
       
       const depthOffset = (i % 2 === 0 ? 0.8 : -0.8);
       
-      const pt = depthCenter.clone()
+      const pt = childCenter.clone()
         .add(dir.clone().multiplyScalar(depthOffset))
         .add(right.clone().multiplyScalar(Math.cos(angle) * radius))
         .add(up.clone().multiplyScalar(Math.sin(angle) * radius));
@@ -120,8 +514,7 @@ function ExternalNode({ node, pos, isSelected, isDimmed, onClick }: {
     return new THREE.BufferGeometry().setFromPoints(pts);
   }, [internalPositions, pos]);
 
-  const targetScale = isSelected ? 1.5 : (isDimmed ? 0.6 : 1.0);
-  
+
   const labelRef = useRef<HTMLDivElement>(null);
   
   const shortLabel = node.id.split('_')[1] || node.label;
@@ -131,6 +524,8 @@ function ExternalNode({ node, pos, isSelected, isDimmed, onClick }: {
 
   useFrame((state) => {
     if (meshRef.current) {
+      // Size interpolation: shrink away if deep drill down
+      const targetScale = isSelected ? (isDeepDrillDown ? 0.0 : 1.5) : (isDimmed ? 0.6 : 1.0);
       meshRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.1);
     }
     if (labelRef.current) {
@@ -148,37 +543,48 @@ function ExternalNode({ node, pos, isSelected, isDimmed, onClick }: {
       }
     }
     if (linesMaterialRef.current) {
-      linesMaterialRef.current.opacity = THREE.MathUtils.lerp(linesMaterialRef.current.opacity, isSelected ? 0.3 : 0, 0.05);
+      const targetOpacity = (isSelected && !isDeepDrillDown) ? 0.3 : 0;
+      linesMaterialRef.current.opacity = THREE.MathUtils.lerp(linesMaterialRef.current.opacity, targetOpacity, 0.05);
     }
   });
 
+  if (node.domain === 'inactive') {
+    return null;
+  }
+
+
   return (
     <group>
+      <group position={pos}>
+        <GlowRing color={color} active={!isDimmed} isSelected={isSelected} isHovered={isHovered} idx={idx} />
+      </group>
       <group 
         ref={meshRef} 
         position={pos} 
         onClick={(e) => { e.stopPropagation(); onClick(); }}
-        onPointerOver={() => document.body.style.cursor = 'pointer'}
-        onPointerOut={() => document.body.style.cursor = 'auto'}
+        onPointerOver={(e) => {
+          e.stopPropagation();
+          document.body.style.cursor = 'pointer';
+          onHover(node.id);
+        }}
+        onPointerOut={(e) => {
+          e.stopPropagation();
+          document.body.style.cursor = 'auto';
+          onHover(null);
+        }}
       >
-        <GlowRing 
-          color={color} 
-          active={!isDimmed && node.domain !== 'inactive'} 
-          isSelected={isSelected} 
-          idx={parseInt(node.id.split('_')[1] || '0')} 
-        />
         <PlasmaSphere 
           color={color} 
-          radius={0.25} 
+          radius={0.22} 
           opacity={isDimmed ? 0.08 : 1.0} 
-          glowIntensity={isSelected ? 2.5 : 1.2} 
+          glowIntensity={isSelected ? 2.5 : isHovered ? 1.8 : 1.2} 
           depthWrite={!isDimmed} 
           speed={1.5} 
         />
       </group>
       
       {/* Label */}
-      {(!isDimmed || isSelected) && (
+      {(!isDimmed || isSelected) && !isDeepDrillDown && (
         <Html position={[pos.x, pos.y - 1.2, pos.z]} center zIndexRange={[100, 0]}>
           <div 
             ref={labelRef}
@@ -195,15 +601,32 @@ function ExternalNode({ node, pos, isSelected, isDimmed, onClick }: {
             whiteSpace: 'nowrap',
             transition: 'opacity 0.2s'
           }}>
-            {isSelected ? node.label : (node.id.split('_')[1] || node.label)}
+            {node.label}
           </div>
         </Html>
       )}
 
-      {/* Internal Nodes */}
-      {isSelected && node.internalNodes.map((intNode, i) => (
-        <InternalNode key={intNode.id} targetPos={internalPositions[i]} startPos={pos} label={intNode.label} color={color} />
-      ))}
+      {/* Internal Nodes (Level 1) */}
+      {isSelected && node.internalNodes.map((intNode, i) => {
+        const isChildVisible = selectedInternalPath.length === 0 || selectedInternalPath[selectedInternalPath.length - 1] === intNode.id;
+        return (
+          <InternalNode 
+            key={intNode.id} 
+            node={intNode}
+            targetPos={internalPositions[i]} 
+            startPos={pos} 
+            color={color} 
+            depth={1}
+            selectedPath={selectedInternalPath}
+            onSelectPath={onSelectInternal}
+            pathContext={[]}
+            parentPos={pos}
+            isVisible={isChildVisible}
+            parentLabel={node.label}
+            setBackInfo={setBackInfo}
+          />
+        );
+      })}
 
       {/* Polytope Wireframe */}
       {isSelected && internalEdgesGeometry && (
@@ -215,50 +638,274 @@ function ExternalNode({ node, pos, isSelected, isDimmed, onClick }: {
   );
 }
 
-function Scene({ selectedId, setSelectedId }: { selectedId: string | null, setSelectedId: (id: string | null) => void }) {
+const vertexShader = `
+attribute float vertexAlpha;
+varying float vAlpha;
+varying vec3 vColor;
+varying float vDist;
+varying vec3 vNormalW;
+varying vec3 vWorldPos;
+
+void main() {
+    vAlpha = vertexAlpha;
+    vColor = color;
+    vDist = length(position);
+    vNormalW = normalize(mat3(modelMatrix) * normal);
+
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPos = worldPos.xyz;
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+}
+`;
+
+const fragmentShader = `
+uniform float uOpacity;
+uniform vec3 uCameraPos;
+
+varying float vAlpha;
+varying vec3 vColor;
+varying float vDist;
+varying vec3 vNormalW;
+varying vec3 vWorldPos;
+
+void main() {
+    vec3 viewDir = normalize(uCameraPos - vWorldPos);
+    float fresnel = pow(1.0 - max(dot(normalize(vNormalW), viewDir), 0.0), 2.2);
+
+    float frontBoost = max(dot(normalize(vNormalW), viewDir), 0.0); // 1.0 when facing the camera
+
+    float radial = smoothstep(1.5, 14.0, vDist);
+    
+    // pow(0.3) stretches the opacity so the glow range is long
+    float stretchedAlpha = pow(vAlpha, 0.3);
+    
+    // Square the color to deepen saturation — prevents light colors (yellow/cyan) from washing out to white
+    vec3 deepColor = vColor * vColor;
+    
+    // Color brightness: vivid near the node, deep/saturated hue preserved
+    vec3 finalColor = deepColor * (3.5 + frontBoost * 2.0) * vAlpha;
+    finalColor += deepColor * fresnel * 0.4 * vAlpha;
+
+    // Opacity: strong near nodes, wide range from stretchedAlpha
+    float alpha = uOpacity * (0.6 + frontBoost * 1.2) * stretchedAlpha;
+    gl_FragColor = vec4(finalColor, alpha);
+}
+`;
+
+function Scene({ 
+  selectedId, 
+  setSelectedId,
+  onPathChange,
+  setBackInfo,
+  companyName,
+  hoveredId,
+  setHoveredId,
+  departments,
+}: { 
+  selectedId: string | null, 
+  setSelectedId: (id: string | null) => void,
+  onPathChange: (path: string[]) => void,
+  setBackInfo: (info: { label: string, onClick: () => void } | null) => void,
+  companyName: string,
+  hoveredId: string | null,
+  setHoveredId: (id: string | null) => void,
+  departments: UExternalNode[],
+}) {
+  // ── Derive geometry data from live departments prop ──────────────────────
+  const { ACTIVE_NODES, ACTIVE_NODE_POSITIONS, SHUFFLED_ACTIVE_DIRS, NODE_COLORS, INITIAL_CAMERA_DISTANCE } = useMemo(() => {
+    const nodes = departments.filter(n => n.domain !== 'inactive');
+    const dirs = symmetricDirs(nodes.length);
+    const shuffledDirs = seededShuffle(dirs, 137);
+    const positions = nodes.map((_, i) => shuffledDirs[i].clone().multiplyScalar(12));
+    const maxR = positions.length > 0 ? Math.max(...positions.map(p => p.length())) : 12;
+    const colors = nodes.map(node => new THREE.Color(U_DOMAIN_COLOR[node.domain]));
+    return {
+      ACTIVE_NODES: nodes,
+      ACTIVE_NODE_POSITIONS: positions,
+      SHUFFLED_ACTIVE_DIRS: shuffledDirs,
+      NODE_COLORS: colors,
+      INITIAL_CAMERA_DISTANCE: Math.max(45, maxR * 4.5),
+    };
+  }, [departments]);
+
+  // Alias for refs used deep in the component
+  const EXTERNAL_NODE_POSITIONS = ACTIVE_NODE_POSITIONS;
   const orbitRef = useRef<any>(null);
   const { camera } = useThree();
+  const facesMatRef = useRef<THREE.ShaderMaterial>(null);
+  const coreGroupRef = useRef<THREE.Group>(null);
+  const cameraPosRef = useRef(new THREE.Vector3());
+
+  const [selectedInternalPath, setSelectedInternalPath] = useState<string[]>([]);
+  const isDeepDrillDown = selectedInternalPath.length > 0;
+
+  useEffect(() => {
+    // Clear deep drill down when switching departments
+    setSelectedInternalPath([]);
+    setBackInfo(null);
+  }, [selectedId, setBackInfo]);
 
   useEffect(() => {
     if (selectedId === null && orbitRef.current) {
+      setSelectedInternalPath([]); // Reset internal path
       gsap.to(orbitRef.current.target, { x: 0, y: 0, z: 0, duration: 1.5, ease: 'power3.inOut' });
       
-      // Pull camera back to radius 35 along its current direction to prevent sweeping through the sphere
       const currentDir = camera.position.clone().normalize();
-      const targetCamPos = currentDir.multiplyScalar(35);
+      const targetCamPos = currentDir.multiplyScalar(INITIAL_CAMERA_DISTANCE);
       
       gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.5, ease: 'power3.inOut' });
     }
   }, [selectedId, camera]);
 
-  // Optimize Edges into a single geometry buffer to save 300+ draw calls
-  const edgesGeometry = useMemo(() => {
-    const pts: THREE.Vector3[] = [];
-    for (let i = 0; i < U_NODES.length; i++) {
-      for (let j = i + 1; j < U_NODES.length; j++) {
-        const pA = EXTERNAL_NODE_POSITIONS[i];
-        const pB = EXTERNAL_NODE_POSITIONS[j];
-        // Distance threshold for 100 points on radius 10 sphere is ~3.5
-        if (pA.distanceTo(pB) < 4.2) {
-          pts.push(pA.clone(), pB.clone());
+  const handleInternalClick = (path: string[], pos: THREE.Vector3, parentId: string) => {
+     setSelectedInternalPath(path);
+     onPathChange(path);
+     if (path.length === 0) {
+        const extNodeIdx = ACTIVE_NODES.findIndex(n => n.id === parentId);
+        const extPos = EXTERNAL_NODE_POSITIONS[extNodeIdx];
+        if (orbitRef.current && extPos) {
+          gsap.to(orbitRef.current.target, { x: extPos.x, y: extPos.y, z: extPos.z, duration: 1.2, ease: 'power2.inOut' });
+          const dir = extPos.clone().normalize();
+          const targetCamPos = dir.multiplyScalar(24);
+          gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.2, ease: 'power2.inOut' });
         }
+     } else {
+        if (orbitRef.current) {
+          gsap.to(orbitRef.current.target, { x: pos.x, y: pos.y, z: pos.z, duration: 1.0, ease: 'power2.inOut' });
+          const dir = pos.clone().normalize();
+          const zoomDist = 10;
+          const targetCamPos = pos.clone().add(dir.multiplyScalar(zoomDist)); 
+          gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.0, ease: 'power2.inOut' });
+        }
+     }
+  };
+
+  // Find neighbor IDs for the hovered node
+  const neighborIds = useMemo(() => {
+    if (!hoveredId) return [];
+    const hoveredIdx = ACTIVE_NODES.findIndex(n => n.id === hoveredId);
+    if (hoveredIdx === -1) return [];
+
+    const neighbors: string[] = [];
+    let minDist = Infinity;
+    const allPairs: { i: number, j: number, dist: number }[] = [];
+    
+    for (let i = 0; i < ACTIVE_NODES.length; i++) {
+      for (let j = i + 1; j < ACTIVE_NODES.length; j++) {
+        const d = SHUFFLED_ACTIVE_DIRS[i].distanceTo(SHUFFLED_ACTIVE_DIRS[j]);
+        allPairs.push({ i, j, dist: d });
+        if (d < minDist) minDist = d;
       }
     }
-    return new THREE.BufferGeometry().setFromPoints(pts);
-  }, []);
+    
+    const threshold = minDist * 1.05;
+    allPairs.forEach(p => {
+      if (p.dist <= threshold) {
+        if (p.i === hoveredIdx) neighbors.push(ACTIVE_NODES[p.j].id);
+        if (p.j === hoveredIdx) neighbors.push(ACTIVE_NODES[p.i].id);
+      }
+    });
+
+    return neighbors;
+  }, [hoveredId]);
+
+  useFrame(() => {
+    camera.getWorldPosition(cameraPosRef.current);
+    if (facesMatRef.current) {
+      facesMatRef.current.uniforms.uCameraPos.value.copy(cameraPosRef.current);
+      let targetOpacity = selectedId !== null ? 0.03 : 0.22;
+      if (hoveredId !== null) {
+        targetOpacity = 0.04;
+      }
+      facesMatRef.current.uniforms.uOpacity.value = THREE.MathUtils.lerp(
+        facesMatRef.current.uniforms.uOpacity.value,
+        targetOpacity,
+        0.08
+      );
+    }
+    if (coreGroupRef.current) {
+      const targetScale = isDeepDrillDown ? 0.0 : 1.0;
+      coreGroupRef.current.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), 0.1);
+    }
+  });
+
+  const { facesGeometry, edgePairs } = useMemo(() => {
+    // Build convex hull first — extract edges directly from its faces
+    const baseGeo = new ConvexGeometry(ACTIVE_NODE_POSITIONS);
+    const indexedPosAttr = baseGeo.getAttribute('position') as THREE.BufferAttribute;
+    const index = baseGeo.getIndex();
+
+    // Map every position in the geometry back to its ACTIVE_NODE_POSITIONS index
+    const posToNodeIdx = (v: THREE.Vector3) =>
+      ACTIVE_NODE_POSITIONS.findIndex(p => p.distanceToSquared(v) < 0.01);
+
+    // Extract unique edges from faces
+    const edgeSet = new Set<string>();
+    const pairs: { i: number; j: number; pA: THREE.Vector3; pB: THREE.Vector3; colorA: THREE.Color; colorB: THREE.Color; }[] = [];
+
+    const addEdge = (ia: number, ib: number) => {
+      const va = new THREE.Vector3().fromBufferAttribute(indexedPosAttr, ia);
+      const vb = new THREE.Vector3().fromBufferAttribute(indexedPosAttr, ib);
+      const ni = posToNodeIdx(va);
+      const nj = posToNodeIdx(vb);
+      if (ni === -1 || nj === -1 || ni === nj) return;
+      const key = `${Math.min(ni, nj)}_${Math.max(ni, nj)}`;
+      if (edgeSet.has(key)) return;
+      edgeSet.add(key);
+      pairs.push({
+        i: ni, j: nj,
+        pA: ACTIVE_NODE_POSITIONS[ni],
+        pB: ACTIVE_NODE_POSITIONS[nj],
+        colorA: new THREE.Color(1, 1, 1),
+        colorB: new THREE.Color(1, 1, 1),
+      });
+    };
+
+    if (index) {
+      for (let f = 0; f < index.count; f += 3) {
+        addEdge(index.getX(f), index.getX(f + 1));
+        addEdge(index.getX(f + 1), index.getX(f + 2));
+        addEdge(index.getX(f + 2), index.getX(f));
+      }
+    } else {
+      // Non-indexed fallback
+      const count = indexedPosAttr.count;
+      for (let f = 0; f < count; f += 3) {
+        addEdge(f, f + 1); addEdge(f + 1, f + 2); addEdge(f + 2, f);
+      }
+    }
+
+    // Build the non-indexed face geometry for the translucent shell
+    const fGeo = baseGeo.toNonIndexed();
+    fGeo.computeVertexNormals();
+
+    const posAttr = fGeo.getAttribute('position') as THREE.BufferAttribute;
+    const colors = new Float32Array(posAttr.count * 3);
+    const alphas = new Float32Array(posAttr.count);
+    for (let i = 0; i < posAttr.count; i++) {
+      const v = new THREE.Vector3().fromBufferAttribute(posAttr, i);
+      const idx = ACTIVE_NODE_POSITIONS.findIndex(p => p.distanceToSquared(v) < 0.01);
+      const col = idx >= 0 ? NODE_COLORS[idx] : new THREE.Color(0, 0, 0);
+      colors[i*3] = col.r; colors[i*3+1] = col.g; colors[i*3+2] = col.b;
+      alphas[i] = idx >= 0 ? 1.0 : 0.0;
+    }
+    fGeo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    fGeo.setAttribute('vertexAlpha', new THREE.BufferAttribute(alphas, 1));
+
+    return { facesGeometry: fGeo, edgePairs: pairs };
+  }, [ACTIVE_NODE_POSITIONS, NODE_COLORS]);
 
   const handleNodeClick = (id: string, pos: THREE.Vector3) => {
     if (selectedId === id) {
-      setSelectedId(null); // Deselect
+      setSelectedId(null);
     } else {
       setSelectedId(id);
-      // Move camera to look at the node, and get closer
+      setSelectedInternalPath([]);
+      onPathChange([]);
       if (orbitRef.current) {
         gsap.to(orbitRef.current.target, { x: pos.x, y: pos.y, z: pos.z, duration: 1.5, ease: 'power3.inOut' });
-        
-        // Calculate a position slightly in front of the node
         const dir = pos.clone().normalize();
-        const targetCamPos = dir.multiplyScalar(16); // Node is at radius 10, camera goes to 16
+        const targetCamPos = dir.multiplyScalar(24);
         gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.5, ease: 'power3.inOut' });
       }
     }
@@ -267,27 +914,39 @@ function Scene({ selectedId, setSelectedId }: { selectedId: string | null, setSe
   const handlePointerMissed = () => {
     if (selectedId) {
       setSelectedId(null);
+      onPathChange([]);
     }
   };
 
   return (
     <>
+      <color attach="background" args={['#050b1a']} />
       <ambientLight intensity={0.5} />
-      <Stars radius={90} depth={70} count={3000} factor={3} saturation={0} fade speed={0.4} />
+      {/* Galaxy theme elements */}
+      <Stars radius={100} depth={50} count={5000} factor={4} saturation={0.5} fade speed={0.4} />
+      <Sparkles count={600} scale={45} size={2} speed={0.2} opacity={0.2} color="#88aaff" />
+      <Sparkles count={300} scale={30} size={3} speed={0.5} opacity={0.3} color="#ffaaff" />
+      
       <pointLight position={[0, 0, 0]} intensity={2} color="#ffffff" distance={20} />
       <directionalLight position={[10, 10, 10]} intensity={1} />
       
       <group onPointerMissed={handlePointerMissed}>
-        {/* Core Nucleus */}
-        <OrgCore dimmed={selectedId !== null} companyName="Universal Polytope" />
+        {/* Universal Polytope Core */}
+        <group ref={coreGroupRef}>
+          <OrgCore dimmed={selectedId !== null} companyName={companyName} isDeepDrillDown={isDeepDrillDown} />
+        </group>
 
         {/* Outer Surface Mesh removed as requested */}
 
         {/* Render External Nodes */}
-        {U_NODES.map((node, i) => {
-          const pos = EXTERNAL_NODE_POSITIONS[i];
+        {ACTIVE_NODES.map((node, i) => {
+          const pos = ACTIVE_NODE_POSITIONS[i];
           const isSelected = selectedId === node.id;
-          const isDimmed = selectedId !== null && selectedId !== node.id;
+          
+          const isHighlighted = hoveredId === null || node.id === hoveredId || neighborIds.includes(node.id);
+          const isDimmed = (selectedId !== null && selectedId !== node.id) || (hoveredId !== null && !isHighlighted);
+          
+          const color = '#' + NODE_COLORS[i].getHexString();
 
           return (
             <ExternalNode 
@@ -297,14 +956,37 @@ function Scene({ selectedId, setSelectedId }: { selectedId: string | null, setSe
               isSelected={isSelected}
               isDimmed={isDimmed}
               onClick={() => handleNodeClick(node.id, pos)} 
+              color={color}
+              selectedInternalPath={selectedInternalPath}
+              onSelectInternal={(path, targetPos) => handleInternalClick(path, targetPos, node.id)}
+              setBackInfo={setBackInfo}
+              isDeepDrillDown={isDeepDrillDown}
+              onHover={setHoveredId}
+              idx={i}
+              isHovered={hoveredId === node.id}
             />
           );
         })}
         
-        {/* Optimized Edges: single line segment object for all edges */}
-        <lineSegments geometry={edgesGeometry}>
-          <lineBasicMaterial color="#ffffff" transparent opacity={selectedId !== null ? 0.05 : 0.25} />
-        </lineSegments>
+
+
+        {/* Translucent Faces - Spectral Shell */}
+        <mesh geometry={facesGeometry}>
+          <shaderMaterial
+            ref={facesMatRef}
+            vertexShader={vertexShader}
+            fragmentShader={fragmentShader}
+            uniforms={{
+              uOpacity: { value: selectedId !== null ? 0.05 : 0.22 },
+              uCameraPos: { value: new THREE.Vector3() },
+            }}
+            transparent
+            side={THREE.DoubleSide}
+            blending={THREE.AdditiveBlending}
+            vertexColors
+            depthWrite={false}
+          />
+        </mesh>
       </group>
 
       <OrbitControls 
@@ -318,38 +1000,172 @@ function Scene({ selectedId, setSelectedId }: { selectedId: string | null, setSe
   );
 }
 
-export default function UniversalPolytope() {
+function AnalyticHoverCard({ hoveredId, departments }: { hoveredId: string | null; departments: UExternalNode[] }) {
+  const cardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!hoveredId) return;
+    
+    const handlePointerMove = (e: PointerEvent) => {
+      if (cardRef.current) {
+        const x = e.clientX + 15;
+        const y = e.clientY + 15;
+        const maxX = window.innerWidth - 260;
+        const maxY = window.innerHeight - 200;
+        const finalX = Math.min(x, maxX);
+        const finalY = Math.min(y, maxY);
+        cardRef.current.style.transform = `translate(${finalX}px, ${finalY}px)`;
+      }
+    };
+    
+    window.addEventListener('pointermove', handlePointerMove);
+    return () => window.removeEventListener('pointermove', handlePointerMove);
+  }, [hoveredId]);
+
+  if (!hoveredId) return null;
+
+  const node = departments.find(n => n.id === hoveredId);
+  if (!node) return null;
+
+  const color = U_DOMAIN_COLOR[node.domain] ?? '#6366f1';
+
+  return (
+    <div 
+      ref={cardRef}
+      style={{
+        position: 'fixed', top: 0, left: 0,
+        width: '240px',
+        background: 'linear-gradient(135deg, rgba(20, 10, 40, 0.75) 0%, rgba(5, 4, 15, 0.9) 100%)',
+        border: `1px solid ${color}`,
+        boxShadow: `0 0 20px ${color}33, inset 0 0 15px rgba(255, 255, 255, 0.05)`,
+        borderRadius: '12px',
+        padding: '16px',
+        color: '#e2e8f0',
+        backdropFilter: 'blur(16px)',
+        zIndex: 99999,
+        pointerEvents: 'none',
+        fontFamily: 'Inter, sans-serif'
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+        <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 'bold', color: '#f8fafc' }}>{node.label}</h3>
+        <span style={{ 
+          fontSize: '12px', fontWeight: '800', 
+          background: `${color}22`, color: color,
+          padding: '2px 8px', borderRadius: '12px',
+          border: `1px solid ${color}40`
+        }}>
+          {node.score} PTS
+        </span>
+      </div>
+      
+      <div style={{ fontSize: '10px', color: '#94a3b8', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '1px' }}>
+        Cluster: {node.cluster}
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {Object.entries(node.metrics).map(([key, val]) => {
+          return (
+            <div key={key} style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px' }}>
+                <span style={{ textTransform: 'capitalize', color: '#cbd5e1' }}>{key}</span>
+                <span style={{ fontWeight: '600', color: key === 'risk' ? '#ef4444' : '#10b981' }}>{val}%</span>
+              </div>
+              <div style={{ width: '100%', height: '5px', backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{ 
+                  width: `${val}%`, height: '100%', 
+                  backgroundColor: key === 'risk' ? '#ef4444' : color,
+                  borderRadius: '2px'
+                }} />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+export default function UniversalPolytope({ companyName = "Universal Polytope" }: { companyName?: string }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [backInfo, setBackInfo] = useState<{ label: string, onClick: () => void } | null>(null);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  const store = usePolytopeStore();
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <Canvas camera={{ position: [0, 0, 35], fov: 45, near: 0.1, far: 300 }}
+      <Canvas camera={{ position: [0, 0, BASE_CAMERA_DISTANCE], fov: 45, near: 0.1, far: 300 }}
         dpr={[1, 1.5]} gl={{ antialias: true, alpha: false }}
-        style={{ background: '#05040f' }}
       >
-        <Scene selectedId={selectedId} setSelectedId={setSelectedId} />
+        <Scene 
+          selectedId={selectedId} 
+          setSelectedId={setSelectedId} 
+          onPathChange={() => {}} 
+          setBackInfo={setBackInfo} 
+          companyName={companyName} 
+          hoveredId={hoveredId}
+          setHoveredId={setHoveredId}
+          departments={store.departments}
+        />
       </Canvas>
 
+      {/* Floating Analytic Info Card */}
+      <AnalyticHoverCard hoveredId={hoveredId} departments={store.departments} />
+
       {/* Back Button */}
-      {selectedId && (
-        <button
-          onClick={() => setSelectedId(null)}
-          style={{
-            position: 'absolute', top: 24, right: 24,
-            background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)',
-            borderRadius: '8px', padding: '8px 16px', color: 'white',
-            display: 'flex', alignItems: 'center', gap: '8px',
-            cursor: 'pointer', backdropFilter: 'blur(8px)',
-            pointerEvents: 'auto', zIndex: 10,
-            transition: 'background 0.2s'
-          }}
-          onPointerOver={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.2)'}
-          onPointerOut={(e) => e.currentTarget.style.background = 'rgba(255,255,255,0.1)'}
-        >
-          <ArrowLeft size={18} />
-          Back to Polytope
-        </button>
-      )}
+      <button
+        onClick={() => {
+          if (backInfo) {
+            backInfo.onClick();
+          } else if (selectedId) {
+            setSelectedId(null);
+          } else {
+            navigate('/');
+          }
+        }}
+        style={{
+          position: 'fixed', top: '80px', left: '24px',
+          background: 'linear-gradient(135deg, rgba(20,10,40,0.8) 0%, rgba(5,4,15,0.9) 100%)',
+          border: '1px solid rgba(136, 170, 255, 0.4)',
+          boxShadow: '0 0 15px rgba(136, 170, 255, 0.3), inset 0 0 10px rgba(255, 170, 255, 0.1)',
+          borderRadius: '12px', padding: '10px 20px', color: '#e0eaff',
+          display: 'flex', alignItems: 'center', gap: '10px',
+          cursor: 'pointer', backdropFilter: 'blur(12px)',
+          pointerEvents: 'auto', zIndex: 99999,
+          transition: 'all 0.3s ease',
+          fontWeight: 'bold', letterSpacing: '0.5px',
+          textTransform: 'uppercase', fontSize: '13px'
+        }}
+        onPointerOver={(e) => {
+          e.currentTarget.style.background = 'linear-gradient(135deg, rgba(40,20,80,0.9) 0%, rgba(15,10,30,0.95) 100%)';
+          e.currentTarget.style.boxShadow = '0 0 25px rgba(136, 170, 255, 0.6), inset 0 0 15px rgba(255, 170, 255, 0.3)';
+          e.currentTarget.style.borderColor = 'rgba(255, 170, 255, 0.6)';
+          e.currentTarget.style.transform = 'translateY(-2px)';
+        }}
+        onPointerOut={(e) => {
+          e.currentTarget.style.background = 'linear-gradient(135deg, rgba(20,10,40,0.8) 0%, rgba(5,4,15,0.9) 100%)';
+          e.currentTarget.style.boxShadow = '0 0 15px rgba(136, 170, 255, 0.3), inset 0 0 10px rgba(255, 170, 255, 0.1)';
+          e.currentTarget.style.borderColor = 'rgba(136, 170, 255, 0.4)';
+          e.currentTarget.style.transform = 'translateY(0)';
+        }}
+      >
+        <ArrowLeft size={18} />
+        {backInfo ? `Back to ${backInfo.label}` : (selectedId ? 'Back to Polytope' : 'Back to Home')}
+      </button>
+
+      {/* Department CRUD Manager */}
+      <PolytopeManager
+        departments={store.departments}
+        onAddDepartment={store.addDepartment}
+        onUpdateDepartment={store.updateDepartment}
+        onDeleteDepartment={store.deleteDepartment}
+        onAddNode={store.addNode}
+        onUpdateNode={store.updateNode}
+        onDeleteNode={store.deleteNode}
+        onReset={store.resetToDefaults}
+      />
     </div>
   );
 }
