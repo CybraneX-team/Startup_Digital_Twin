@@ -9,6 +9,9 @@ import type { UniverseIndustry, UniverseSubdomain } from '../data/universeGraph'
 import CreateCompanyModal from '../components/CreateCompanyModal';
 import type { LocalCompany } from '../lib/localCompanies';
 import UniversalPolytope from '../components/UniversalPolytope';
+import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
+import { PolytopeManager } from '../components/PolytopeManager';
+import { usePolytopeStore } from '../lib/usePolytopeStore';
 
 // ── Side Panel ───────────────────────────────────────────────────────────────
 
@@ -227,16 +230,49 @@ export default function Universe3DPage() {
   // Increments each entry so UniversalPolytope resets camera to initial view
   const [bhEntryCount, setBhEntryCount] = useState(0);
 
+  // ── Polytope sidebar state (shown when insideBH) ──────────────────────────
+  const polytopeStore = usePolytopeStore();
+  const [polytopeDeptId, setPolytopeDeptId] = useState<string | null>(null);
+  const [polytopeInternalPath, setPolytopeInternalPath] = useState<string[]>([]);
+  const [polytopeManagerOpen, setPolytopeManagerOpen] = useState(false);
+  const [polytopeManagerView, setPolytopeManagerView] = useState<any>({ type: 'home' });
+
+  const handlePolytopeAddDepartment = useCallback(() => {
+    setPolytopeManagerView({ type: 'addDept' });
+    setPolytopeManagerOpen(true);
+  }, []);
+
+  const handlePolytopeAddNode = useCallback((deptId: string) => {
+    const dept = polytopeStore.departments.find(d => d.id === deptId);
+    if (dept) {
+      setPolytopeManagerView({ type: 'addNode', dept });
+      setPolytopeManagerOpen(true);
+    }
+  }, [polytopeStore.departments]);
+
+  const handlePolytopeDeptChange = useCallback((id: string | null) => {
+    setPolytopeDeptId(id);
+    if (id === null) setPolytopeInternalPath([]);
+  }, []);
+
+  // Reset sidebar when exiting BH
+  const handleExitBH = useCallback(() => {
+    setInsideBH(false);
+    setPolytopeDeptId(null);
+    setPolytopeInternalPath([]);
+  }, []);
+
   const handleEnterBH = useCallback(() => {
     setBhMounted(true);
     setInsideBH(true);
     setBhEntryCount(c => c + 1);
   }, []);
-  const handleExitBH  = useCallback(() => setInsideBH(false), []);
 
   // Called from within R3F overlay when user scrolls out past OrbitControls maxDistance
   const handleBHExitIntent = useCallback(() => {
     setInsideBH(false);
+    setPolytopeDeptId(null);
+    setPolytopeInternalPath([]);
     controllerRef.current?.exitBlackHole();
   }, []);
 
@@ -413,6 +449,9 @@ export default function Universe3DPage() {
             onExitIntent={handleBHExitIntent}
             transparent={true}
             cameraResetTrigger={bhEntryCount}
+            requestSelectDeptId={polytopeDeptId}
+            onDepartmentChange={handlePolytopeDeptChange}
+            onInternalPathChange={setPolytopeInternalPath}
           />
         )}
       </div>
@@ -460,69 +499,101 @@ export default function Universe3DPage() {
       {/* Bottom-left column: hidden when create modal is active */}
       {!createModal && (
         <div className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3">
-          {/* Search Bar */}
-          <div 
-            className="relative rounded-2xl overflow-hidden shadow-xl"
-            style={{
-              width: '196px',
-              background: 'rgba(0, 0, 0, 0.72)',
-              backdropFilter: 'blur(12px)',
-              border: '1px solid rgba(255,255,255,0.07)',
-            }}
-          >
-            <div className="flex items-center px-3 py-2.5">
-              <Search className="w-3.5 h-3.5 text-gray-400 mr-2 shrink-0" />
-              <input 
-                ref={searchInputRef}
-                type="text" 
-                placeholder="Search universe..." 
-                value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="bg-transparent border-none outline-none text-xs text-white w-full placeholder:text-gray-500"
-              />
-              <div className="flex items-center gap-0.5 ml-2 opacity-50 shrink-0 bg-white/10 px-1.5 py-0.5 rounded">
-                <Command className="w-2.5 h-2.5 text-gray-300" />
-                <span className="text-[9px] text-gray-300 font-medium">K</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Side nav panel */}
-          {data && (
-            <SidePanel
-              data={data}
-              navPath={navPath}
-              currentLevel={currentLevel}
-              controllerRef={controllerRef}
-              onAddCompany={handleAddCompany}
-              searchQuery={searchQuery}
-              setSearchQuery={setSearchQuery}
+          {/* When inside BH polytope — show polytope dept sidebar instead of galaxy sidebar */}
+          {insideBH ? (
+            <PolytopeSidePanel
+              departments={polytopeStore.departments}
+              selectedDeptId={polytopeDeptId}
+              onDeptSelect={(id) => {
+                setPolytopeDeptId(id);
+                if (id === null) setPolytopeInternalPath([]);
+              }}
+              selectedInternalPath={polytopeInternalPath}
+              onAddDepartment={handlePolytopeAddDepartment}
+              onAddNode={handlePolytopeAddNode}
             />
-          )}
+          ) : (
+            <>
+              {/* Search Bar — galaxy mode */}
+              <div
+                className="relative rounded-2xl overflow-hidden shadow-xl"
+                style={{
+                  width: '196px',
+                  background: 'rgba(0, 0, 0, 0.72)',
+                  backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255,255,255,0.07)',
+                }}
+              >
+                <div className="flex items-center px-3 py-2.5">
+                  <Search className="w-3.5 h-3.5 text-gray-400 mr-2 shrink-0" />
+                  <input
+                    ref={searchInputRef}
+                    type="text"
+                    placeholder="Search universe..."
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    className="bg-transparent border-none outline-none text-xs text-white w-full placeholder:text-gray-500"
+                  />
+                  <div className="flex items-center gap-0.5 ml-2 opacity-50 shrink-0 bg-white/10 px-1.5 py-0.5 rounded">
+                    <Command className="w-2.5 h-2.5 text-gray-300" />
+                    <span className="text-[9px] text-gray-300 font-medium">K</span>
+                  </div>
+                </div>
+              </div>
 
-          {/* Ecosystem pills */}
-          {canRead('ecosystem') && (
-            <div className="flex flex-col gap-2 w-full">
-              <button
-                onClick={() => navigate('/ecosystem/vc-connect')}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-sky-500/30"
-                style={{ background: 'rgba(0,0,0,0.55)', borderColor: 'rgba(148,163,184,0.1)' }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
-                VC &amp; Mentors
-              </button>
-              <button
-                onClick={() => navigate('/ecosystem/network')}
-                className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-teal-500/30"
-                style={{ background: 'rgba(0,0,0,0.55)', borderColor: 'rgba(148,163,184,0.1)' }}
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
-                Startup Network
-              </button>
-            </div>
+              {/* Side nav panel — galaxy/subdomain/company */}
+              {data && (
+                <SidePanel
+                  data={data}
+                  navPath={navPath}
+                  currentLevel={currentLevel}
+                  controllerRef={controllerRef}
+                  onAddCompany={handleAddCompany}
+                  searchQuery={searchQuery}
+                  setSearchQuery={setSearchQuery}
+                />
+              )}
+
+              {/* Ecosystem pills */}
+              {canRead('ecosystem') && (
+                <div className="flex flex-col gap-2 w-full">
+                  <button
+                    onClick={() => navigate('/ecosystem/vc-connect')}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-sky-500/30"
+                    style={{ background: 'rgba(0,0,0,0.55)', borderColor: 'rgba(148,163,184,0.1)' }}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400" />
+                    VC &amp; Mentors
+                  </button>
+                  <button
+                    onClick={() => navigate('/ecosystem/network')}
+                    className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-teal-500/30"
+                    style={{ background: 'rgba(0,0,0,0.55)', borderColor: 'rgba(148,163,184,0.1)' }}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-teal-400" />
+                    Startup Network
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
+
+      {/* PolytopeManager modal for BH polytope — opened by sidebar Add buttons */}
+      <PolytopeManager
+        departments={polytopeStore.departments}
+        onAddDepartment={polytopeStore.addDepartment}
+        onUpdateDepartment={polytopeStore.updateDepartment}
+        onDeleteDepartment={polytopeStore.deleteDepartment}
+        onAddNode={polytopeStore.addNode}
+        onUpdateNode={polytopeStore.updateNode}
+        onDeleteNode={polytopeStore.deleteNode}
+        onReset={polytopeStore.resetToDefaults}
+        forceOpen={polytopeManagerOpen}
+        forcedView={polytopeManagerView}
+        onForcedClose={() => setPolytopeManagerOpen(false)}
+      />
 
       {/* Hover detail panel — right side */}
       {hoverTarget && hoverTarget.type && (

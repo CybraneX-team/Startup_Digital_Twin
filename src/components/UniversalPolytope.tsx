@@ -572,6 +572,7 @@ function Scene({
   departments,
   onExitIntent,
   cameraResetTrigger,
+  requestSelectDeptId,
 }: {
   selectedId: string | null,
   setSelectedId: (id: string | null) => void,
@@ -583,6 +584,7 @@ function Scene({
   departments: UExternalNode[],
   onExitIntent?: () => void,
   cameraResetTrigger?: number,
+  requestSelectDeptId?: string | null,
 }) {
   // ── Derive geometry data from live departments prop ──────────────────────
   const { ACTIVE_NODES, ACTIVE_NODE_POSITIONS, SHUFFLED_ACTIVE_DIRS, NODE_COLORS, INITIAL_CAMERA_DISTANCE } = useMemo(() => {
@@ -810,6 +812,31 @@ function Scene({
     }
   };
 
+  // ── External selection request (from sidebar clicks) ─────────────────────
+  const prevRequestRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (requestSelectDeptId === prevRequestRef.current) return;
+    prevRequestRef.current = requestSelectDeptId;
+    if (requestSelectDeptId === null) {
+      setSelectedId(null);
+      return;
+    }
+    if (requestSelectDeptId === undefined) return;
+    const idx = ACTIVE_NODES.findIndex(n => n.id === requestSelectDeptId);
+    if (idx === -1) return;
+    const pos = ACTIVE_NODE_POSITIONS[idx];
+    setSelectedId(requestSelectDeptId);
+    setSelectedInternalPath([]);
+    onPathChange([]);
+    if (orbitRef.current) {
+      gsap.to(orbitRef.current.target, { x: pos.x, y: pos.y, z: pos.z, duration: 1.5, ease: 'power3.inOut' });
+      const dir = pos.clone().normalize();
+      const targetCamPos = dir.multiplyScalar(24);
+      gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.5, ease: 'power3.inOut' });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestSelectDeptId]);
+
   const handlePointerMissed = () => {
     if (selectedId) {
       setSelectedId(null);
@@ -985,11 +1012,36 @@ function AnalyticHoverCard({ hoveredId, departments }: { hoveredId: string | nul
   );
 }
 
-export default function UniversalPolytope({ companyName = "Universal Polytope", onExitIntent, transparent = false, cameraResetTrigger = 0 }: { companyName?: string; onExitIntent?: () => void; transparent?: boolean; cameraResetTrigger?: number }) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+export default function UniversalPolytope({
+  companyName = "Universal Polytope",
+  onExitIntent,
+  transparent = false,
+  cameraResetTrigger = 0,
+  onDepartmentChange,
+  onInternalPathChange,
+  requestSelectDeptId,
+}: {
+  companyName?: string;
+  onExitIntent?: () => void;
+  transparent?: boolean;
+  cameraResetTrigger?: number;
+  /** Called whenever a department is selected (id) or deselected (null) in the 3D scene */
+  onDepartmentChange?: (id: string | null) => void;
+  /** Called whenever the internal drill-down path changes */
+  onInternalPathChange?: (path: string[]) => void;
+  /** When set, auto-flies camera to this department and selects it */
+  requestSelectDeptId?: string | null;
+}) {
+  const [selectedId, setSelectedIdRaw] = useState<string | null>(null);
   const [backInfo, setBackInfo] = useState<{ label: string, onClick: () => void } | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const navigate = useNavigate();
+
+  // Wrap setter to fire callback
+  const setSelectedId = (id: string | null) => {
+    setSelectedIdRaw(id);
+    onDepartmentChange?.(id);
+  };
 
   const store = usePolytopeStore();
 
@@ -1001,7 +1053,7 @@ export default function UniversalPolytope({ companyName = "Universal Polytope", 
         <Scene
           selectedId={selectedId}
           setSelectedId={setSelectedId}
-          onPathChange={() => {}}
+          onPathChange={(path) => { onInternalPathChange?.(path); }}
           setBackInfo={setBackInfo}
           companyName={companyName}
           hoveredId={hoveredId}
@@ -1009,6 +1061,7 @@ export default function UniversalPolytope({ companyName = "Universal Polytope", 
           departments={store.departments}
           onExitIntent={onExitIntent}
           cameraResetTrigger={cameraResetTrigger}
+          requestSelectDeptId={requestSelectDeptId}
         />
       </Canvas>
 

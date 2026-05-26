@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, X, Edit3, Trash2, ChevronRight, ChevronDown, ArrowLeft, RotateCcw, AlertTriangle } from 'lucide-react';
 import type { UExternalNode, UInternalNode, UDomain } from '../lib/usePolytopeStore';
 import { U_DOMAIN_COLOR } from '../lib/usePolytopeStore';
@@ -14,6 +14,12 @@ interface Props {
   onUpdateNode: (deptId: string, nodeId: string, n: Partial<Omit<UInternalNode, 'id' | 'children'>>) => void;
   onDeleteNode: (deptId: string, nodeId: string) => void;
   onReset: () => void;
+  /** External open trigger — when true, opens the modal. Set back to false via onForcedClose. */
+  forceOpen?: boolean;
+  /** When forceOpen is true, open on this view (e.g. { type: 'addDept' }) */
+  forcedView?: View;
+  /** Called after the modal closes when it was opened via forceOpen */
+  onForcedClose?: () => void;
 }
 
 type View =
@@ -420,9 +426,20 @@ export function PolytopeManager(props: Props) {
   const [open, setOpen] = useState(false);
   const [view, setView] = useState<View>({ type: 'home' });
 
+  // External open/view control (from sidebar Add buttons)
+  const { forceOpen, forcedView, onForcedClose } = props;
+  useEffect(() => {
+    if (forceOpen) {
+      setOpen(true);
+      if (forcedView) setView(forcedView);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [forceOpen]);
+
   const closeModal = () => {
     setOpen(false);
     setView({ type: 'home' });
+    if (forceOpen) onForcedClose?.();
   };
 
   const getTitle = (): string => {
@@ -508,8 +525,8 @@ export function PolytopeManager(props: Props) {
 
   return (
     <>
-      {/* Plus Button */}
-      <button
+      {/* Plus Button — commented out; sidebar Add buttons open the modal instead */}
+      {/* <button
         onClick={() => setOpen(true)}
         style={{
           position: 'fixed', bottom: 32, right: 32, zIndex: 9000,
@@ -531,7 +548,7 @@ export function PolytopeManager(props: Props) {
         }}
       >
         <Plus size={24} color="#fff" />
-      </button>
+      </button> */}
 
       <style>{`
         @keyframes pulse-ring {
