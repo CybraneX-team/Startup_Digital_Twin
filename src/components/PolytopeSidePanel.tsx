@@ -12,6 +12,8 @@ export interface PolytopeSidePanelProps {
   selectedInternalPath: string[];
   onAddDepartment?: () => void;
   onAddNode?: (deptId: string) => void;
+  /** Called when user clicks the back button while inside sub-nodes — go 1 step up */
+  onInternalBack?: () => void;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -75,6 +77,7 @@ export function PolytopeSidePanel({
   selectedInternalPath,
   onAddDepartment,
   onAddNode,
+  onInternalBack,
 }: PolytopeSidePanelProps) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -82,12 +85,15 @@ export function PolytopeSidePanel({
 
   const activeDepts = departments.filter(d => d.domain !== 'inactive');
   const selectedDept = activeDepts.find(d => d.id === selectedDeptId) ?? null;
-  const showingNodes = selectedDeptId !== null && selectedDept !== null;
+  // showingNodes is true when: a dept is explicitly selected OR the user has drilled into sub-nodes
+  const showingNodes = (selectedDeptId !== null && selectedDept !== null) || selectedInternalPath.length > 0;
   const isSearchActive = searchQuery.trim().length > 0;
 
   // ── Search results: departments + all internal nodes ──────────────────────
   const q = searchQuery.toLowerCase();
-  const deptResults = isSearchActive
+
+  // When inside a dept, search filters that dept's nodes; otherwise global search
+  const deptResults = isSearchActive && !showingNodes
     ? activeDepts.filter(d =>
         d.label.toLowerCase().includes(q) ||
         d.domain.toLowerCase().includes(q) ||
@@ -95,7 +101,7 @@ export function PolytopeSidePanel({
       )
     : activeDepts;
 
-  const internalNodeResults: InternalNodeResult[] = isSearchActive
+  const internalNodeResults: InternalNodeResult[] = (isSearchActive && !showingNodes)
     ? activeDepts.flatMap(dept => {
         const color = U_DOMAIN_COLOR[dept.domain] ?? '#6366f1';
         return collectAllInternalNodes(dept.internalNodes, dept, color).filter(r =>
@@ -105,9 +111,25 @@ export function PolytopeSidePanel({
       })
     : [];
 
+  // Fallback: if selectedDept is null but we have an internalPath, search for the dept that owns the path root
+  const fallbackDept = !selectedDept && selectedInternalPath.length > 0
+    ? activeDepts.find(d => {
+        const root = d.internalNodes.find(n => n.id === selectedInternalPath[0]);
+        return root !== undefined;
+      }) ?? null
+    : null;
+  const effectiveDept = selectedDept ?? fallbackDept;
+
   // Internal nodes at the current drill-down level
-  const visibleNodes = selectedDept ? getNodesAtPath(selectedDept, selectedInternalPath) : [];
-  const deptColor = selectedDept ? (U_DOMAIN_COLOR[selectedDept.domain] ?? '#6366f1') : '#C1AEFF';
+  const allVisibleNodes = effectiveDept ? getNodesAtPath(effectiveDept, selectedInternalPath) : [];
+  // Filter by search query when inside a dept
+  const visibleNodes = (showingNodes && isSearchActive)
+    ? allVisibleNodes.filter(n =>
+        n.label.toLowerCase().includes(q) ||
+        n.type.toLowerCase().includes(q)
+      )
+    : allVisibleNodes;
+  const deptColor = effectiveDept ? (U_DOMAIN_COLOR[effectiveDept.domain] ?? '#6366f1') : '#C1AEFF';
 
   // Key that forces list re-animation on level change
   const listKey = `${isSearchActive ? 'search-' + q : (selectedDeptId ?? 'root')}-${selectedInternalPath.join('.')}`;
@@ -128,13 +150,13 @@ export function PolytopeSidePanel({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
 
-  // Clear search when drilling into dept
+  // Clear search when switching between departments
   useEffect(() => {
-    if (showingNodes) setSearchQuery('');
-  }, [showingNodes]);
+    setSearchQuery('');
+  }, [selectedDeptId]);
 
   // Section label logic
-  const sectionLabel = isSearchActive
+  const sectionLabel = isSearchActive && !showingNodes
     ? 'SEARCH RESULTS'
     : !showingNodes
     ? 'DEPARTMENTS'
@@ -144,38 +166,39 @@ export function PolytopeSidePanel({
 
   return (
     <div className="flex flex-col items-start gap-3">
-      {/* ── Search bar — visible only in departments view (not when inside a dept) ── */}
-      {!showingNodes && (
-        <div
-          className="relative rounded-2xl overflow-hidden shadow-xl"
-          style={{
-            width: '196px',
-            background: 'rgba(0, 0, 0, 0.72)',
-            backdropFilter: 'blur(14px)',
-            WebkitBackdropFilter: 'blur(14px)',
-            border: '1px solid rgba(255,255,255,0.07)',
-          }}
-        >
-          <div className="flex items-center px-3 py-2.5">
-            <Search className="w-3.5 h-3.5 text-gray-400 mr-2 shrink-0" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              placeholder="Search departments & nodes..."
-              value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
-              className="bg-transparent border-none outline-none text-xs text-white w-full placeholder:text-gray-500"
-            />
-            <div
-              className="flex items-center gap-0.5 ml-2 opacity-50 shrink-0 bg-white/10 px-1.5 py-0.5 rounded"
-              title="Cmd+K"
-            >
-              <Command className="w-2.5 h-2.5 text-gray-300" />
-              <span className="text-[9px] text-gray-300 font-medium">K</span>
-            </div>
+      {/* ── Search bar — always visible ── */}
+      <div
+        className="relative rounded-2xl overflow-hidden shadow-xl"
+        style={{
+          width: '196px',
+          background: 'rgba(0, 0, 0, 0.72)',
+          backdropFilter: 'blur(14px)',
+          WebkitBackdropFilter: 'blur(14px)',
+          border: showingNodes
+            ? `1px solid ${deptColor}40`
+            : '1px solid rgba(255,255,255,0.07)',
+          transition: 'border-color 0.3s ease',
+        }}
+      >
+        <div className="flex items-center px-3 py-2.5">
+          <Search className="w-3.5 h-3.5 mr-2 shrink-0" style={{ color: showingNodes ? deptColor : '#9ca3af' }} />
+          <input
+            ref={searchInputRef}
+            type="text"
+            placeholder={showingNodes ? `Search ${effectiveDept?.label ?? ''}…` : 'Search departments & nodes…'}
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="bg-transparent border-none outline-none text-xs text-white w-full placeholder:text-gray-500"
+          />
+          <div
+            className="flex items-center gap-0.5 ml-2 opacity-50 shrink-0 bg-white/10 px-1.5 py-0.5 rounded"
+            title="Cmd+K"
+          >
+            <Command className="w-2.5 h-2.5 text-gray-300" />
+            <span className="text-[9px] text-gray-300 font-medium">K</span>
           </div>
         </div>
-      )}
+      </div>
 
       {/* ── Main panel ── */}
       <div
@@ -190,20 +213,57 @@ export function PolytopeSidePanel({
           boxShadow: '0 12px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04)',
         }}
       >
-        {/* ── Back nav (dept drill-down) ── */}
+        {/* ── Back nav ── */}
         {showingNodes && (
           <div
             className="flex items-center gap-2 px-3 pt-3 pb-2 shrink-0 panel-slide-in"
             style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
           >
-            <button
-              onClick={() => onDeptSelect(null)}
-              className="flex items-center gap-1.5 text-[11px] font-medium transition-colors hover:text-white"
-              style={{ color: '#C1AEFF' }}
-            >
-              <ArrowLeft className="w-3 h-3" />
-              Departments
-            </button>
+            {selectedInternalPath.length > 0 ? (
+              /* Inside sub-nodes — prominent one-step back button */
+              <div className="flex items-center justify-between w-full">
+                <button
+                  onClick={() => onInternalBack?.()}
+                  className="flex items-center gap-1.5 text-[11px] font-semibold transition-all active:scale-95"
+                  style={{
+                    color: deptColor,
+                    background: `${deptColor}18`,
+                    border: `1px solid ${deptColor}35`,
+                    padding: '4px 10px',
+                    borderRadius: '8px',
+                    transition: 'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => {
+                    (e.currentTarget as HTMLButtonElement).style.background = `${deptColor}30`;
+                    (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 0 10px ${deptColor}40`;
+                  }}
+                  onMouseLeave={e => {
+                    (e.currentTarget as HTMLButtonElement).style.background = `${deptColor}18`;
+                    (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
+                  }}
+                >
+                  <ArrowLeft className="w-3 h-3" />
+                  Back
+                </button>
+                <button
+                  onClick={() => onDeptSelect(null)}
+                  className="text-[10px] transition-colors hover:text-gray-400"
+                  style={{ color: '#5E5E5E' }}
+                >
+                  Departments
+                </button>
+              </div>
+            ) : (
+              /* At dept root — go back to departments list */
+              <button
+                onClick={() => onDeptSelect(null)}
+                className="flex items-center gap-1.5 text-[11px] font-medium transition-colors hover:text-white"
+                style={{ color: '#C1AEFF' }}
+              >
+                <ArrowLeft className="w-3 h-3" />
+                Departments
+              </button>
+            )}
           </div>
         )}
 
@@ -214,16 +274,19 @@ export function PolytopeSidePanel({
           </span>
 
           {/* Dept name sub-header when inside a dept */}
-          {showingNodes && selectedDept && (
+          {showingNodes && effectiveDept && (
             <p className="text-[11px] font-semibold mt-0.5 truncate" style={{ color: deptColor }}>
-              {selectedDept.label}
+              {effectiveDept.label}
             </p>
           )}
 
           {/* Search result count */}
           {isSearchActive && (
             <p className="text-[10px] mt-0.5" style={{ color: '#4b5563' }}>
-              {deptResults.length + internalNodeResults.length} result{deptResults.length + internalNodeResults.length !== 1 ? 's' : ''}
+              {showingNodes
+                ? `${visibleNodes.length} result${visibleNodes.length !== 1 ? 's' : ''}`
+                : `${deptResults.length + internalNodeResults.length} result${deptResults.length + internalNodeResults.length !== 1 ? 's' : ''}`
+              }
             </p>
           )}
         </div>
@@ -234,8 +297,8 @@ export function PolytopeSidePanel({
           className="overflow-y-auto flex-1"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {isSearchActive ? (
-            /* ── SEARCH RESULTS: departments + internal nodes ── */
+          {isSearchActive && !showingNodes ? (
+            /* ── GLOBAL SEARCH RESULTS: departments + internal nodes ── */
             deptResults.length === 0 && internalNodeResults.length === 0 ? (
               <div className="px-3 py-6 text-[11px] text-center" style={{ color: '#4b5563' }}>
                 No results found
@@ -321,31 +384,45 @@ export function PolytopeSidePanel({
             ) : (
               deptResults.map((dept, i) => {
                 const color = U_DOMAIN_COLOR[dept.domain] ?? '#6366f1';
+                const isActiveDept = dept.id === selectedDeptId;
                 return (
                   <button
                     key={dept.id}
                     onClick={() => onDeptSelect(dept.id)}
-                    className="panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group"
-                    style={{ animationDelay: `${i * 22}ms` }}
+                    className={`panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-all group ${!isActiveDept ? 'hover:bg-white/[0.06]' : ''}`}
+                    style={{
+                      animationDelay: `${i * 22}ms`,
+                      background: isActiveDept ? `${color}18` : 'transparent',
+                      borderLeft: isActiveDept ? `2px solid ${color}` : '2px solid transparent',
+                      boxShadow: isActiveDept ? `inset 0 0 12px ${color}10` : 'none',
+                      transition: 'all 0.2s ease',
+                    }}
                   >
                     {/* Color dot */}
                     <span
                       className="w-2 h-2 rounded-full shrink-0 transition-transform group-hover:scale-125"
-                      style={{ background: color, boxShadow: `0 0 8px ${color}70` }}
+                      style={{
+                        background: color,
+                        boxShadow: isActiveDept ? `0 0 12px ${color}` : `0 0 8px ${color}70`,
+                        transform: isActiveDept ? 'scale(1.3)' : undefined,
+                      }}
                     />
-                    {/* Text — score removed */}
+                    {/* Text */}
                     <span className="flex-1 min-w-0">
-                      <span className="block text-[12px] text-gray-300 group-hover:text-white transition-colors leading-tight truncate">
+                      <span
+                        className="block text-[12px] leading-tight truncate transition-colors"
+                        style={{ color: isActiveDept ? '#ffffff' : '#d1d5db', fontWeight: isActiveDept ? 600 : 400 }}
+                      >
                         {dept.label}
                       </span>
-                      <span className="block text-[10px] leading-tight mt-0.5" style={{ color: '#4b5563' }}>
+                      <span className="block text-[10px] leading-tight mt-0.5" style={{ color: isActiveDept ? `${color}cc` : '#4b5563' }}>
                         {dept.internalNodes.length} domain{dept.internalNodes.length !== 1 ? 's' : ''}
                       </span>
                     </span>
                     {/* Chevron */}
                     <ChevronRight
-                      className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-40 transition-opacity"
-                      style={{ color: '#6b7280' }}
+                      className="w-3 h-3 shrink-0 transition-all"
+                      style={{ color: isActiveDept ? color : '#6b7280', opacity: isActiveDept ? 0.9 : 0 }}
                     />
                   </button>
                 );
@@ -404,7 +481,7 @@ export function PolytopeSidePanel({
               if (!showingNodes) {
                 onAddDepartment?.();
               } else {
-                onAddNode?.(selectedDeptId!);
+                onAddNode?.(selectedDeptId ?? effectiveDept?.id ?? '');
               }
             }}
             className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-semibold transition-all hover:opacity-90 active:scale-95"

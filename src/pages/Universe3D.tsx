@@ -236,6 +236,10 @@ export default function Universe3DPage() {
   const [polytopeInternalPath, setPolytopeInternalPath] = useState<string[]>([]);
   const [polytopeManagerOpen, setPolytopeManagerOpen] = useState(false);
   const [polytopeManagerView, setPolytopeManagerView] = useState<any>({ type: 'home' });
+  // Separate state so clicking sidebar triggers camera fly-in without looping
+  const [polytopeRequestSelectDeptId, setPolytopeRequestSelectDeptId] = useState<string | null | undefined>(undefined);
+  // Counter incremented by sidebar back button to go back one internal level
+  const [polytopeInternalBackStep, setPolytopeInternalBackStep] = useState(0);
 
   const handlePolytopeAddDepartment = useCallback(() => {
     setPolytopeManagerView({ type: 'addDept' });
@@ -250,9 +254,26 @@ export default function Universe3DPage() {
     }
   }, [polytopeStore.departments]);
 
+  // Called when the 3D scene selects a dept — only update sidebar, no camera re-trigger
   const handlePolytopeDeptChange = useCallback((id: string | null) => {
     setPolytopeDeptId(id);
-    if (id === null) setPolytopeInternalPath([]);
+    if (id === null) {
+      setPolytopeInternalPath([]);
+      setPolytopeRequestSelectDeptId(null);
+      setPolytopeInternalBackStep(0);
+    }
+  }, []);
+
+  // Called when sidebar selects a dept — update dept AND trigger camera fly-in
+  const handlePolytopeSidebarDeptSelect = useCallback((id: string | null) => {
+    setPolytopeDeptId(id);
+    if (id === null) {
+      setPolytopeInternalPath([]);
+      setPolytopeRequestSelectDeptId(null);
+      setPolytopeInternalBackStep(0);
+    } else {
+      setPolytopeRequestSelectDeptId(id);
+    }
   }, []);
 
   // Reset sidebar when exiting BH
@@ -260,6 +281,8 @@ export default function Universe3DPage() {
     setInsideBH(false);
     setPolytopeDeptId(null);
     setPolytopeInternalPath([]);
+    setPolytopeRequestSelectDeptId(null);
+    setPolytopeInternalBackStep(0);
   }, []);
 
   const handleEnterBH = useCallback(() => {
@@ -273,6 +296,8 @@ export default function Universe3DPage() {
     setInsideBH(false);
     setPolytopeDeptId(null);
     setPolytopeInternalPath([]);
+    setPolytopeRequestSelectDeptId(null);
+    setPolytopeInternalBackStep(0);
     controllerRef.current?.exitBlackHole();
   }, []);
 
@@ -282,23 +307,64 @@ export default function Universe3DPage() {
   const [companyPolytopeEntryCount, setCompanyPolytopeEntryCount] = useState(0);
   const [activeCompany, setActiveCompany] = useState<any>(null);
 
+  // Company polytope sidebar state — mirrors the BH polytope pattern
+  const [companyPolytopeDeptId, setCompanyPolytopeDeptId] = useState<string | null>(null);
+  const [companyPolytopeInternalPath, setCompanyPolytopeInternalPath] = useState<string[]>([]);
+  const [companyPolytopeRequestSelectDeptId, setCompanyPolytopeRequestSelectDeptId] = useState<string | null | undefined>(undefined);
+  const [companyPolytopeInternalBackStep, setCompanyPolytopeInternalBackStep] = useState(0);
+
   const handleEnterCompanyPolytope = useCallback((company: any) => {
     setActiveCompany(company);
     setCompanyPolytopeMounted(true);
     setInsideCompanyPolytope(true);
     setCompanyPolytopeEntryCount(c => c + 1);
+    // Reset sidebar for fresh entry
+    setCompanyPolytopeDeptId(null);
+    setCompanyPolytopeInternalPath([]);
+    setCompanyPolytopeRequestSelectDeptId(undefined);
+    setCompanyPolytopeInternalBackStep(0);
+  }, []);
+
+  // Called when the 3D scene selects a dept inside company polytope
+  const handleCompanyPolytopeDeptChange = useCallback((id: string | null) => {
+    setCompanyPolytopeDeptId(id);
+    if (id === null) {
+      setCompanyPolytopeInternalPath([]);
+      setCompanyPolytopeRequestSelectDeptId(null);
+      setCompanyPolytopeInternalBackStep(0);
+    }
+  }, []);
+
+  // Called when the sidebar selects a dept — triggers camera fly-in
+  const handleCompanyPolytopeSidebarDeptSelect = useCallback((id: string | null) => {
+    setCompanyPolytopeDeptId(id);
+    if (id === null) {
+      setCompanyPolytopeInternalPath([]);
+      setCompanyPolytopeRequestSelectDeptId(null);
+      setCompanyPolytopeInternalBackStep(0);
+    } else {
+      setCompanyPolytopeRequestSelectDeptId(id);
+    }
   }, []);
 
   // Called by NavigationManager whenever leaving COMPANY level (back button, ESC, or scroll-out)
   const handleExitCompanyPolytope = useCallback(() => {
     setInsideCompanyPolytope(false);
     setActiveCompany(null);
+    setCompanyPolytopeDeptId(null);
+    setCompanyPolytopeInternalPath([]);
+    setCompanyPolytopeRequestSelectDeptId(null);
+    setCompanyPolytopeInternalBackStep(0);
   }, []);
 
   // Called by UniversalPolytope scroll-out: hide overlay AND tell controller to go back
   const handleCompanyPolytopeExitIntent = useCallback(() => {
     setInsideCompanyPolytope(false);
     setActiveCompany(null);
+    setCompanyPolytopeDeptId(null);
+    setCompanyPolytopeInternalPath([]);
+    setCompanyPolytopeRequestSelectDeptId(null);
+    setCompanyPolytopeInternalBackStep(0);
     controllerRef.current?.exitCompanyPolytope();
   }, []);
 
@@ -449,9 +515,10 @@ export default function Universe3DPage() {
             onExitIntent={handleBHExitIntent}
             transparent={true}
             cameraResetTrigger={bhEntryCount}
-            requestSelectDeptId={polytopeDeptId}
+            requestSelectDeptId={polytopeRequestSelectDeptId}
             onDepartmentChange={handlePolytopeDeptChange}
             onInternalPathChange={setPolytopeInternalPath}
+            requestBackStep={polytopeInternalBackStep}
           />
         )}
       </div>
@@ -477,6 +544,10 @@ export default function Universe3DPage() {
             onExitIntent={handleCompanyPolytopeExitIntent}
             transparent={true}
             cameraResetTrigger={companyPolytopeEntryCount}
+            requestSelectDeptId={companyPolytopeRequestSelectDeptId}
+            onDepartmentChange={handleCompanyPolytopeDeptChange}
+            onInternalPathChange={setCompanyPolytopeInternalPath}
+            requestBackStep={companyPolytopeInternalBackStep}
           />
         )}
       </div>
@@ -499,18 +570,19 @@ export default function Universe3DPage() {
       {/* Bottom-left column: hidden when create modal is active */}
       {!createModal && (
         <div className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3">
-          {/* When inside BH polytope — show polytope dept sidebar instead of galaxy sidebar */}
-          {insideBH ? (
+          {/* When inside BH or Company polytope — show polytope dept sidebar */}
+          {(insideBH || insideCompanyPolytope) ? (
             <PolytopeSidePanel
               departments={polytopeStore.departments}
-              selectedDeptId={polytopeDeptId}
-              onDeptSelect={(id) => {
-                setPolytopeDeptId(id);
-                if (id === null) setPolytopeInternalPath([]);
-              }}
-              selectedInternalPath={polytopeInternalPath}
+              selectedDeptId={insideBH ? polytopeDeptId : companyPolytopeDeptId}
+              onDeptSelect={insideBH ? handlePolytopeSidebarDeptSelect : handleCompanyPolytopeSidebarDeptSelect}
+              selectedInternalPath={insideBH ? polytopeInternalPath : companyPolytopeInternalPath}
               onAddDepartment={handlePolytopeAddDepartment}
               onAddNode={handlePolytopeAddNode}
+              onInternalBack={insideBH
+                ? () => setPolytopeInternalBackStep(c => c + 1)
+                : () => setCompanyPolytopeInternalBackStep(c => c + 1)
+              }
             />
           ) : (
             <>

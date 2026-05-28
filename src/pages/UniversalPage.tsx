@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import UniversalPolytope from '../components/UniversalPolytope';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
 import { PolytopeManager } from '../components/PolytopeManager';
@@ -14,6 +14,17 @@ export default function UniversalPage() {
   // Sidebar state — which dept is selected in sidebar, and internal drill-down path
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
   const [internalPath, setInternalPath] = useState<string[]>([]);
+  // Counter incremented each time the sidebar's back button is pressed
+  const [internalBackStep, setInternalBackStep] = useState(0);
+
+  // requestSelectDeptId is only set when the SIDEBAR triggers a selection,
+  // so the 3D scene camera flies in. When the 3D scene selects a dept itself
+  // (user clicks a node), we just update selectedDeptId directly without
+  // re-triggering the camera fly (the 3D scene already handles it).
+  const [requestSelectDeptId, setRequestSelectDeptId] = useState<string | null | undefined>(undefined);
+
+  // Track whether the last selection came from the 3D scene (to avoid loop)
+  const selectionFromScene = useRef(false);
 
   // PolytopeManager (CRUD modal) controlled externally by sidebar Add buttons
   const [managerOpen, setManagerOpen] = useState(false);
@@ -37,10 +48,29 @@ export default function UniversalPage() {
     }
   };
 
-  // When dept is selected in 3D → update sidebar
+  // When dept is selected in 3D scene → update sidebar highlight only (no camera retrigger)
   const handleDepartmentChange = (id: string | null) => {
+    selectionFromScene.current = true;
     setSelectedDeptId(id);
-    if (id === null) setInternalPath([]);
+    if (id === null) {
+      setInternalPath([]);
+      setRequestSelectDeptId(null);
+      setInternalBackStep(0); // reset when leaving dept
+    }
+    // Reset flag after state batch
+    setTimeout(() => { selectionFromScene.current = false; }, 0);
+  };
+
+  // When sidebar selects a dept → update selectedDeptId AND trigger camera fly in 3D
+  const handleSidebarDeptSelect = (id: string | null) => {
+    setSelectedDeptId(id);
+    if (id === null) {
+      setInternalPath([]);
+      setRequestSelectDeptId(null);
+      setInternalBackStep(0);
+    } else {
+      setRequestSelectDeptId(id);
+    }
   };
 
   return (
@@ -50,24 +80,22 @@ export default function UniversalPage() {
         companyName={companyName}
         onDepartmentChange={handleDepartmentChange}
         onInternalPathChange={setInternalPath}
-        requestSelectDeptId={selectedDeptId}
+        requestSelectDeptId={requestSelectDeptId}
+        requestBackStep={internalBackStep}
       />
 
-      {/* ── Left sidebar panel — bottom-left floating overlay ── */}
+      {/* ── Left sidebar panel — fixed bottom-left, above all overlays ── */}
       <div
-        className="absolute bottom-6 left-4 z-20 pointer-events-auto"
-        style={{ pointerEvents: 'auto' }}
+        className="fixed bottom-6 left-4 z-[60] pointer-events-auto"
       >
         <PolytopeSidePanel
           departments={store.departments}
           selectedDeptId={selectedDeptId}
-          onDeptSelect={(id) => {
-            setSelectedDeptId(id);
-            if (id === null) setInternalPath([]);
-          }}
+          onDeptSelect={handleSidebarDeptSelect}
           selectedInternalPath={internalPath}
           onAddDepartment={handleAddDepartment}
           onAddNode={handleAddNode}
+          onInternalBack={() => setInternalBackStep(c => c + 1)}
         />
       </div>
 

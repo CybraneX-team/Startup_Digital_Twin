@@ -573,6 +573,7 @@ function Scene({
   onExitIntent,
   cameraResetTrigger,
   requestSelectDeptId,
+  requestBackStep,
 }: {
   selectedId: string | null,
   setSelectedId: (id: string | null) => void,
@@ -585,6 +586,7 @@ function Scene({
   onExitIntent?: () => void,
   cameraResetTrigger?: number,
   requestSelectDeptId?: string | null,
+  requestBackStep?: number,
 }) {
   // ── Derive geometry data from live departments prop ──────────────────────
   const { ACTIVE_NODES, ACTIVE_NODE_POSITIONS, SHUFFLED_ACTIVE_DIRS, NODE_COLORS, INITIAL_CAMERA_DISTANCE } = useMemo(() => {
@@ -637,6 +639,16 @@ function Scene({
   const coreGroupRef = useRef<THREE.Group>(null);
   const cameraPosRef = useRef(new THREE.Vector3());
 
+  // ── Camera history for sidebar back navigation ───────────────────────────
+  // Each entry records where the camera was BEFORE drilling into a sub-node,
+  // so we can animate back precisely when the sidebar back button is pressed.
+  const cameraHistoryRef = useRef<Array<{
+    path: string[];
+    orbitTarget: THREE.Vector3;
+    camPos: THREE.Vector3;
+  }>>([]);
+  const prevBackStepRef = useRef(0);
+
   const [selectedInternalPath, setSelectedInternalPath] = useState<string[]>([]);
   const isDeepDrillDown = selectedInternalPath.length > 0;
 
@@ -644,6 +656,7 @@ function Scene({
     // Clear deep drill down when switching departments
     setSelectedInternalPath([]);
     setBackInfo(null);
+    cameraHistoryRef.current = []; // also clear camera history
   }, [selectedId, setBackInfo]);
 
   useEffect(() => {
@@ -659,9 +672,11 @@ function Scene({
   }, [selectedId, camera]);
 
   const handleInternalClick = (path: string[], pos: THREE.Vector3, parentId: string) => {
-     setSelectedInternalPath(path);
-     onPathChange(path);
      if (path.length === 0) {
+        // Going back to dept root from 3D click — clear history
+        cameraHistoryRef.current = [];
+        setSelectedInternalPath([]);
+        onPathChange([]);
         const extNodeIdx = ACTIVE_NODES.findIndex(n => n.id === parentId);
         const extPos = EXTERNAL_NODE_POSITIONS[extNodeIdx];
         if (orbitRef.current && extPos) {
@@ -671,15 +686,64 @@ function Scene({
           gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.2, ease: 'power2.inOut' });
         }
      } else {
+        // Drilling into a sub-node — push current camera state so we can go back
+        if (orbitRef.current) {
+          cameraHistoryRef.current.push({
+            path: selectedInternalPath,
+            orbitTarget: orbitRef.current.target.clone(),
+            camPos: camera.position.clone(),
+          });
+        }
+        setSelectedInternalPath(path);
+        onPathChange(path);
         if (orbitRef.current) {
           gsap.to(orbitRef.current.target, { x: pos.x, y: pos.y, z: pos.z, duration: 1.0, ease: 'power2.inOut' });
           const dir = pos.clone().normalize();
           const zoomDist = 10;
-          const targetCamPos = pos.clone().add(dir.multiplyScalar(zoomDist)); 
+          const targetCamPos = pos.clone().add(dir.multiplyScalar(zoomDist));
           gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.0, ease: 'power2.inOut' });
         }
      }
   };
+
+  // ── Sidebar back-one-step request ────────────────────────────────────────
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!requestBackStep || requestBackStep === prevBackStepRef.current) return;
+    prevBackStepRef.current = requestBackStep;
+
+    const history = cameraHistoryRef.current;
+    if (history.length > 0) {
+      // Pop the last recorded camera state and animate back
+      const prev = history[history.length - 1];
+      cameraHistoryRef.current = history.slice(0, -1);
+      setSelectedInternalPath(prev.path);
+      onPathChange(prev.path);
+      if (orbitRef.current) {
+        gsap.to(orbitRef.current.target, {
+          x: prev.orbitTarget.x, y: prev.orbitTarget.y, z: prev.orbitTarget.z,
+          duration: 1.0, ease: 'power2.inOut',
+        });
+        gsap.to(camera.position, {
+          x: prev.camPos.x, y: prev.camPos.y, z: prev.camPos.z,
+          duration: 1.0, ease: 'power2.inOut',
+        });
+      }
+    } else {
+      // History empty — snap back to dept root
+      setSelectedInternalPath([]);
+      onPathChange([]);
+      if (selectedId && orbitRef.current) {
+        const extIdx = ACTIVE_NODES.findIndex(n => n.id === selectedId);
+        const extPos = ACTIVE_NODE_POSITIONS[extIdx];
+        if (extPos) {
+          gsap.to(orbitRef.current.target, { x: extPos.x, y: extPos.y, z: extPos.z, duration: 1.2, ease: 'power2.inOut' });
+          const dir = extPos.clone().normalize();
+          gsap.to(camera.position, { x: dir.multiplyScalar(24).x, y: dir.multiplyScalar(24).y, z: dir.multiplyScalar(24).z, duration: 1.2, ease: 'power2.inOut' });
+        }
+      }
+    }
+  }, [requestBackStep]);
 
   // Find neighbor IDs for the hovered node
   const neighborIds = useMemo(() => {
@@ -1020,6 +1084,7 @@ export default function UniversalPolytope({
   onDepartmentChange,
   onInternalPathChange,
   requestSelectDeptId,
+  requestBackStep,
 }: {
   companyName?: string;
   onExitIntent?: () => void;
@@ -1031,6 +1096,8 @@ export default function UniversalPolytope({
   onInternalPathChange?: (path: string[]) => void;
   /** When set, auto-flies camera to this department and selects it */
   requestSelectDeptId?: string | null;
+  /** Increment to trigger going back exactly one internal node level with camera animation */
+  requestBackStep?: number;
 }) {
   const [selectedId, setSelectedIdRaw] = useState<string | null>(null);
   const [backInfo, setBackInfo] = useState<{ label: string, onClick: () => void } | null>(null);
@@ -1062,53 +1129,14 @@ export default function UniversalPolytope({
           onExitIntent={onExitIntent}
           cameraResetTrigger={cameraResetTrigger}
           requestSelectDeptId={requestSelectDeptId}
+          requestBackStep={requestBackStep}
         />
       </Canvas>
 
       {/* Floating Analytic Info Card */}
       <AnalyticHoverCard hoveredId={hoveredId} departments={store.departments} />
 
-      {/* Back Button — hidden when embedded in BH overlay (transparent mode) */}
-      <button
-        onClick={() => {
-          if (backInfo) {
-            backInfo.onClick();
-          } else if (selectedId) {
-            setSelectedId(null);
-          } else {
-            navigate('/');
-          }
-        }}
-        style={{
-          display: transparent ? 'none' : 'flex',
-          position: 'fixed', top: '80px', left: '24px',
-          background: 'linear-gradient(135deg, rgba(20,10,40,0.8) 0%, rgba(5,4,15,0.9) 100%)',
-          border: '1px solid rgba(136, 170, 255, 0.4)',
-          boxShadow: '0 0 15px rgba(136, 170, 255, 0.3), inset 0 0 10px rgba(255, 170, 255, 0.1)',
-          borderRadius: '12px', padding: '10px 20px', color: '#e0eaff',
-          alignItems: 'center', gap: '10px',
-          cursor: 'pointer', backdropFilter: 'blur(12px)',
-          pointerEvents: 'auto', zIndex: 99999,
-          transition: 'all 0.3s ease',
-          fontWeight: 'bold', letterSpacing: '0.5px',
-          textTransform: 'uppercase', fontSize: '13px'
-        }}
-        onPointerOver={(e) => {
-          e.currentTarget.style.background = 'linear-gradient(135deg, rgba(40,20,80,0.9) 0%, rgba(15,10,30,0.95) 100%)';
-          e.currentTarget.style.boxShadow = '0 0 25px rgba(136, 170, 255, 0.6), inset 0 0 15px rgba(255, 170, 255, 0.3)';
-          e.currentTarget.style.borderColor = 'rgba(255, 170, 255, 0.6)';
-          e.currentTarget.style.transform = 'translateY(-2px)';
-        }}
-        onPointerOut={(e) => {
-          e.currentTarget.style.background = 'linear-gradient(135deg, rgba(20,10,40,0.8) 0%, rgba(5,4,15,0.9) 100%)';
-          e.currentTarget.style.boxShadow = '0 0 15px rgba(136, 170, 255, 0.3), inset 0 0 10px rgba(255, 170, 255, 0.1)';
-          e.currentTarget.style.borderColor = 'rgba(136, 170, 255, 0.4)';
-          e.currentTarget.style.transform = 'translateY(0)';
-        }}
-      >
-        <ArrowLeft size={18} />
-        {backInfo ? `Back to ${backInfo.label}` : (selectedId ? 'Back to Polytope' : 'Back to Home')}
-      </button>
+      
 
       {/* Department CRUD Manager — hidden when embedded in BH overlay */}
       {!transparent && (
