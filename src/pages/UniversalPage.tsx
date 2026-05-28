@@ -41,7 +41,7 @@ export default function UniversalPage() {
 
   // PolytopeManager (CRUD modal) — only used for edit/delete flows now
   const [managerOpen, setManagerOpen] = useState(false);
-  const [managerView, setManagerView] = useState<any>({ type: 'home' });
+  const [managerView, _setManagerView] = useState<any>({ type: 'home' });
 
   // Use the actual company name from the database, fallback to heuristic if loading
   const companyName = company?.name || (profile?.company_id

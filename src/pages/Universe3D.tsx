@@ -237,7 +237,7 @@ export default function Universe3DPage() {
   const [polytopeDeptId, setPolytopeDeptId] = useState<string | null>(null);
   const [polytopeInternalPath, setPolytopeInternalPath] = useState<string[]>([]);
   const [polytopeManagerOpen, setPolytopeManagerOpen] = useState(false);
-  const [polytopeManagerView, setPolytopeManagerView] = useState<any>({ type: 'home' });
+  const [polytopeManagerView, _setPolytopeManagerView] = useState<any>({ type: 'home' });
   // Separate state so clicking sidebar triggers camera fly-in without looping
   const [polytopeRequestSelectDeptId, setPolytopeRequestSelectDeptId] = useState<string | null | undefined>(undefined);
   // Counter incremented by sidebar back button to go back one internal level

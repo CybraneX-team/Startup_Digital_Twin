@@ -70,7 +70,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function ScoreSlider({ value, onChange, label }: { value: number; onChange: (v: number) => void; label: string }) {
+function ScoreSlider({ value, onChange, label: _label }: { value: number; onChange: (v: number) => void; label: string }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex justify-between text-[10px]" style={{ color: '#5E5E5E' }}>
@@ -93,7 +93,7 @@ function DeptFormContent({
   onDraftUpdate,
   onSave,
   onCancel,
-  accentColor,
+  accentColor: _accentColor,
 }: {
   onDraftUpdate?: (patch: Partial<Pick<UExternalNode, 'label' | 'domain'>>) => void;
   onSave: (data: Omit<UExternalNode, 'id' | 'internalNodes' | 'isDraft'>) => void;
