@@ -1,0 +1,195 @@
+import { useRef, useMemo } from 'react';
+import { useFrame } from '@react-three/fiber';
+import { Html } from '@react-three/drei';
+import * as THREE from 'three';
+import type { UExternalNode } from '../../lib/universalPolytopeData';
+import { PlasmaSphere } from '../PolytopeShared';
+import { GlowRing } from './GlowRing';
+import { InternalNode } from './InternalNode';
+
+interface ExternalNodeProps {
+  node: UExternalNode;
+  pos: THREE.Vector3;
+  isSelected: boolean;
+  isDimmed: boolean;
+  onClick: () => void;
+  color: string;
+  selectedInternalPath: string[];
+  onSelectInternal: (path: string[], pos: THREE.Vector3) => void;
+  setBackInfo: (info: { label: string; onClick: () => void } | null) => void;
+  isDeepDrillDown: boolean;
+  onHover: (id: string | null) => void;
+  idx: number;
+  isHovered: boolean;
+}
+
+export function ExternalNode({
+  node,
+  pos,
+  isSelected,
+  isDimmed,
+  onClick,
+  color,
+  selectedInternalPath,
+  onSelectInternal,
+  setBackInfo,
+  isDeepDrillDown,
+  onHover,
+  idx,
+  isHovered,
+}: ExternalNodeProps) {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const labelRef = useRef<HTMLDivElement>(null);
+  const linesMaterialRef = useRef<THREE.LineBasicMaterial>(null);
+
+  const fullLabel = node.label;
+  const shortLabel = fullLabel.split(/[\s_\-]/)[0] || fullLabel;
+
+  const internalPositions = useMemo(() => {
+    const pts: THREE.Vector3[] = [];
+    const count = node.internalNodes.length;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2;
+      const localUp = new THREE.Vector3(0, 1, 0);
+      const dir = pos.clone().normalize();
+      if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
+      const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();
+      const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+      const depthStep = 3.0;
+      const childCenter = pos.clone().add(dir.clone().multiplyScalar(depthStep));
+      const depthOffset = i % 2 === 0 ? 0.8 : -0.8;
+      const pt = childCenter.clone()
+        .add(dir.clone().multiplyScalar(depthOffset))
+        .add(right.clone().multiplyScalar(Math.cos(angle) * 1.8))
+        .add(up.clone().multiplyScalar(Math.sin(angle) * 1.8));
+      pts.push(pt);
+    }
+    return pts;
+  }, [node, pos]);
+
+  const internalEdgesGeometry = useMemo(() => {
+    if (internalPositions.length === 0) return null;
+    const pts: THREE.Vector3[] = [];
+    for (let i = 0; i < internalPositions.length; i++) {
+      pts.push(internalPositions[i].clone());
+      pts.push(internalPositions[(i + 1) % internalPositions.length].clone());
+      pts.push(internalPositions[i].clone());
+      pts.push(pos.clone());
+    }
+    return new THREE.BufferGeometry().setFromPoints(pts);
+  }, [internalPositions, pos]);
+
+  useFrame(state => {
+    if (meshRef.current) {
+      const targetScale = isSelected
+        ? isDeepDrillDown ? 0.0 : 1.5
+        : isDimmed ? 0.6 : 1.0;
+      meshRef.current.scale.lerp(
+        new THREE.Vector3(targetScale, targetScale, targetScale),
+        0.1
+      );
+    }
+    if (labelRef.current) {
+      const isFront = state.camera.position.dot(pos) > 0;
+      labelRef.current.style.opacity = isFront ? '1' : '0';
+      const dist = state.camera.position.distanceTo(pos);
+      const isClose = dist < 15;
+      const newText = isSelected || isClose ? fullLabel : shortLabel;
+      if (labelRef.current.innerText !== newText) labelRef.current.innerText = newText;
+    }
+    if (linesMaterialRef.current) {
+      const targetOpacity = isSelected && !isDeepDrillDown ? 0.3 : 0;
+      linesMaterialRef.current.opacity = THREE.MathUtils.lerp(
+        linesMaterialRef.current.opacity,
+        targetOpacity,
+        0.05
+      );
+    }
+  });
+
+  if (node.domain === 'inactive') return null;
+
+  return (
+    <group>
+      <group position={pos}>
+        <GlowRing color={color} active={!isDimmed} isSelected={isSelected} idx={idx} />
+      </group>
+      <group
+        ref={meshRef}
+        position={pos}
+        onClick={e => { e.stopPropagation(); onClick(); }}
+        onPointerOver={e => {
+          e.stopPropagation();
+          document.body.style.cursor = 'pointer';
+          onHover(node.id);
+        }}
+        onPointerOut={e => {
+          e.stopPropagation();
+          document.body.style.cursor = 'auto';
+          onHover(null);
+        }}
+      >
+        <PlasmaSphere
+          color={color}
+          radius={0.22}
+          opacity={isDimmed ? 0.08 : 1.0}
+          glowIntensity={isSelected ? 2.5 : isHovered ? 1.8 : 1.2}
+          depthWrite={!isDimmed}
+          speed={1.5}
+        />
+      </group>
+
+      {(!isDimmed || isSelected) && !isDeepDrillDown && (
+        <Html position={[pos.x, pos.y - 1.2, pos.z]} center zIndexRange={[100, 0]}>
+          <div
+            ref={labelRef}
+            style={{
+              color: 'white',
+              background: 'rgba(0,0,0,0.6)',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              fontSize: '12px',
+              fontWeight: 'bold',
+              backdropFilter: 'blur(4px)',
+              border: `1px solid ${color}40`,
+              pointerEvents: 'none',
+              whiteSpace: 'nowrap',
+              transition: 'opacity 0.2s',
+            }}
+          >
+            {node.label}
+          </div>
+        </Html>
+      )}
+
+      {isSelected && node.internalNodes.map((intNode, i) => {
+        const isChildVisible =
+          selectedInternalPath.length === 0 ||
+          selectedInternalPath[selectedInternalPath.length - 1] === intNode.id;
+        return (
+          <InternalNode
+            key={intNode.id}
+            node={intNode}
+            targetPos={internalPositions[i]}
+            startPos={pos}
+            color={color}
+            depth={1}
+            selectedPath={selectedInternalPath}
+            onSelectPath={onSelectInternal}
+            pathContext={[]}
+            parentPos={pos}
+            isVisible={isChildVisible}
+            parentLabel={node.label}
+            setBackInfo={setBackInfo}
+          />
+        );
+      })}
+
+      {isSelected && internalEdgesGeometry && (
+        <lineSegments geometry={internalEdgesGeometry}>
+          <lineBasicMaterial ref={linesMaterialRef} color={color} transparent opacity={0} />
+        </lineSegments>
+      )}
+    </group>
+  );
+}

@@ -2,7 +2,6 @@ import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-route
 import { AuthProvider, useAuth } from './lib/auth';
 import AuthGuard from './components/AuthGuard';
 import TopBar from './components/TopBar';
-import LandingPage from './pages/LandingPage';
 import Overview from './pages/Overview';
 import Twin from './pages/Twin';
 import Universe3D from './pages/Universe3D';
@@ -66,18 +65,19 @@ function RootRoute() {
   if (user && profile?.onboarding_completed && !profile?.company_id) return <Navigate to="/pending" replace />;
   // Everyone else (unauthenticated OR authenticated but not yet onboarded) sees the landing page.
   // The landing page's CTA buttons guide them to /auth → /onboarding.
-  return <LandingPage />;
+  return <LandingNew />;
 }
 
 function AppRoutes() {
   const location = useLocation();
   const { user, profile } = useAuth();
 
-  // /landing — custom nav, no default TopBar
-  if (location.pathname === '/landing') {
+  // / — public landing (custom nav, no default TopBar)
+  if (location.pathname === '/' || location.pathname === '/landing') {
     return (
       <Routes>
-        <Route path="/landing" element={<LandingNew />} />
+        <Route path="/" element={<RootRoute />} />
+        <Route path="/landing" element={<Navigate to="/" replace />} />
       </Routes>
     );
   }
@@ -169,9 +169,6 @@ function AppRoutes() {
           ) : (
             <main className="pt-14  pb-8 overflow-y-auto">
               <Routes>
-                {/* Root: redirect authenticated+onboarded users to dashboard */}
-                <Route path="/" element={<RootRoute />} />
-
                 {/* Authenticated app routes */}
                 <Route path="/overview" element={
                   <AuthGuard requireOnboarding>
@@ -257,8 +254,6 @@ function AppRoutes() {
                   </AuthGuard>
                 } />
 
-                {/* /landing — public liquid-glass landing page */}
-                <Route path="/landing" element={<LandingNew />} />
               </Routes>
             </main>
           )}

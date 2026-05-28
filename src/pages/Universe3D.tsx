@@ -11,7 +11,9 @@ import type { LocalCompany } from '../lib/localCompanies';
 import UniversalPolytope from '../components/UniversalPolytope';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
 import { PolytopeManager } from '../components/PolytopeManager';
+import CreateDepartmentPanel from '../components/CreateDepartmentPanel';
 import { usePolytopeStore } from '../lib/usePolytopeStore';
+import type { UExternalNode, UInternalNode } from '../lib/usePolytopeStore';
 
 // ── Side Panel ───────────────────────────────────────────────────────────────
 
@@ -241,17 +243,45 @@ export default function Universe3DPage() {
   // Counter incremented by sidebar back button to go back one internal level
   const [polytopeInternalBackStep, setPolytopeInternalBackStep] = useState(0);
 
+  // ── Draft dept/node state for inline creation panels ─────────────────────
+  const [polytopeDraftDept, setPolytopeDraftDept] = useState<UExternalNode | null>(null);
+  const polytopeDraftDeptScreenPosRef = useRef<{ x: number; y: number } | null>(null);
+  const [polytopeDraftInternalNode, setPolytopeDraftInternalNode] = useState<{ deptId: string; node: UInternalNode } | null>(null);
+  const polytopeDraftInternalNodeScreenPosRef = useRef<{ x: number; y: number } | null>(null);
+  // Incremented on draft create/cancel to fly camera back to overview
+  const [polytopeDraftResetTrigger, setPolytopeDraftResetTrigger] = useState(0);
+
   const handlePolytopeAddDepartment = useCallback(() => {
-    setPolytopeManagerView({ type: 'addDept' });
-    setPolytopeManagerOpen(true);
+    const draftId = `draft_dept_${Date.now()}`;
+    const draft: UExternalNode = {
+      id: draftId,
+      label: 'New Department',
+      domain: 'build',
+      cluster: '',
+      score: 75,
+      metrics: { performance: 75, efficiency: 75, capacity: 75, alignment: 75, risk: 25 },
+      internalNodes: [],
+      isDraft: true,
+    };
+    setPolytopeDraftDept(draft);
+    // Deselect current dept so camera returns to overview before flying to draft
+    setPolytopeRequestSelectDeptId(null);
   }, []);
 
   const handlePolytopeAddNode = useCallback((deptId: string) => {
     const dept = polytopeStore.departments.find(d => d.id === deptId);
-    if (dept) {
-      setPolytopeManagerView({ type: 'addNode', dept });
-      setPolytopeManagerOpen(true);
-    }
+    if (!dept) return;
+    const draftNode: UInternalNode = {
+      id: `draft_node_${Date.now()}`,
+      label: 'New Node',
+      type: 'team',
+      score: 75,
+      children: [],
+    };
+    setPolytopeDraftInternalNode({ deptId, node: draftNode });
+    // Ensure dept is selected so internal ring is visible
+    setPolytopeDeptId(deptId);
+    setPolytopeRequestSelectDeptId(deptId);
   }, [polytopeStore.departments]);
 
   // Called when the 3D scene selects a dept — only update sidebar, no camera re-trigger
@@ -514,11 +544,15 @@ export default function Universe3DPage() {
             companyName="Work OS Orbit"
             onExitIntent={handleBHExitIntent}
             transparent={true}
-            cameraResetTrigger={bhEntryCount}
+            cameraResetTrigger={bhEntryCount + polytopeDraftResetTrigger}
             requestSelectDeptId={polytopeRequestSelectDeptId}
             onDepartmentChange={handlePolytopeDeptChange}
             onInternalPathChange={setPolytopeInternalPath}
             requestBackStep={polytopeInternalBackStep}
+            draftDept={polytopeDraftDept}
+            draftNodeScreenPosRef={polytopeDraftDeptScreenPosRef}
+            draftInternalNode={polytopeDraftInternalNode}
+            draftInternalNodeScreenPosRef={polytopeDraftInternalNodeScreenPosRef}
           />
         )}
       </div>
@@ -567,8 +601,8 @@ export default function Universe3DPage() {
         />
       )}
 
-      {/* Bottom-left column: hidden when create modal is active */}
-      {!createModal && (
+      {/* Bottom-left column: hidden when create modal is active OR drafting dept/node */}
+      {!createModal && !polytopeDraftDept && !polytopeDraftInternalNode && (
         <div className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3">
           {/* When inside BH or Company polytope — show polytope dept sidebar */}
           {(insideBH || insideCompanyPolytope) ? (
@@ -652,7 +686,7 @@ export default function Universe3DPage() {
         </div>
       )}
 
-      {/* PolytopeManager modal for BH polytope — opened by sidebar Add buttons */}
+      {/* PolytopeManager modal for BH polytope — only for edit/delete flows */}
       <PolytopeManager
         departments={polytopeStore.departments}
         onAddDepartment={polytopeStore.addDepartment}
@@ -666,6 +700,54 @@ export default function Universe3DPage() {
         forcedView={polytopeManagerView}
         onForcedClose={() => setPolytopeManagerOpen(false)}
       />
+
+      {/* Draft Dept Creation Panel — BH/Company polytope */}
+      {(insideBH || insideCompanyPolytope) && polytopeDraftDept && (
+        <CreateDepartmentPanel
+          mode="department"
+          draftNodeScreenPosRef={polytopeDraftDeptScreenPosRef}
+          onDraftUpdate={(patch) => setPolytopeDraftDept(prev => prev ? { ...prev, ...patch } : prev)}
+          onClose={(isCancel) => {
+            if (isCancel) {
+              setPolytopeDraftDept(null);
+              setPolytopeRequestSelectDeptId(null);
+              setPolytopeDraftResetTrigger(c => c + 1);
+            }
+          }}
+          onCreated={(data) => {
+            const saved = polytopeStore.addDepartment(data as Omit<UExternalNode, 'id' | 'internalNodes' | 'isDraft'>);
+            setPolytopeDraftDept(null);
+            setPolytopeDraftResetTrigger(c => c + 1);
+            setPolytopeDeptId(saved.id);
+            setPolytopeRequestSelectDeptId(saved.id);
+          }}
+        />
+      )}
+
+      {/* Draft Internal Node Creation Panel — BH/Company polytope */}
+      {(insideBH || insideCompanyPolytope) && polytopeDraftInternalNode && (() => {
+        const dept = polytopeStore.departments.find(d => d.id === polytopeDraftInternalNode.deptId);
+        if (!dept) return null;
+        return (
+          <CreateDepartmentPanel
+            mode="node"
+            dept={dept}
+            draftNodeScreenPosRef={polytopeDraftInternalNodeScreenPosRef}
+            onDraftUpdate={(patch) => setPolytopeDraftInternalNode(prev => prev ? { ...prev, node: { ...prev.node, ...patch } } : prev)}
+            onClose={(isCancel) => {
+              if (isCancel) {
+                setPolytopeDraftInternalNode(null);
+                setPolytopeDraftResetTrigger(c => c + 1);
+              }
+            }}
+            onCreated={(data) => {
+              polytopeStore.addNode(polytopeDraftInternalNode.deptId, data as Omit<UInternalNode, 'id' | 'children'>);
+              setPolytopeDraftInternalNode(null);
+              setPolytopeDraftResetTrigger(c => c + 1);
+            }}
+          />
+        );
+      })()}
 
       {/* Hover detail panel — right side */}
       {hoverTarget && hoverTarget.type && (

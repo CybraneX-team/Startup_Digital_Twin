@@ -8,7 +8,7 @@ export default function ResearchSection() {
       <div style={{
         position: 'relative', width: '100%',
         minHeight: '100vh',
-        background: '#0e0e0e',
+        background: 'transparent',
         // backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.07) 1px, transparent 1px)`,
         backgroundSize: '28px 28px',
         overflow: 'hidden',

@@ -41,6 +41,8 @@ export interface UExternalNode {
     risk: number;
   };
   internalNodes: UInternalNode[];
+  /** Transient flag — draft nodes are rendered in-scene but not persisted */
+  isDraft?: boolean;
 }
 
 // ── Polytope vertex-count targets ───────────────────────────────────────────
