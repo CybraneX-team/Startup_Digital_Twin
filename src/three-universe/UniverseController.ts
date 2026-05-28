@@ -138,9 +138,22 @@ export class UniverseController {
       this.polytopeRenderer = new PolytopeRenderer(this.engine.scene);
       this.polytopeRenderer.renderPolytope("Work OS Orbit", industries, "#4ade80");
 
+      // Black-hole pre-zone: slow zoom as camera enters the 1800-unit pre-zone
+      // so users always get the same smooth, deliberate approach sensation.
+      this.galaxyParticles.onNearBH = (near: boolean) => {
+        if (this.cameraCtrl?.controls) {
+          this.cameraCtrl.controls.zoomSpeed = near ? 0.28 : 0.6;
+        }
+      };
+
       // Black-hole interior callbacks (wired after both deps exist)
       this.galaxyParticles.onEnterBH = () => {
         this._exitingBH = false; // allow exit to work if user re-enters
+        // Freeze the vanilla camera immediately — stops OrbitControls damping
+        // from coasting the camera past the trigger zone all the way to minDistance.
+        // Without this, camera can reach distance ~3 on first entry, making flyToGalaxy
+        // compute a bad exit direction, and making the second approach feel totally different.
+        this.cameraCtrl.controls.enableZoom = false;
         this.systemParticles?.setVisible(false);
         this.polytopeRenderer?.setVisible(false);
         this._callbacks?.onEnterBH?.();
@@ -597,8 +610,19 @@ export class UniverseController {
     ctrl.isTransitioning = false;
 
     // Disable zoom only — prevents user scroll fighting the fly animation.
-    // Orbit rotation stays enabled so it doesn't feel frozen.
     ctrl.controls.enableZoom = false;
+
+    // If camera coasted to near-origin despite the onEnterBH freeze (e.g. race
+    // condition), nudge it out to at least 700 units so flyTo has a valid
+    // direction vector and the exit always looks the same regardless of entry depth.
+    if (cam.position.lengthSq() < 700 * 700) {
+      const safeDir = cam.position.lengthSq() > 1
+        ? cam.position.clone().normalize()
+        : new THREE.Vector3(0.4, 0.35, 0.85).normalize();
+      cam.position.copy(safeDir.multiplyScalar(700));
+      ctrl.controls.target.set(0, 0, 0);
+      ctrl.controls.update();
+    }
 
     // Force-restore galaxy geometry visibility.
     this.galaxyParticles?.setVisible(true);
@@ -611,6 +635,7 @@ export class UniverseController {
     setTimeout(() => {
       ctrl.controls.enableZoom = true;
       ctrl.controls.enabled    = true;
+      ctrl.controls.zoomSpeed  = 0.6; // restore full speed (pre-zone callback restores on exit anyway, but be explicit)
       ctrl.isTransitioning     = false;
       ctrl.controls.update();
       this._exitingBH = false;

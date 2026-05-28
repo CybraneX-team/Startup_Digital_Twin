@@ -60,10 +60,12 @@ export class GalaxyParticles {
     this._createUniverseSphere();
     this._createBlackHole();
     this._createBlackHoleInterior();
-    this.onEnterBH = null;
-    this.onExitBH  = null;
-    this._insideBH = false;
-    this._insideEH = false;
+    this.onEnterBH  = null;
+    this.onExitBH   = null;
+    this.onNearBH   = null;  // fired entering/leaving the slow-approach pre-zone
+    this._insideBH  = false;
+    this._insideEH  = false;
+    this._nearBH    = false;
     this._bhEnabled = true;  // disabled during subdomain/solar-system view
   }
 
@@ -764,13 +766,21 @@ export class GalaxyParticles {
     // Animate accretion particle disk
     if (this._bhAccretionMat) this._bhAccretionMat.uniforms.uTime.value = elapsed;
 
-    // Black hole — two-stage camera detection (disabled during subdomain solar-system view)
+    // Black hole — three-stage camera detection (disabled during subdomain solar-system view)
     if (camPos && this._bhEnabled) {
       const distSq = camPos.lengthSq();
-      const EH_R   = 900;
-      const POLY_R_TRIGGER = 750; // appears ~150 units after crossing EH at 900
+      const SLOW_R         = 1800; // pre-zone: reduce zoomSpeed for smooth approach
+      const EH_R           = 900;
+      const POLY_R_TRIGGER = 750;
 
-      // ── Stage 1: entered event horizon → fade galaxy, stay dark ───────
+      // ── Stage 0: pre-zone → halve zoom speed for controlled approach ────
+      const nearBH = distSq < SLOW_R * SLOW_R;
+      if (nearBH !== this._nearBH) {
+        this._nearBH = nearBH;
+        if (this.onNearBH) this.onNearBH(nearBH);
+      }
+
+      // ── Stage 1: entered event horizon → fade galaxy, stay dark ─────────
       const insideEH = distSq < EH_R * EH_R;
       if (insideEH !== this._insideEH) {
         this._insideEH = insideEH;
@@ -794,9 +804,10 @@ export class GalaxyParticles {
     this._bhEnabled = v;
     if (this._bhGroup) this._bhGroup.visible = v;
     if (!v) {
-      // Reset internal state so the trigger fires cleanly on next enable
+      // Reset internal state so the triggers fire cleanly on next enable
       this._insideBH = false;
       this._insideEH = false;
+      this._nearBH   = false;
     }
   }
 

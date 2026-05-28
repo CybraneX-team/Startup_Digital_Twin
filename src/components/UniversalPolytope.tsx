@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useEffect } from 'react';
+import { useRef, useState, useMemo, useEffect, useCallback } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Stars, Sparkles, Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -8,9 +8,7 @@ import { usePolytopeStore } from '../lib/usePolytopeStore';
 import { PolytopeManager } from './PolytopeManager';
 import { OrgCore, PlasmaSphere } from './PolytopeShared';
 import { gsap } from 'gsap';
-import { ArrowLeft } from 'lucide-react';
 import { ConvexGeometry } from 'three-stdlib';
-import { useNavigate } from 'react-router-dom';
 
 
 
@@ -1100,9 +1098,10 @@ export default function UniversalPolytope({
   requestBackStep?: number;
 }) {
   const [selectedId, setSelectedIdRaw] = useState<string | null>(null);
-  const [backInfo, setBackInfo] = useState<{ label: string, onClick: () => void } | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
-  const navigate = useNavigate();
+  // backInfo would normally drive an in-canvas back button, but in overlay/transparent
+  // mode that UI isn't rendered — use a no-op so sub-components still work.
+  const setBackInfo = useCallback((_info: { label: string; onClick: () => void } | null) => {}, []);
 
   // Wrap setter to fire callback
   const setSelectedId = (id: string | null) => {

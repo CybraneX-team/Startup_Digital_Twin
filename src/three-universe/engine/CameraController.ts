@@ -114,11 +114,16 @@ export class CameraController {
     this.controls.autoRotate = false;
 
     // Calculate camera destination
-    const currentDir = new THREE.Vector3()
-      .subVectors(this.camera.position, this.controls.target)
-      .normalize();
+    const toCam = new THREE.Vector3().subVectors(this.camera.position, this.controls.target);
+    const toCamLen = toCam.length();
 
-    // If direction is too vertical, adjust
+    // Degenerate: camera at/very near target (e.g. coasted to BH center).
+    // Use a fixed "safe" direction so every galaxy exit looks the same.
+    const currentDir = toCamLen < 150
+      ? new THREE.Vector3(0.4, 0.35, 0.85).normalize()
+      : toCam.divideScalar(toCamLen); // manual normalize to reuse already-computed length
+
+    // Prevent near-vertical direction (gimbal-lock feeling)
     if (Math.abs(currentDir.y) > 0.9) {
       currentDir.set(0.5, 0.4, 0.5).normalize();
     }
