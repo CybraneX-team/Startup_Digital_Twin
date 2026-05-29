@@ -585,11 +585,11 @@ export default function Universe3DPage() {
                 ? () => setPolytopeInternalBackStep(c => c + 1)
                 : () => setCompanyPolytopeInternalBackStep(c => c + 1)
               }
-              onExitToSubdomain={insideCompanyPolytope ? handleCompanyPolytopeBackToSubdomain : undefined}
+              onExitToSubdomain={insideCompanyPolytope ? handleCompanyPolytopeBackToSubdomain : handleBHExitIntent}
               exitToSubdomainLabel={
                 insideCompanyPolytope
                   ? (navPath.find(p => p.level === 'subdomain')?.name ?? 'Subdomain')
-                  : undefined
+                  : 'Galaxy'
               }
             />
           ) : (

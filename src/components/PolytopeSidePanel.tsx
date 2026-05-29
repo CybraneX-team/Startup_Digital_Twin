@@ -3,7 +3,6 @@ import { Search, Command, ArrowLeft, Plus, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
 import { U_DOMAIN_COLOR } from '../lib/universalPolytopeData';
-import { UniverseNavBackButton } from './UniverseNavBackButton';
 
 export interface PolytopeSidePanelProps {
   departments: UExternalNode[];
@@ -137,6 +136,31 @@ export function PolytopeSidePanel({
     : allVisibleNodes;
   const deptColor = effectiveDept ? (U_DOMAIN_COLOR[effectiveDept.domain] ?? '#6366f1') : '#C1AEFF';
 
+  // Dynamic back button logic based on drill-down level
+  let backLabel: string | null = null;
+  let onBackClick: (() => void) | null = null;
+  let backColor = '#C1AEFF';
+
+  if (selectedInternalPath.length > 0) {
+    onBackClick = () => onInternalBack?.();
+    backColor = deptColor;
+    if (selectedInternalPath.length === 1) {
+      backLabel = effectiveDept ? `Back to ${effectiveDept.label}` : 'Back to Department';
+    } else {
+      const parentPath = selectedInternalPath.slice(0, -1);
+      const parentNode = effectiveDept ? findNodeAtPath(effectiveDept.internalNodes, parentPath) : null;
+      backLabel = parentNode ? `Back to ${parentNode.label}` : 'Back';
+    }
+  } else if (selectedDeptId !== null && effectiveDept !== null) {
+    onBackClick = () => onDeptSelect(null);
+    backColor = deptColor;
+    backLabel = 'Back to Departments';
+  } else if (onExitToSubdomain) {
+    onBackClick = onExitToSubdomain;
+    backColor = '#C1AEFF';
+    backLabel = `Back to ${exitToSubdomainLabel ?? 'solar system'}`;
+  }
+
   // Key that forces list re-animation on level change
   const listKey = `${isSearchActive ? 'search-' + q : (selectedDeptId ?? 'root')}-${selectedInternalPath.join('.')}`;
 
@@ -208,11 +232,24 @@ export function PolytopeSidePanel({
         </div>
       </div>
 
-      {onExitToSubdomain && (
-        <UniverseNavBackButton
-          label={`Back to ${exitToSubdomainLabel ?? 'solar system'}`}
-          onClick={onExitToSubdomain}
-        />
+      {backLabel && onBackClick && (
+        <button
+          type="button"
+          onClick={onBackClick}
+          className="flex items-center gap-2 px-3 py-2.5 rounded-2xl text-[11px] font-semibold transition-all hover:opacity-90 active:scale-[0.98] panel-slide-in"
+          style={{
+            width: '196px',
+            background: 'rgba(0, 0, 0, 0.72)',
+            backdropFilter: 'blur(14px)',
+            WebkitBackdropFilter: 'blur(14px)',
+            border: `1px solid ${backColor}5a`,
+            color: backColor,
+            boxShadow: '0 8px 24px rgba(0,0,0,0.45)',
+          }}
+        >
+          <ArrowLeft className="w-3.5 h-3.5 shrink-0" />
+          <span className="truncate">{backLabel}</span>
+        </button>
       )}
 
       {/* ── Main panel ── */}
@@ -228,59 +265,6 @@ export function PolytopeSidePanel({
           boxShadow: '0 12px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04)',
         }}
       >
-        {/* ── Back nav ── */}
-        {showingNodes && (
-          <div
-            className="flex items-center gap-2 px-3 pt-3 pb-2 shrink-0 panel-slide-in"
-            style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
-          >
-            {selectedInternalPath.length > 0 ? (
-              /* Inside sub-nodes — prominent one-step back button */
-              <div className="flex items-center justify-between w-full">
-                <button
-                  onClick={() => onInternalBack?.()}
-                  className="flex items-center gap-1.5 text-[11px] font-semibold transition-all active:scale-95"
-                  style={{
-                    color: deptColor,
-                    background: `${deptColor}18`,
-                    border: `1px solid ${deptColor}35`,
-                    padding: '4px 10px',
-                    borderRadius: '8px',
-                    transition: 'all 0.15s ease',
-                  }}
-                  onMouseEnter={e => {
-                    (e.currentTarget as HTMLButtonElement).style.background = `${deptColor}30`;
-                    (e.currentTarget as HTMLButtonElement).style.boxShadow = `0 0 10px ${deptColor}40`;
-                  }}
-                  onMouseLeave={e => {
-                    (e.currentTarget as HTMLButtonElement).style.background = `${deptColor}18`;
-                    (e.currentTarget as HTMLButtonElement).style.boxShadow = 'none';
-                  }}
-                >
-                  <ArrowLeft className="w-3 h-3" />
-                  Back
-                </button>
-                <button
-                  onClick={() => onDeptSelect(null)}
-                  className="text-[10px] transition-colors hover:text-gray-400"
-                  style={{ color: '#5E5E5E' }}
-                >
-                  Departments
-                </button>
-              </div>
-            ) : (
-              /* At dept root — go back to departments list */
-              <button
-                onClick={() => onDeptSelect(null)}
-                className="flex items-center gap-1.5 text-[11px] font-medium transition-colors hover:text-white"
-                style={{ color: '#C1AEFF' }}
-              >
-                <ArrowLeft className="w-3 h-3" />
-                Departments
-              </button>
-            )}
-          </div>
-        )}
 
         {/* ── Section header ── */}
         <div key={listKey + '-hdr'} className="px-3 pt-3 pb-1 shrink-0 panel-slide-in">
