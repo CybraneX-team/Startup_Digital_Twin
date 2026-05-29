@@ -11,7 +11,14 @@ import { symmetricDirs, seededShuffle } from './geometry';
 import { vertexShader, fragmentShader } from './shaders';
 import { GlowRing } from './GlowRing';
 import { ExternalNode } from './ExternalNode';
-import { computeDraftInternalNodePosition, computeInternalNodePosition, findNodeAtPath, computeDraftChildNodePosition } from './internalNodeLayout';
+import {
+  computeDraftInternalNodePosition,
+  computeInternalNodePosition,
+  findNodeAtPath,
+  computeDraftChildNodePosition,
+} from './internalNodeLayout';
+import type { CoreWorkspacePhase } from '../../lib/coreWorkspaceTransition';
+import { CORE_DIVE_DURATION_S, CORE_SURFACE_DURATION_S } from '../../lib/coreWorkspaceTransition';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -37,6 +44,12 @@ export interface SceneProps {
   /** Ref that Scene writes the draft internal node's screen-space position to each frame */
   draftInternalNodeScreenPosRef?: MutableRefObject<{ x: number; y: number } | null>;
   selectedInternalPathProps?: string[];
+  /** BDT: click core → dive animation → workspace */
+  enableCoreWorkspace?: boolean;
+  coreWorkspacePhase?: CoreWorkspacePhase;
+  onCoreClickIntent?: () => void;
+  onCoreDiveComplete?: () => void;
+  onCoreSurfaceComplete?: () => void;
 }
 
 function findNodePosition(
@@ -114,7 +127,19 @@ export function Scene({
   draftInternalNode,
   draftInternalNodeScreenPosRef,
   selectedInternalPathProps,
+  enableCoreWorkspace = false,
+  coreWorkspacePhase = 'idle',
+  onCoreClickIntent,
+  onCoreDiveComplete,
+  onCoreSurfaceComplete,
 }: SceneProps) {
+  const diveBlendRef = useRef({ value: 0 });
+  const savedOverviewRef = useRef<{ camPos: THREE.Vector3; orbitTarget: THREE.Vector3 } | null>(null);
+  const coreAnimTokenRef = useRef(0);
+  const isCoreTransitioning =
+    coreWorkspacePhase === 'diving-in' ||
+    coreWorkspacePhase === 'workspace' ||
+    coreWorkspacePhase === 'surfacing';
   // ── Derive geometry ───────────────────────────────────────────────────────
   // Draft dept is included so the convex hull + shader preview the exact final state.
   const {
@@ -144,7 +169,7 @@ export function Scene({
   const orbitRef = useRef<any>(null);
   const { camera, gl } = useThree();
 
-  // ── Exit intent (scroll out while inside BH) ──────────────────────────────
+  // ── Exit intent (universe BH overlay only — not used for BDT workspace) ───
   const onExitIntentRef = useRef(onExitIntent);
   onExitIntentRef.current = onExitIntent;
   useEffect(() => {
@@ -222,7 +247,7 @@ export function Scene({
 
   // ── Camera reset to overview (entry, create confirm, draft dept cancel) ────
   useEffect(() => {
-    if (!cameraResetTrigger) return;
+    if (!cameraResetTrigger || coreWorkspacePhase !== 'idle') return;
     setSelectedId(null);
     setSelectedInternalPath([]);
     onPathChange([]);
@@ -236,6 +261,95 @@ export function Scene({
   const facesMatRef = useRef<THREE.ShaderMaterial>(null);
   const coreGroupRef = useRef<THREE.Group>(null);
   const cameraPosRef = useRef(new THREE.Vector3());
+
+  const runCoreDiveAnimation = () => {
+    const token = ++coreAnimTokenRef.current;
+    gsap.killTweensOf(camera.position);
+    if (orbitRef.current) gsap.killTweensOf(orbitRef.current.target);
+    if (orbitRef.current) {
+      savedOverviewRef.current = {
+        camPos: camera.position.clone(),
+        orbitTarget: orbitRef.current.target.clone(),
+      };
+    }
+    setSelectedId(null);
+    setSelectedInternalPath([]);
+    onPathChange([]);
+    cameraHistoryRef.current = [];
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        if (token !== coreAnimTokenRef.current) return;
+        onCoreDiveComplete?.();
+      },
+    });
+
+    tl.to(diveBlendRef.current, { value: 1, duration: CORE_DIVE_DURATION_S, ease: 'power4.inOut' }, 0);
+
+    if (orbitRef.current) {
+      tl.to(orbitRef.current.target, { x: 0, y: 0, z: 0, duration: CORE_DIVE_DURATION_S, ease: 'power4.inOut' }, 0);
+    }
+    tl.to(
+      camera.position,
+      { x: 0, y: 0, z: 2.15, duration: CORE_DIVE_DURATION_S, ease: 'power4.inOut' },
+      0,
+    );
+  };
+
+  const runCoreSurfaceAnimation = () => {
+    const token = ++coreAnimTokenRef.current;
+    gsap.killTweensOf(camera.position);
+    if (orbitRef.current) gsap.killTweensOf(orbitRef.current.target);
+    const saved = savedOverviewRef.current;
+    const camTarget = saved?.camPos ?? new THREE.Vector3(0, 0, INITIAL_CAMERA_DISTANCE);
+    const orbitTarget = saved?.orbitTarget ?? new THREE.Vector3(0, 0, 0);
+
+    const tl = gsap.timeline({
+      onComplete: () => {
+        if (token !== coreAnimTokenRef.current) return;
+        savedOverviewRef.current = null;
+        onCoreSurfaceComplete?.();
+      },
+    });
+
+    tl.to(diveBlendRef.current, { value: 0, duration: CORE_SURFACE_DURATION_S, ease: 'power3.out' }, 0);
+
+    if (orbitRef.current) {
+      tl.to(
+        orbitRef.current.target,
+        { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: CORE_SURFACE_DURATION_S, ease: 'power3.out' },
+        0,
+      );
+    }
+    tl.to(
+      camera.position,
+      { x: camTarget.x, y: camTarget.y, z: camTarget.z, duration: CORE_SURFACE_DURATION_S, ease: 'power3.out' },
+      0,
+    );
+  };
+
+  const prevCorePhaseRef = useRef<CoreWorkspacePhase>('idle');
+  useEffect(() => {
+    const prev = prevCorePhaseRef.current;
+    prevCorePhaseRef.current = coreWorkspacePhase;
+
+    if (coreWorkspacePhase === 'diving-in' && prev !== 'diving-in') {
+      runCoreDiveAnimation();
+    }
+    if (coreWorkspacePhase === 'surfacing' && prev !== 'surfacing') {
+      runCoreSurfaceAnimation();
+    }
+    if (coreWorkspacePhase === 'idle' && prev === 'workspace') {
+      diveBlendRef.current.value = 0;
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coreWorkspacePhase]);
+
+  const handleCoreClick = () => {
+    if (!enableCoreWorkspace || coreWorkspacePhase !== 'idle') return;
+    if (selectedId || isDeepDrillDown || draftDept) return;
+    onCoreClickIntent?.();
+  };
 
   // ── Camera history for sidebar back-step navigation ───────────────────────
   const cameraHistoryRef = useRef<Array<{
@@ -423,10 +537,12 @@ export function Scene({
   // ── Per-frame updates ─────────────────────────────────────────────────────
   useFrame(() => {
     camera.getWorldPosition(cameraPosRef.current);
+    const dive = diveBlendRef.current.value;
     if (facesMatRef.current) {
       facesMatRef.current.uniforms.uCameraPos.value.copy(cameraPosRef.current);
       let targetOpacity = selectedId !== null ? 0.03 : 0.22;
       if (hoveredId !== null) targetOpacity = 0.04;
+      targetOpacity *= 1 - dive * 0.92;
       facesMatRef.current.uniforms.uOpacity.value = THREE.MathUtils.lerp(
         facesMatRef.current.uniforms.uOpacity.value,
         targetOpacity,
@@ -434,10 +550,12 @@ export function Scene({
       );
     }
     if (coreGroupRef.current) {
-      const targetScale = isDeepDrillDown ? 0.0 : 1.0;
+      const deepScale = isDeepDrillDown ? 0.0 : 1.0;
+      const diveScale = 1 + dive * 2.8;
+      const targetScale = deepScale * diveScale;
       coreGroupRef.current.scale.lerp(
         new THREE.Vector3(targetScale, targetScale, targetScale),
-        0.1
+        0.12
       );
     }
   });
@@ -575,7 +693,19 @@ export function Scene({
 
       <group onPointerMissed={handlePointerMissed}>
         <group ref={coreGroupRef}>
-          <OrgCore dimmed={selectedId !== null} companyName={companyName} isDeepDrillDown={isDeepDrillDown} />
+          <OrgCore
+            dimmed={selectedId !== null && coreWorkspacePhase === 'idle'}
+            companyName={companyName}
+            isDeepDrillDown={isDeepDrillDown}
+            showWorkspaceCta={
+              enableCoreWorkspace &&
+              coreWorkspacePhase === 'idle' &&
+              !selectedId &&
+              !isDeepDrillDown &&
+              !draftDept
+            }
+            onClick={enableCoreWorkspace ? handleCoreClick : undefined}
+          />
         </group>
 
         {ACTIVE_NODES.map((node, i) => {
@@ -614,7 +744,10 @@ export function Scene({
 
           const isSelected = selectedId === node.id;
           const isHighlighted = hoveredId === null || node.id === hoveredId || neighborIds.includes(node.id);
-          const isDimmed = (selectedId !== null && selectedId !== node.id) || (hoveredId !== null && !isHighlighted);
+          const isDimmed =
+            isCoreTransitioning ||
+            (selectedId !== null && selectedId !== node.id) ||
+            (hoveredId !== null && !isHighlighted);
           const color = '#' + NODE_COLORS[i].getHexString();
 
           const draftChild =
@@ -668,6 +801,7 @@ export function Scene({
         minDistance={5}
         maxDistance={40}
         enablePan={false}
+        enabled={coreWorkspacePhase === 'idle'}
       />
     </>
   );

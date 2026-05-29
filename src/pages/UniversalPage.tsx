@@ -1,12 +1,14 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import UniversalPolytope from '../components/UniversalPolytope';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
 import { PolytopeManager } from '../components/PolytopeManager';
 import CreateDepartmentPanel from '../components/CreateDepartmentPanel';
+import { ProductWorkspace } from '../components/workspace/ProductWorkspace';
 import { usePolytopeStore } from '../lib/usePolytopeStore';
 import type { UExternalNode, UInternalNode } from '../lib/usePolytopeStore';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/db/companies';
+import type { CoreWorkspacePhase } from '../lib/coreWorkspaceTransition';
 
 export default function UniversalPage() {
   const { profile } = useAuth();
@@ -62,6 +64,12 @@ export default function UniversalPage() {
     setManagerView({ type: 'deleteNode', dept, node });
     setManagerOpen(true);
   };
+
+  // Product workspace — click core → dive in → workspace; back → surface out
+  const [corePhase, setCorePhase] = useState<CoreWorkspacePhase>('idle');
+  const [workspaceMounted, setWorkspaceMounted] = useState(false);
+  const [workspaceAnim, setWorkspaceAnim] = useState<'enter' | 'exit' | null>(null);
+  const isPolytopeInteractive = corePhase === 'idle';
 
   // Use the actual company name from the database, fallback to heuristic if loading
   const companyName = company?.name || (profile?.company_id
@@ -168,26 +176,110 @@ export default function UniversalPage() {
     }
   };
 
+  const clearPolytopeSelection = useCallback(() => {
+    setSelectedDeptId(null);
+    setInternalPath([]);
+    setRequestSelectDeptId(null);
+    setInternalBackStep(0);
+    setDraftDept(null);
+    setDraftInternalNode(null);
+  }, []);
+
+  const handleCoreClickIntent = useCallback(() => {
+    if (corePhase !== 'idle') return;
+    clearPolytopeSelection();
+    setCorePhase('diving-in');
+  }, [corePhase, clearPolytopeSelection]);
+
+  const handleCoreDiveComplete = useCallback(() => {
+    setWorkspaceAnim('enter');
+    setWorkspaceMounted(true);
+    setCorePhase('workspace');
+  }, []);
+
+  const handleBackToCompany = useCallback(() => {
+    if (corePhase !== 'workspace') return;
+    setWorkspaceAnim('exit');
+  }, [corePhase]);
+
+  const handleWorkspaceExitAnimationEnd = useCallback(() => {
+    setWorkspaceMounted(false);
+    setWorkspaceAnim(null);
+    setCorePhase('surfacing');
+  }, []);
+
+  const handleCoreSurfaceComplete = useCallback(() => {
+    setCorePhase('idle');
+  }, []);
+
   return (
     <div className="w-full h-[calc(100vh-56px)] -mb-8 bg-black overflow-hidden relative">
       {/* ── 3D Polytope Canvas ── */}
-      <UniversalPolytope
-        companyName={companyName}
-        onDepartmentChange={handleDepartmentChange}
-        onInternalPathChange={setInternalPath}
-        requestSelectDeptId={requestSelectDeptId}
-        requestBackStep={internalBackStep}
-        draftDept={draftDept}
-        draftNodeScreenPosRef={draftDeptScreenPosRef}
-        draftInternalNode={draftInternalNode}
-        draftInternalNodeScreenPosRef={draftInternalNodeScreenPosRef}
-        cameraResetTrigger={polytopeResetTrigger}
-        departments={store.departments}
-        selectedInternalPath={internalPath}
-      />
+      <div
+        className="absolute inset-0"
+        style={{
+          opacity: corePhase === 'workspace' ? 0 : 1,
+          pointerEvents: isPolytopeInteractive ? 'auto' : 'none',
+          transition: corePhase === 'workspace' ? 'opacity 0.35s ease-out' : 'opacity 0.5s ease-in',
+        }}
+      >
+        <UniversalPolytope
+          companyName={companyName}
+          onDepartmentChange={handleDepartmentChange}
+          onInternalPathChange={setInternalPath}
+          requestSelectDeptId={requestSelectDeptId}
+          requestBackStep={internalBackStep}
+          draftDept={draftDept}
+          draftNodeScreenPosRef={draftDeptScreenPosRef}
+          draftInternalNode={draftInternalNode}
+          draftInternalNodeScreenPosRef={draftInternalNodeScreenPosRef}
+          cameraResetTrigger={polytopeResetTrigger}
+          departments={store.departments}
+          selectedInternalPath={internalPath}
+          enableCoreWorkspace
+          coreWorkspacePhase={corePhase}
+          onCoreClickIntent={handleCoreClickIntent}
+          onCoreDiveComplete={handleCoreDiveComplete}
+          onCoreSurfaceComplete={handleCoreSurfaceComplete}
+        />
+      </div>
+
+      {/* Core dive light burst (during camera fly-in) */}
+      {corePhase === 'diving-in' && (
+        <div
+          className="absolute inset-0 z-[65] flex items-center justify-center core-dive-flash"
+          aria-hidden
+        >
+          <div
+            className="w-[min(90vw,520px)] aspect-square rounded-full"
+            style={{
+              background: 'radial-gradient(circle, rgba(193,174,255,0.5) 0%, rgba(30,58,138,0.35) 40%, transparent 70%)',
+            }}
+          />
+        </div>
+      )}
+
+      {/* ── Product workspace (after core dive completes) ── */}
+      {workspaceMounted && (
+        <div
+          className={`absolute inset-0 z-[70] ${
+            workspaceAnim === 'enter' ? 'workspace-panel-enter' : ''
+          } ${workspaceAnim === 'exit' ? 'workspace-panel-exit' : ''}`}
+          onAnimationEnd={e => {
+            if (e.animationName === 'workspace-exit') handleWorkspaceExitAnimationEnd();
+          }}
+        >
+          <ProductWorkspace
+            company={company}
+            companyName={companyName}
+            onBackToCompany={handleBackToCompany}
+            exiting={workspaceAnim === 'exit'}
+          />
+        </div>
+      )}
 
       {/* ── Left sidebar panel — hidden when create panel is shown ── */}
-      {!draftDept && !draftInternalNode && (
+      {isPolytopeInteractive && !draftDept && !draftInternalNode && (
         <div className="fixed bottom-6 left-4 z-[60] pointer-events-auto">
           <PolytopeSidePanel
             departments={store.departments}

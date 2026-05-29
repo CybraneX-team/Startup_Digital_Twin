@@ -6,7 +6,20 @@ import * as THREE from 'three';
 /* ─────────────────────────────────
    ORG CORE — large luminous nucleus with company name
 ───────────────────────────────── */
-export function OrgCore({ dimmed, companyName, isDeepDrillDown = false }: { dimmed: boolean; companyName: string; isDeepDrillDown?: boolean }) {
+export function OrgCore({
+  dimmed,
+  companyName,
+  isDeepDrillDown = false,
+  onClick,
+  showWorkspaceCta = false,
+}: {
+  dimmed: boolean;
+  companyName: string;
+  isDeepDrillDown?: boolean;
+  onClick?: () => void;
+  /** BDT: static CTA on core — click to dive into workspace */
+  showWorkspaceCta?: boolean;
+}) {
   const meshRef  = useRef<THREE.Group>(null);
   const ringMat  = useRef<THREE.MeshBasicMaterial>(null);
 
@@ -19,8 +32,26 @@ export function OrgCore({ dimmed, companyName, isDeepDrillDown = false }: { dimm
 
   return (
     <group>
-      {/* Plasma Sphere Core */}
+      {/* Plasma Sphere Core — click or zoom to open workspace (BDT) */}
       <group ref={meshRef}>
+        <mesh
+          onClick={e => {
+            e.stopPropagation();
+            onClick?.();
+          }}
+          onPointerOver={e => {
+            if (onClick) {
+              e.stopPropagation();
+              document.body.style.cursor = 'pointer';
+            }
+          }}
+          onPointerOut={() => {
+            document.body.style.cursor = 'auto';
+          }}
+        >
+          <sphereGeometry args={[1.35, 32, 32]} />
+          <meshBasicMaterial visible={false} />
+        </mesh>
         <PlasmaSphere 
            radius={1.2} 
            color="#1e3a8a" // Navy blue core
@@ -41,10 +72,14 @@ export function OrgCore({ dimmed, companyName, isDeepDrillDown = false }: { dimm
             textAlign="center"
             anchorX="center"
             anchorY="middle"
-            fillOpacity={isDeepDrillDown ? 0 : (dimmed ? 0.9 : 0)}
+            fillOpacity={
+              isDeepDrillDown ? 0 : dimmed || showWorkspaceCta ? 0.95 : 0
+            }
             outlineWidth={0.01}
             outlineColor="#0f172a"
-            outlineOpacity={isDeepDrillDown ? 0 : (dimmed ? 0.6 : 0)}
+            outlineOpacity={
+              isDeepDrillDown ? 0 : dimmed || showWorkspaceCta ? 0.6 : 0
+            }
           >
             {companyName}
           </Text>
@@ -56,12 +91,38 @@ export function OrgCore({ dimmed, companyName, isDeepDrillDown = false }: { dimm
             textAlign="center"
             anchorX="center"
             anchorY="middle"
-            fillOpacity={isDeepDrillDown ? 0 : (dimmed ? 0.6 : 0)}
+            fillOpacity={
+              isDeepDrillDown ? 0 : dimmed || showWorkspaceCta ? 0.65 : 0
+            }
           >
             CORE
           </Text>
         </group>
       </Billboard>
+
+      {/* CTA below core — same treatment as company name above */}
+      {showWorkspaceCta && !isDeepDrillDown && (
+        <Billboard follow lockX={false} lockY={false} lockZ={false}>
+          <group position={[0, -1.65, 0]}>
+            <Text
+              color="#ffffff"
+              fontSize={0.2}
+              maxWidth={4.2}
+              lineHeight={1.15}
+              letterSpacing={0.1}
+              textAlign="center"
+              anchorX="center"
+              anchorY="middle"
+              fillOpacity={0.95}
+              outlineWidth={0.01}
+              outlineColor="#0f172a"
+              outlineOpacity={0.55}
+            >
+              Click to enter your workspace
+            </Text>
+          </group>
+        </Billboard>
+      )}
     </group>
   );
 }

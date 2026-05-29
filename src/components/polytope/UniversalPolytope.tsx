@@ -6,6 +6,7 @@ import { PolytopeManager } from '../PolytopeManager';
 import { AnalyticHoverCard } from './AnalyticHoverCard';
 import { Scene } from './Scene';
 import { BASE_CAMERA_DISTANCE } from './constants';
+import type { CoreWorkspacePhase } from '../../lib/coreWorkspaceTransition';
 
 // ── Props ─────────────────────────────────────────────────────────────────────
 
@@ -34,6 +35,12 @@ export interface UniversalPolytopeProps {
   departments?: UExternalNode[];
   /** Optional current selected internal path to synchronize drill-down state */
   selectedInternalPath?: string[];
+  /** BDT route: click core → dive → product workspace */
+  enableCoreWorkspace?: boolean;
+  coreWorkspacePhase?: CoreWorkspacePhase;
+  onCoreClickIntent?: () => void;
+  onCoreDiveComplete?: () => void;
+  onCoreSurfaceComplete?: () => void;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -53,6 +60,11 @@ export default function UniversalPolytope({
   draftInternalNodeScreenPosRef,
   departments,
   selectedInternalPath,
+  enableCoreWorkspace = false,
+  coreWorkspacePhase = 'idle',
+  onCoreClickIntent,
+  onCoreDiveComplete,
+  onCoreSurfaceComplete,
 }: UniversalPolytopeProps) {
   const [selectedId, setSelectedIdRaw] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -96,6 +108,11 @@ export default function UniversalPolytope({
           draftInternalNode={draftInternalNode}
           draftInternalNodeScreenPosRef={draftInternalNodeScreenPosRef}
           selectedInternalPathProps={selectedInternalPath}
+          enableCoreWorkspace={enableCoreWorkspace}
+          coreWorkspacePhase={coreWorkspacePhase}
+          onCoreClickIntent={onCoreClickIntent}
+          onCoreDiveComplete={onCoreDiveComplete}
+          onCoreSurfaceComplete={onCoreSurfaceComplete}
         />
       </Canvas>
 
