@@ -18,6 +18,7 @@ interface InternalNodeProps {
   isVisible: boolean;
   parentLabel: string;
   setBackInfo: (info: { label: string; onClick: () => void } | null) => void;
+  isDraft?: boolean;
 }
 
 export function InternalNode({
@@ -33,6 +34,7 @@ export function InternalNode({
   isVisible,
   parentLabel,
   setBackInfo,
+  isDraft = false,
 }: InternalNodeProps) {
   const groupRef = useRef<THREE.Group>(null);
   const currentPos = useRef(startPos.clone());
@@ -96,10 +98,16 @@ export function InternalNode({
 
   useEffect(() => {
     if (groupRef.current) {
-      groupRef.current.position.copy(startPos);
-      groupRef.current.scale.setScalar(0);
+      if (isDraft) {
+        currentPos.current.copy(targetPos);
+        groupRef.current.position.copy(targetPos);
+        groupRef.current.scale.setScalar(1);
+      } else {
+        groupRef.current.position.copy(startPos);
+        groupRef.current.scale.setScalar(0);
+      }
     }
-  }, [startPos]);
+  }, [startPos, targetPos, isDraft]);
 
   useEffect(() => {
     if (isMeActiveCenter) {
@@ -113,8 +121,10 @@ export function InternalNode({
 
   useFrame(() => {
     if (groupRef.current) {
-      currentPos.current.lerp(targetPos, 0.06);
-      groupRef.current.position.copy(currentPos.current);
+      if (!isDraft) {
+        currentPos.current.lerp(targetPos, 0.06);
+        groupRef.current.position.copy(currentPos.current);
+      }
 
       const targetScale = isVisible ? (isMeActiveCenter ? 1.5 : 1.0) : 0.0;
       groupRef.current.scale.lerp(
@@ -126,6 +136,7 @@ export function InternalNode({
 
   const handleClick = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
+    if (isDraft) return;
     if (selectedPath[selectedPath.length - 1] === node.id) {
       onSelectPath(pathContext, parentPos);
     } else {
@@ -138,14 +149,14 @@ export function InternalNode({
       <group
         ref={groupRef}
         onClick={handleClick}
-        onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+        onPointerOver={() => { if (!isDraft) document.body.style.cursor = 'pointer'; }}
         onPointerOut={() => { document.body.style.cursor = 'auto'; }}
       >
         <PlasmaSphere
           color={color}
           radius={radius}
-          opacity={1.0}
-          glowIntensity={isMeActiveCenter ? 3.5 : 0.2}
+          opacity={isDraft ? 0.85 : 1.0}
+          glowIntensity={isDraft ? 2.8 : isMeActiveCenter ? 3.5 : 0.2}
           depthWrite={true}
           speed={isMeActiveCenter ? 1.5 : 0.2}
         />
@@ -159,13 +170,14 @@ export function InternalNode({
               fontSize: `${Math.max(8, 12 - depth)}px`,
               fontWeight: 'bold',
               backdropFilter: 'blur(4px)',
-              border: `1px solid ${color}40`,
+              border: isDraft ? `1.5px dashed ${color}` : `1px solid ${color}40`,
               pointerEvents: 'none',
               whiteSpace: 'nowrap',
-              opacity: isMeActiveCenter || isMeAncestor ? 1 : 0.7,
+              opacity: isDraft ? 1 : isMeActiveCenter || isMeAncestor ? 1 : 0.7,
               transition: 'opacity 0.2s',
+              boxShadow: isDraft ? `0 0 12px ${color}50` : undefined,
             }}>
-              {node.label}
+              {isDraft ? `✦ ${node.label}` : node.label}
             </div>
           </Html>
         )}

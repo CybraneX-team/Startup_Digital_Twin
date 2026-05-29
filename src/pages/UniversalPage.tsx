@@ -100,9 +100,10 @@ export default function UniversalPage() {
       children: [],
     };
     setDraftInternalNode({ deptId, node: draftNode });
-    // Make sure the dept is selected so the internal node ring is visible
-    setSelectedDeptId(deptId);
-    setRequestSelectDeptId(deptId);
+    if (selectedDeptId !== deptId) {
+      setSelectedDeptId(deptId);
+      setRequestSelectDeptId(deptId);
+    }
   };
 
   const handleDraftNodeUpdate = (patch: Partial<Pick<UInternalNode, 'label' | 'type'>>) => {
@@ -112,15 +113,15 @@ export default function UniversalPage() {
   const handleDraftNodeClose = (isCancel?: boolean) => {
     if (isCancel) {
       setDraftInternalNode(null);
-      setPolytopeResetTrigger(c => c + 1);
     }
   };
 
   const handleDraftNodeCreated = (data: Omit<UInternalNode, 'id' | 'children'>) => {
     if (!draftInternalNode) return;
-    store.addNode(draftInternalNode.deptId, data);
+    const deptId = draftInternalNode.deptId;
+    store.addNode(deptId, data);
     setDraftInternalNode(null);
-    setPolytopeResetTrigger(c => c + 1);
+    setSelectedDeptId(deptId);
   };
 
   // When dept is selected in 3D scene → update sidebar highlight only (no camera retrigger)

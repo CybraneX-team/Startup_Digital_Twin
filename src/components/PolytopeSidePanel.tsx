@@ -3,6 +3,7 @@ import { Search, Command, ArrowLeft, Plus, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
 import { U_DOMAIN_COLOR } from '../lib/universalPolytopeData';
+import { UniverseNavBackButton } from './UniverseNavBackButton';
 
 export interface PolytopeSidePanelProps {
   departments: UExternalNode[];
@@ -14,6 +15,9 @@ export interface PolytopeSidePanelProps {
   onAddNode?: (deptId: string) => void;
   /** Called when user clicks the back button while inside sub-nodes — go 1 step up */
   onInternalBack?: () => void;
+  /** Company polytope only — leave interior and return to subdomain solar system */
+  onExitToSubdomain?: () => void;
+  exitToSubdomainLabel?: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -78,6 +82,8 @@ export function PolytopeSidePanel({
   onAddDepartment,
   onAddNode,
   onInternalBack,
+  onExitToSubdomain,
+  exitToSubdomainLabel,
 }: PolytopeSidePanelProps) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -166,6 +172,8 @@ export function PolytopeSidePanel({
 
   return (
     <div className="flex flex-col items-start gap-3">
+      
+
       {/* ── Search bar — always visible ── */}
       <div
         className="relative rounded-2xl overflow-hidden shadow-xl"
@@ -199,6 +207,13 @@ export function PolytopeSidePanel({
           </div>
         </div>
       </div>
+
+      {onExitToSubdomain && (
+        <UniverseNavBackButton
+          label={`Back to ${exitToSubdomainLabel ?? 'solar system'}`}
+          onClick={onExitToSubdomain}
+        />
+      )}
 
       {/* ── Main panel ── */}
       <div

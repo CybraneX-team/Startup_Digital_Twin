@@ -105,7 +105,7 @@ export class CameraController {
   /**
    * Fly the camera to a target with cinematic GSAP transition.
    */
-  flyTo(targetPosition, distance, level, onComplete) {
+  flyTo(targetPosition, distance, level, onComplete, durationOverride) {
     if (this.isTransitioning) {
       // Kill previous transition
       if (this._flyTimeline) this._flyTimeline.kill();
@@ -135,7 +135,7 @@ export class CameraController {
     // Ensure above plane
     newCamPos.y = Math.max(newCamPos.y, targetPosition.y + distance * 0.25);
 
-    const duration = this._getTransitionDuration(distance);
+    const duration = durationOverride ?? this._getTransitionDuration(distance);
 
     this._flyTimeline = gsap.timeline({
       onComplete: () => {

@@ -272,6 +272,16 @@ export class NavigationManager {
     });
   }
 
+  /** Camera pose matching flyTo(target, distance) for scene-swap teleports */
+  _cameraPoseNearTarget(targetPosition, distance) {
+    const dir = new THREE.Vector3(0.4, 0.35, 0.85).normalize();
+    const pos = new THREE.Vector3()
+      .copy(targetPosition)
+      .add(dir.multiplyScalar(distance));
+    pos.y = Math.max(pos.y, targetPosition.y + distance * 0.25);
+    return { pos, target: targetPosition.clone() };
+  }
+
   // ── Simple fade-to-black scene swap ─────────────────────────────────────
   // Fade out (300ms) → onMidpoint (instant scene swap) → fade in (300ms) → onComplete
   _fadeSwap(onMidpoint, onComplete) {
@@ -383,28 +393,114 @@ export class NavigationManager {
     if (this.cameraCtrl.isTransitioning) return;
     this.selectedCompany = company;
 
-    // Get company world position — solar system if active, else system particles
+    const earlyPath = [
+      { level: ZOOM_LEVELS.INDUSTRY, id: industry.id, name: industry.name, data: industry },
+      { level: ZOOM_LEVELS.SUBDOMAIN, id: subdomain.id, name: subdomain.name, data: subdomain },
+      { level: ZOOM_LEVELS.COMPANY, id: company.id, name: company.name, data: company },
+    ];
+    if (this.onNavigateBegin) this.onNavigateBegin(earlyPath, ZOOM_LEVELS.COMPANY);
+
     const wp = this._subdomainSolarSystem?.companyMeshes?.length
       ? this._subdomainSolarSystem.getCompanyWorldPosition(company.id)
       : this.systemParticles.getCompanyPosition(industry.id, subdomain.id, company.id);
 
-    // Live (user-created) company: zoom close then show polytope overlay
-    // Catalog company: zoom just outside planet surface so it fills screen — then stop
-    const flyDist = company.isLive ? 20 : 28;
+    // Catalog company — single fly, no polytope interior
+    if (!company.isLive) {
+      this.cameraCtrl.flyTo(wp, 28, ZOOM_LEVELS.COMPANY, () => {
+        this.currentLevel = ZOOM_LEVELS.COMPANY;
+        this.navigationPath = earlyPath;
+        if (this.onNavigate) this.onNavigate(this.navigationPath, this.currentLevel);
+      });
+      return;
+    }
 
-    this.cameraCtrl.flyTo(wp, flyDist, ZOOM_LEVELS.COMPANY, () => {
-      this.currentLevel = ZOOM_LEVELS.COMPANY;
-      this.navigationPath = [
-        { level: ZOOM_LEVELS.INDUSTRY, id: industry.id, name: industry.name, data: industry },
-        { level: ZOOM_LEVELS.SUBDOMAIN, id: subdomain.id, name: subdomain.name, data: subdomain },
-        { level: ZOOM_LEVELS.COMPANY, id: company.id, name: company.name, data: company },
-      ];
-      if (this.onNavigate) this.onNavigate(this.navigationPath, this.currentLevel);
-      // Only fire polytope for live companies
-      if (company.isLive && this.onEnterCompanyPolytope) {
-        this.onEnterCompanyPolytope(company);
-      }
+    // ── Live company: industry→subdomain style multi-phase entry ───────────
+    const sss = this._subdomainSolarSystem;
+    if (sss?.group) sss.morphOutSiblings(company.id, 0.4, 1.3);
+
+    // Phase 1: fly INTO the company planet surface (longer duration for smooth approach)
+    this.cameraCtrl.flyTo(wp, 6, ZOOM_LEVELS.COMPANY, () => {
+      // Phase 2: fade-swap — leave solar system, enter interior space
+      this._fadeSwap(
+        () => {
+          if (sss?.group) sss.group.visible = false;
+          this.camera.position.set(0, 500, 4500);
+          this.cameraCtrl.controls.target.set(0, 0, 0);
+          this.cameraCtrl.controls.update();
+        },
+        () => {
+          // Phase 3: warp-zoom inward while polytope fades in (synced with React overlay)
+          if (this.onEnterCompanyPolytope) this.onEnterCompanyPolytope(company);
+
+          this.cameraCtrl.isTransitioning = true;
+          gsap.to(this.camera.position, {
+            x: 0, y: 60, z: 220,
+            duration: 2.6,
+            ease: 'power3.in',
+            onUpdate: () => { this.cameraCtrl.controls.update(); },
+            onComplete: () => {
+              this.cameraCtrl.isTransitioning = false;
+              this.currentLevel = ZOOM_LEVELS.COMPANY;
+              this.navigationPath = earlyPath;
+              if (this.onNavigate) this.onNavigate(this.navigationPath, this.currentLevel);
+            },
+          });
+          gsap.to(this.cameraCtrl.controls.target, { x: 0, y: 0, z: 0, duration: 2.6, ease: 'power3.in' });
+        }
+      );
+    }, 2.2);
+  }
+
+  // ═══ EXIT LIVE COMPANY POLYTOPE (reverse of navigateToCompany) ═══
+  _exitLiveCompanyPolytope(industry, subdomain, company, sss) {
+    const subdomainPath = [
+      { level: ZOOM_LEVELS.INDUSTRY, id: industry.id, name: industry.name, data: industry },
+      { level: ZOOM_LEVELS.SUBDOMAIN, id: subdomain.id, name: subdomain.name, data: subdomain },
+    ];
+    if (this.onNavigateBegin) this.onNavigateBegin(subdomainPath, ZOOM_LEVELS.SUBDOMAIN);
+
+    const wp = sss.getCompanyWorldPosition(company.id);
+    const atPlanet = this._cameraPoseNearTarget(wp, 6);
+
+    this.cameraCtrl.isTransitioning = true;
+
+    // Phase 1: zoom out from polytope interior (reverse of entry warp)
+    gsap.to(this.camera.position, {
+      x: 0, y: 420, z: 3000,
+      duration: 1.7,
+      ease: 'power2.inOut',
+      onUpdate: () => { this.cameraCtrl.controls.update(); },
+      onComplete: () => {
+        // Phase 2: fade-swap — re-enter solar system at the company planet
+        this._fadeSwap(
+          () => {
+            sss.group.visible = true;
+            sss.restoreFromCompanyEntry();
+            this.camera.position.copy(atPlanet.pos);
+            this.cameraCtrl.controls.target.copy(atPlanet.target);
+            this.cameraCtrl.controls.update();
+          },
+          () => {
+            // Phase 3: zoom out from company planet to subdomain solar system
+            gsap.to(this.camera.position, {
+              x: 0, y: 200, z: 750,
+              duration: 2.5,
+              ease: 'power3.out',
+              onUpdate: () => { this.cameraCtrl.controls.update(); },
+              onComplete: () => {
+                this.selectedCompany = null;
+                this.currentLevel = ZOOM_LEVELS.SUBDOMAIN;
+                this.navigationPath = subdomainPath;
+                this.cameraCtrl.isTransitioning = false;
+                this._onNavigateDone(this.navigationPath, this.currentLevel);
+              },
+            });
+            gsap.to(this.cameraCtrl.controls.target, { x: 0, y: 0, z: 0, duration: 2.5, ease: 'power3.out' });
+          }
+        );
+      },
     });
+    gsap.to(this.cameraCtrl.controls.target, { x: 0, y: 0, z: 0, duration: 1.7, ease: 'power2.inOut' });
   }
 
   // ═══ NAVIGATE TO DEPARTMENT ═══
@@ -449,11 +545,17 @@ export class NavigationManager {
       const industry = this.navigationPath[0]?.data;
       if (!company || !subdomain || !industry) return;
 
-      // Always fire exit callback — hides polytope overlay whether back came from
-      // side panel, ESC key, or the polytope's own scroll-out handler.
       if (this.onExitCompanyPolytope) this.onExitCompanyPolytope();
 
-      // Restore all company containers
+      const sss = this._subdomainSolarSystem;
+      const wasLivePolytope = company.isLive && sss?.group && !sss.group.visible;
+
+      if (wasLivePolytope) {
+        this._exitLiveCompanyPolytope(industry, subdomain, company, sss);
+        return;
+      }
+
+      // Catalog company — restore particle-system groups and fly back
       const sdMesh2 = this.systemParticles.getSubdomainMesh(industry.id, subdomain.id);
       if (sdMesh2) {
         (sdMesh2.userData.companyContainers || []).forEach(cd => {
@@ -470,8 +572,7 @@ export class NavigationManager {
       }
 
       this.selectedCompany = null;
-      // Back to solar system center (if active) or original subdomain position
-      const wp = this._subdomainSolarSystem?.group
+      const wp = sss?.group
         ? new THREE.Vector3(0, 0, 0)
         : this.systemParticles.getSubdomainPosition(industry.id, subdomain.id);
       this.cameraCtrl.flyTo(wp, 450, ZOOM_LEVELS.SUBDOMAIN, () => {

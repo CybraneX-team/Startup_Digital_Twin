@@ -354,6 +354,47 @@ export class SubdomainSolarSystem {
     return this.group.position.clone();
   }
 
+  /** Scale down sibling planets, sun, and star field during company entry */
+  morphOutSiblings(keepCompanyId, delay = 0.4, duration = 1.2) {
+    if (!this.group) return;
+    this.freeze();
+    this._containers.forEach(cc => {
+      const mesh = cc.container.children.find(c => c.userData?.company);
+      if (mesh?.userData?.company?.id !== keepCompanyId) {
+        gsap.killTweensOf(cc.container.scale);
+        gsap.to(cc.container.scale, { x: 0.001, y: 0.001, z: 0.001, duration, delay, ease: 'power3.inOut' });
+      }
+    });
+    const sunMesh = this.group.children[0];
+    if (sunMesh?.scale) {
+      gsap.killTweensOf(sunMesh.scale);
+      gsap.to(sunMesh.scale, { x: 0.001, y: 0.001, z: 0.001, duration, delay, ease: 'power3.in' });
+    }
+    if (this._starMat) {
+      gsap.killTweensOf(this._starMat);
+      gsap.to(this._starMat, { opacity: 0, duration, delay, ease: 'power2.in' });
+    }
+  }
+
+  /** Restore solar system after exiting company polytope */
+  restoreFromCompanyEntry() {
+    if (!this.group) return;
+    this._containers.forEach(cc => {
+      gsap.killTweensOf(cc.container.scale);
+      gsap.to(cc.container.scale, { x: 1, y: 1, z: 1, duration: 1.0, ease: 'power2.out' });
+    });
+    const sunMesh = this.group.children[0];
+    if (sunMesh?.scale) {
+      gsap.killTweensOf(sunMesh.scale);
+      gsap.to(sunMesh.scale, { x: 1, y: 1, z: 1, duration: 1.0, ease: 'power2.out' });
+    }
+    if (this._starMat) {
+      gsap.killTweensOf(this._starMat);
+      gsap.to(this._starMat, { opacity: 0.85, duration: 1.0, ease: 'power2.out' });
+    }
+    this.unfreeze();
+  }
+
   // ── HELPERS ──────────────────────────────────────────────────────────────
   getCompanyWorldPosition(companyId) {
     const mesh = this.companyMeshes.find(m => m.userData.company.id === companyId);

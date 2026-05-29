@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, Loader2, Plus, Search, Command } from 'lucide-react';
+import { Loader2, Plus, Search, Command } from 'lucide-react';
 import UniverseCanvas from '../three-universe/UniverseCanvas';
 import { useUniverseGraph } from '../data/universeGraph';
 import { useAuth } from '../lib/auth';
@@ -10,6 +10,7 @@ import CreateCompanyModal from '../components/CreateCompanyModal';
 import type { LocalCompany } from '../lib/localCompanies';
 import UniversalPolytope from '../components/UniversalPolytope';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
+import { UniverseNavBackButton, getUniverseBackLabel } from '../components/UniverseNavBackButton';
 import { PolytopeManager } from '../components/PolytopeManager';
 import CreateDepartmentPanel from '../components/CreateDepartmentPanel';
 import { usePolytopeStore } from '../lib/usePolytopeStore';
@@ -99,9 +100,6 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany, s
     onItemClick = (id) => controllerRef.current?.zoomToCompany(industry.id, subdomain.id, id);
   }
 
-  const backToGalaxy = () => controllerRef.current?.goToGalaxy();
-  const goBack = () => controllerRef.current?.goBack();
-
   return (
     <div
       className="rounded-2xl overflow-hidden flex flex-col"
@@ -115,30 +113,6 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany, s
         boxShadow: '0 12px 40px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04)',
       }}
     >
-      {/* Back nav — slides in when drilled */}
-      {!isGalaxy && !isSearchActive && (
-        <div
-          className="flex items-center gap-2 px-3 pt-3 pb-2 shrink-0 panel-slide-in"
-          style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}
-        >
-          <button
-            onClick={goBack}
-            className="flex items-center gap-1.5 text-[11px] font-medium transition-colors hover:text-white"
-            style={{ color: '#C1AEFF' }}
-          >
-            <ArrowLeft className="w-3 h-3" />
-            Back
-          </button>
-          <button
-            onClick={backToGalaxy}
-            className="ml-auto text-[10px] transition-colors hover:text-gray-300"
-            style={{ color: '#5E5E5E' }}
-          >
-            Galaxy
-          </button>
-        </div>
-      )}
-
       {/* Section label + context — animates on level change */}
       <div key={listKey + '-header'} className="px-3 pt-3 pb-1 shrink-0 panel-slide-in">
         <span className="text-[10px] font-semibold tracking-widest" style={{ color: '#5E5E5E' }}>
@@ -279,10 +253,11 @@ export default function Universe3DPage() {
       children: [],
     };
     setPolytopeDraftInternalNode({ deptId, node: draftNode });
-    // Ensure dept is selected so internal ring is visible
     setPolytopeDeptId(deptId);
-    setPolytopeRequestSelectDeptId(deptId);
-  }, [polytopeStore.departments]);
+    if (polytopeDeptId !== deptId) {
+      setPolytopeRequestSelectDeptId(deptId);
+    }
+  }, [polytopeStore.departments, polytopeDeptId]);
 
   // Called when the 3D scene selects a dept — only update sidebar, no camera re-trigger
   const handlePolytopeDeptChange = useCallback((id: string | null) => {
@@ -387,14 +362,8 @@ export default function Universe3DPage() {
     setCompanyPolytopeInternalBackStep(0);
   }, []);
 
-  // Called by UniversalPolytope scroll-out: hide overlay AND tell controller to go back
-  const handleCompanyPolytopeExitIntent = useCallback(() => {
-    setInsideCompanyPolytope(false);
-    setActiveCompany(null);
-    setCompanyPolytopeDeptId(null);
-    setCompanyPolytopeInternalPath([]);
-    setCompanyPolytopeRequestSelectDeptId(null);
-    setCompanyPolytopeInternalBackStep(0);
+  // Sidebar only — 3D journey + overlay fade handled in NavigationManager
+  const handleCompanyPolytopeBackToSubdomain = useCallback(() => {
     controllerRef.current?.exitCompanyPolytope();
   }, []);
 
@@ -568,14 +537,13 @@ export default function Universe3DPage() {
           opacity: insideCompanyPolytope ? 1 : 0,
           visibility: insideCompanyPolytope ? 'visible' : 'hidden',
           transition: insideCompanyPolytope
-            ? 'opacity 1.2s ease-in-out'
-            : 'opacity 1.2s ease-in-out, visibility 0s 1.2s',
+            ? 'opacity 1.4s ease-in-out'
+            : 'opacity 1.4s ease-in-out, visibility 0s 1.4s',
         }}
       >
         {companyPolytopeMounted && (
           <UniversalPolytope
             companyName={activeCompany?.name ?? 'My Company'}
-            onExitIntent={handleCompanyPolytopeExitIntent}
             transparent={true}
             cameraResetTrigger={companyPolytopeEntryCount}
             requestSelectDeptId={companyPolytopeRequestSelectDeptId}
@@ -617,6 +585,12 @@ export default function Universe3DPage() {
                 ? () => setPolytopeInternalBackStep(c => c + 1)
                 : () => setCompanyPolytopeInternalBackStep(c => c + 1)
               }
+              onExitToSubdomain={insideCompanyPolytope ? handleCompanyPolytopeBackToSubdomain : undefined}
+              exitToSubdomainLabel={
+                insideCompanyPolytope
+                  ? (navPath.find(p => p.level === 'subdomain')?.name ?? 'Subdomain')
+                  : undefined
+              }
             />
           ) : (
             <>
@@ -646,6 +620,17 @@ export default function Universe3DPage() {
                   </div>
                 </div>
               </div>
+
+              {/* Back — above panel (industry / subdomain / catalog company) */}
+              {(() => {
+                const backTarget = searchQuery.trim() ? null : getUniverseBackLabel(currentLevel, navPath);
+                return backTarget ? (
+                  <UniverseNavBackButton
+                    label={`Back to ${backTarget}`}
+                    onClick={() => controllerRef.current?.goBack()}
+                  />
+                ) : null;
+              })()}
 
               {/* Side nav panel — galaxy/subdomain/company */}
               {data && (
@@ -737,13 +722,13 @@ export default function Universe3DPage() {
             onClose={(isCancel) => {
               if (isCancel) {
                 setPolytopeDraftInternalNode(null);
-                setPolytopeDraftResetTrigger(c => c + 1);
               }
             }}
             onCreated={(data) => {
-              polytopeStore.addNode(polytopeDraftInternalNode.deptId, data as Omit<UInternalNode, 'id' | 'children'>);
+              const deptId = polytopeDraftInternalNode.deptId;
+              polytopeStore.addNode(deptId, data as Omit<UInternalNode, 'id' | 'children'>);
               setPolytopeDraftInternalNode(null);
-              setPolytopeDraftResetTrigger(c => c + 1);
+              setPolytopeDeptId(deptId);
             }}
           />
         );

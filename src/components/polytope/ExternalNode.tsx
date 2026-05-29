@@ -2,10 +2,11 @@ import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Html } from '@react-three/drei';
 import * as THREE from 'three';
-import type { UExternalNode } from '../../lib/universalPolytopeData';
+import type { UExternalNode, UInternalNode } from '../../lib/universalPolytopeData';
 import { PlasmaSphere } from '../PolytopeShared';
 import { GlowRing } from './GlowRing';
 import { InternalNode } from './InternalNode';
+import { computeInternalNodePosition } from './internalNodeLayout';
 
 interface ExternalNodeProps {
   node: UExternalNode;
@@ -21,6 +22,8 @@ interface ExternalNodeProps {
   onHover: (id: string | null) => void;
   idx: number;
   isHovered: boolean;
+  /** Preview node while "Add internal node" form is open */
+  draftChildNode?: UInternalNode | null;
 }
 
 export function ExternalNode({
@@ -37,6 +40,7 @@ export function ExternalNode({
   onHover,
   idx,
   isHovered,
+  draftChildNode,
 }: ExternalNodeProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const labelRef = useRef<HTMLDivElement>(null);
@@ -46,26 +50,16 @@ export function ExternalNode({
   const shortLabel = fullLabel.split(/[\s_\-]/)[0] || fullLabel;
 
   const internalPositions = useMemo(() => {
+    const count = node.internalNodes.length + (draftChildNode ? 1 : 0);
     const pts: THREE.Vector3[] = [];
-    const count = node.internalNodes.length;
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2;
-      const localUp = new THREE.Vector3(0, 1, 0);
-      const dir = pos.clone().normalize();
-      if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
-      const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();
-      const up = new THREE.Vector3().crossVectors(right, dir).normalize();
-      const depthStep = 3.0;
-      const childCenter = pos.clone().add(dir.clone().multiplyScalar(depthStep));
-      const depthOffset = i % 2 === 0 ? 0.8 : -0.8;
-      const pt = childCenter.clone()
-        .add(dir.clone().multiplyScalar(depthOffset))
-        .add(right.clone().multiplyScalar(Math.cos(angle) * 1.8))
-        .add(up.clone().multiplyScalar(Math.sin(angle) * 1.8));
-      pts.push(pt);
+    for (let i = 0; i < node.internalNodes.length; i++) {
+      pts.push(computeInternalNodePosition(pos, i, count));
+    }
+    if (draftChildNode) {
+      pts.push(computeInternalNodePosition(pos, node.internalNodes.length, count));
     }
     return pts;
-  }, [node, pos]);
+  }, [node.internalNodes.length, draftChildNode, pos]);
 
   const internalEdgesGeometry = useMemo(() => {
     if (internalPositions.length === 0) return null;
@@ -184,6 +178,25 @@ export function ExternalNode({
           />
         );
       })}
+
+      {isSelected && draftChildNode && (
+        <InternalNode
+          key={draftChildNode.id}
+          node={draftChildNode}
+          targetPos={internalPositions[internalPositions.length - 1]}
+          startPos={pos}
+          color={color}
+          depth={1}
+          selectedPath={selectedInternalPath}
+          onSelectPath={onSelectInternal}
+          pathContext={[]}
+          parentPos={pos}
+          isVisible={true}
+          parentLabel={node.label}
+          setBackInfo={setBackInfo}
+          isDraft
+        />
+      )}
 
       {isSelected && internalEdgesGeometry && (
         <lineSegments geometry={internalEdgesGeometry}>

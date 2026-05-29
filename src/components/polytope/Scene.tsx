@@ -11,6 +11,7 @@ import { symmetricDirs, seededShuffle } from './geometry';
 import { vertexShader, fragmentShader } from './shaders';
 import { GlowRing } from './GlowRing';
 import { ExternalNode } from './ExternalNode';
+import { computeDraftInternalNodePosition } from './internalNodeLayout';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -118,7 +119,51 @@ export function Scene({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftDept?.id]);
 
-  // ── Camera reset to overview (entry, create confirm, draft cancel) ─────────
+  // ── Draft internal node: save camera, fly to preview slot, restore on exit ──
+  const preDraftInternalCameraRef = useRef<{
+    orbitTarget: THREE.Vector3;
+    camPos: THREE.Vector3;
+    internalPath: string[];
+  } | null>(null);
+  const prevDraftInternalIdRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!draftInternalNode) {
+      if (prevDraftInternalIdRef.current && preDraftInternalCameraRef.current) {
+        const saved = preDraftInternalCameraRef.current;
+        preDraftInternalCameraRef.current = null;
+        prevDraftInternalIdRef.current = null;
+        setSelectedInternalPath(saved.internalPath);
+        onPathChange(saved.internalPath);
+        if (orbitRef.current) {
+          gsap.to(orbitRef.current.target, {
+            x: saved.orbitTarget.x, y: saved.orbitTarget.y, z: saved.orbitTarget.z,
+            duration: 1.2, ease: 'power3.inOut',
+          });
+          gsap.to(camera.position, {
+            x: saved.camPos.x, y: saved.camPos.y, z: saved.camPos.z,
+            duration: 1.2, ease: 'power3.inOut',
+          });
+        }
+      }
+      return;
+    }
+
+    if (draftInternalNode.node.id === prevDraftInternalIdRef.current) return;
+    prevDraftInternalIdRef.current = draftInternalNode.node.id;
+
+    if (orbitRef.current) {
+      preDraftInternalCameraRef.current = {
+        orbitTarget: orbitRef.current.target.clone(),
+        camPos: camera.position.clone(),
+        internalPath: [...selectedInternalPath],
+      };
+    }
+    // Keep camera fixed — draft preview appears at its final ring slot (see ExternalNode)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftInternalNode?.node.id, draftInternalNode?.deptId]);
+
+  // ── Camera reset to overview (entry, create confirm, draft dept cancel) ────
   useEffect(() => {
     if (!cameraResetTrigger) return;
     setSelectedId(null);
@@ -306,18 +351,11 @@ export function Scene({
       const deptIdx = ACTIVE_NODES.findIndex(n => n.id === draftInternalNode.deptId);
       if (deptIdx !== -1) {
         const deptPos = ACTIVE_NODE_POSITIONS[deptIdx];
-        const draftNodeCount = ACTIVE_NODES[deptIdx].internalNodes.length;
-        const angle = (draftNodeCount / Math.max(draftNodeCount + 1, 1)) * Math.PI * 2;
-        const dir = deptPos.clone().normalize();
-        const localUp = new THREE.Vector3(0, 1, 0);
-        if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
-        const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();
-        const up = new THREE.Vector3().crossVectors(right, dir).normalize();
-        const childCenter = deptPos.clone().add(dir.clone().multiplyScalar(3.0));
-        const wp3 = childCenter.clone()
-          .add(right.clone().multiplyScalar(Math.cos(angle) * 1.8))
-          .add(up.clone().multiplyScalar(Math.sin(angle) * 1.8))
-          .project(cam);
+        const draftPos = computeDraftInternalNodePosition(
+          deptPos,
+          ACTIVE_NODES[deptIdx].internalNodes.length,
+        );
+        const wp3 = draftPos.clone().project(cam);
         const rect = renderer.domElement.getBoundingClientRect();
         draftInternalNodeScreenPosRef.current = {
           x: rect.left + (wp3.x * 0.5 + 0.5) * rect.width,
@@ -390,47 +428,6 @@ export function Scene({
     if (selectedId) { setSelectedId(null); onPathChange([]); }
   };
 
-  // ── Draft internal node preview ───────────────────────────────────────────
-  const draftInternalNodePreview = (() => {
-    if (!draftInternalNode || selectedId !== draftInternalNode.deptId) return null;
-    const deptIdx = ACTIVE_NODES.findIndex(n => n.id === draftInternalNode.deptId);
-    if (deptIdx === -1) return null;
-    const deptPos = ACTIVE_NODE_POSITIONS[deptIdx];
-    const draftNodeCount = ACTIVE_NODES[deptIdx].internalNodes.length;
-    const angle = (draftNodeCount / Math.max(draftNodeCount + 1, 1)) * Math.PI * 2;
-    const dir = deptPos.clone().normalize();
-    const localUp = new THREE.Vector3(0, 1, 0);
-    if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
-    const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();
-    const up = new THREE.Vector3().crossVectors(right, dir).normalize();
-    const childCenter = deptPos.clone().add(dir.clone().multiplyScalar(3.0));
-    const draftPos = childCenter.clone()
-      .add(right.clone().multiplyScalar(Math.cos(angle) * 1.8))
-      .add(up.clone().multiplyScalar(Math.sin(angle) * 1.8));
-    const deptColor = U_DOMAIN_COLOR[ACTIVE_NODES[deptIdx].domain] ?? '#6366f1';
-    return (
-      <group key="draft-internal-node" position={draftPos}>
-        <PlasmaSphere color={deptColor} radius={0.14} opacity={0.7} glowIntensity={2.5} depthWrite={false} speed={3} />
-        <GlowRing color={deptColor} active={true} isSelected={false} idx={999} />
-        <Html position={[0, -0.9, 0]} center zIndexRange={[100, 0]}>
-          <div style={{
-            color: deptColor,
-            background: 'rgba(0,0,0,0.7)',
-            padding: '3px 7px',
-            borderRadius: '4px',
-            fontSize: '10px',
-            fontWeight: 'bold',
-            border: `1px solid ${deptColor}60`,
-            pointerEvents: 'none',
-            whiteSpace: 'nowrap',
-          }}>
-            {draftInternalNode.node.label || '+ New Node'}
-          </div>
-        </Html>
-      </group>
-    );
-  })();
-
   // ── Render ────────────────────────────────────────────────────────────────
   return (
     <>
@@ -486,6 +483,11 @@ export function Scene({
           const isDimmed = (selectedId !== null && selectedId !== node.id) || (hoveredId !== null && !isHighlighted);
           const color = '#' + NODE_COLORS[i].getHexString();
 
+          const draftChild =
+            draftInternalNode && draftInternalNode.deptId === node.id
+              ? draftInternalNode.node
+              : null;
+
           return (
             <ExternalNode
               key={node.id}
@@ -502,11 +504,10 @@ export function Scene({
               onHover={setHoveredId}
               idx={i}
               isHovered={hoveredId === node.id}
+              draftChildNode={draftChild}
             />
           );
         })}
-
-        {draftInternalNodePreview}
 
         {/* Translucent spectral shell */}
         <mesh geometry={facesGeometry}>
