@@ -207,7 +207,7 @@ export default function Universe3DPage() {
   const [bhEntryCount, setBhEntryCount] = useState(0);
 
   // ── Polytope sidebar state (shown when insideBH) ──────────────────────────
-  const polytopeStore = usePolytopeStore();
+  const polytopeStore = usePolytopeStore('twin');
   const [polytopeDeptId, setPolytopeDeptId] = useState<string | null>(null);
   const [polytopeInternalPath, setPolytopeInternalPath] = useState<string[]>([]);
   const [polytopeManagerOpen, setPolytopeManagerOpen] = useState(false);
@@ -430,6 +430,22 @@ export default function Universe3DPage() {
       const rafId = requestAnimationFrame(() => controllerRef.current?.resize());
       return () => cancelAnimationFrame(rafId);
     }
+
+    // Left 3D twin — close polytope overlays so BDT (/universal) is fully independent
+    setInsideBH(false);
+    setInsideCompanyPolytope(false);
+    setPolytopeDraftDept(null);
+    setPolytopeDraftInternalNode(null);
+    setPolytopeDeptId(null);
+    setPolytopeInternalPath([]);
+    setPolytopeRequestSelectDeptId(null);
+    setPolytopeInternalBackStep(0);
+    setCompanyPolytopeDeptId(null);
+    setCompanyPolytopeInternalPath([]);
+    setCompanyPolytopeRequestSelectDeptId(undefined);
+    setCompanyPolytopeInternalBackStep(0);
+    controllerRef.current?.exitBlackHole();
+    controllerRef.current?.exitCompanyPolytope();
   }, [pathname]);
 
   const handleNavigate = useCallback((path: NavPathEntry[], level: ZoomLevel) => {
@@ -532,6 +548,7 @@ export default function Universe3DPage() {
         {bhMounted && (
           <UniversalPolytope
             companyName="Work OS Orbit"
+            storeScope="twin"
             onExitIntent={handleBHExitIntent}
             transparent={true}
             cameraResetTrigger={bhEntryCount + polytopeDraftResetTrigger}
@@ -567,6 +584,7 @@ export default function Universe3DPage() {
         {companyPolytopeMounted && (
           <UniversalPolytope
             companyName={activeCompany?.name ?? 'My Company'}
+            storeScope="twin"
             transparent={true}
             cameraResetTrigger={companyPolytopeEntryCount + polytopeDraftResetTrigger}
             requestSelectDeptId={companyPolytopeRequestSelectDeptId}

@@ -1,4 +1,5 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useLayoutEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import UniversalPolytope from '../components/UniversalPolytope';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
 import { PolytopeManager } from '../components/PolytopeManager';
@@ -13,7 +14,12 @@ import type { CoreWorkspacePhase } from '../lib/coreWorkspaceTransition';
 export default function UniversalPage() {
   const { profile } = useAuth();
   const { company } = useCompany(profile?.company_id);
-  const store = usePolytopeStore();
+  const location = useLocation();
+  const store = usePolytopeStore('bdt');
+
+  /** New session id + deferred mount = fresh WebGL canvas after leaving 3D twin. */
+  const [bdtSessionId, setBdtSessionId] = useState(() => Date.now());
+  const [showBdtCanvas, setShowBdtCanvas] = useState(false);
 
   // Sidebar state — which dept is selected in sidebar, and internal drill-down path
   const [selectedDeptId, setSelectedDeptId] = useState<string | null>(null);
@@ -70,6 +76,30 @@ export default function UniversalPage() {
   const [workspaceMounted, setWorkspaceMounted] = useState(false);
   const [workspaceAnim, setWorkspaceAnim] = useState<'enter' | 'exit' | null>(null);
   const isPolytopeInteractive = corePhase === 'idle';
+
+  useLayoutEffect(() => {
+    if (location.pathname !== '/universal') {
+      setShowBdtCanvas(false);
+      return;
+    }
+
+    setShowBdtCanvas(false);
+    setBdtSessionId(Date.now());
+    setPolytopeResetTrigger(t => t + 1);
+    setSelectedDeptId(null);
+    setInternalPath([]);
+    setRequestSelectDeptId(null);
+    setInternalBackStep(0);
+    setDraftDept(null);
+    setDraftInternalNode(null);
+    setCorePhase('idle');
+    setWorkspaceMounted(false);
+    setWorkspaceAnim(null);
+    setManagerOpen(false);
+
+    const rafId = requestAnimationFrame(() => setShowBdtCanvas(true));
+    return () => cancelAnimationFrame(rafId);
+  }, [location.pathname]);
 
   // Use the actual company name from the database, fallback to heuristic if loading
   const companyName = company?.name || (profile?.company_id
@@ -213,7 +243,7 @@ export default function UniversalPage() {
   }, []);
 
   return (
-    <div className="w-full h-[calc(100vh-56px)] -mb-8 bg-black overflow-hidden relative">
+    <div className="w-full h-[calc(100vh-56px)] -mb-8 bg-black overflow-hidden relative z-50">
       {/* ── 3D Polytope Canvas ── */}
       <div
         className="absolute inset-0"
@@ -223,7 +253,10 @@ export default function UniversalPage() {
           transition: corePhase === 'workspace' ? 'opacity 0.35s ease-out' : 'opacity 0.5s ease-in',
         }}
       >
+        {showBdtCanvas && (
         <UniversalPolytope
+          key={bdtSessionId}
+          storeScope="bdt"
           companyName={companyName}
           onDepartmentChange={handleDepartmentChange}
           onInternalPathChange={setInternalPath}
@@ -242,6 +275,7 @@ export default function UniversalPage() {
           onCoreDiveComplete={handleCoreDiveComplete}
           onCoreSurfaceComplete={handleCoreSurfaceComplete}
         />
+        )}
       </div>
 
       {/* Core dive light burst (during camera fly-in) */}

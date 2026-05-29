@@ -1,16 +1,33 @@
-import { useState, useCallback, useEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useState, useCallback } from 'react';
 import { U_NODES, U_DOMAIN_COLOR } from './universalPolytopeData';
 import type { UExternalNode, UInternalNode, UDomain } from './universalPolytopeData';
 
-const STORAGE_KEY = 'polytope_departments_v1';
+/** Twin (/3d) and BDT (/universal) keep separate department graphs — no cross-route sync. */
+export type PolytopeStoreScope = 'twin' | 'bdt';
+
+const STORAGE_KEYS: Record<PolytopeStoreScope, string> = {
+  twin: 'polytope_departments_twin_v1',
+  bdt: 'polytope_departments_bdt_v1',
+};
+
+/** Legacy shared key — migrate once into twin scope for existing users. */
+const LEGACY_STORAGE_KEY = 'polytope_departments_v1';
 
 export type { UExternalNode, UInternalNode, UDomain };
 export { U_DOMAIN_COLOR };
 
-function loadFromStorage(): UExternalNode[] | null {
+const DEFAULT_NODES = U_NODES.filter(n => n.domain !== 'inactive');
+
+function loadFromStorage(scope: PolytopeStoreScope): UExternalNode[] | null {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const key = STORAGE_KEYS[scope];
+    let raw = localStorage.getItem(key);
+    if (!raw && scope === 'twin') {
+      raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (raw) {
+        localStorage.setItem(key, raw);
+      }
+    }
     if (!raw) return null;
     return JSON.parse(raw) as UExternalNode[];
   } catch {
@@ -18,11 +35,9 @@ function loadFromStorage(): UExternalNode[] | null {
   }
 }
 
-function saveToStorage(nodes: UExternalNode[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(nodes));
+function saveToStorage(scope: PolytopeStoreScope, nodes: UExternalNode[]) {
+  localStorage.setItem(STORAGE_KEYS[scope], JSON.stringify(nodes));
 }
-
-const DEFAULT_NODES = U_NODES.filter(n => n.domain !== 'inactive');
 
 function addNodeToTree(nodes: UInternalNode[], path: string[], newNode: UInternalNode): UInternalNode[] {
   if (path.length === 0) {
@@ -75,22 +90,15 @@ function deleteNodeFromTree(nodes: UInternalNode[], nodeId: string): UInternalNo
   });
 }
 
-export function usePolytopeStore() {
-  const location = useLocation();
-
+export function usePolytopeStore(scope: PolytopeStoreScope = 'twin') {
   const [departments, setDepartments] = useState<UExternalNode[]>(() => {
-    return loadFromStorage() ?? DEFAULT_NODES;
+    return loadFromStorage(scope) ?? DEFAULT_NODES;
   });
-
-  useEffect(() => {
-    const latest = loadFromStorage() ?? DEFAULT_NODES;
-    setDepartments(latest);
-  }, [location.pathname]);
 
   const persist = useCallback((next: UExternalNode[]) => {
     setDepartments(next);
-    saveToStorage(next);
-  }, []);
+    saveToStorage(scope, next);
+  }, [scope]);
 
   // ── Department CRUD ────────────────────────────────────────────────────────
 
@@ -145,9 +153,9 @@ export function usePolytopeStore() {
   }, [departments, persist]);
 
   const resetToDefaults = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEYS[scope]);
     setDepartments(DEFAULT_NODES);
-  }, []);
+  }, [scope]);
 
   return {
     departments,

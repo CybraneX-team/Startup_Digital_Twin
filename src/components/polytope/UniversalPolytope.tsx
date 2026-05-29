@@ -1,7 +1,7 @@
 import { useState, useCallback, type MutableRefObject } from 'react';
 import { Canvas } from '@react-three/fiber';
 import type { UExternalNode, UInternalNode } from '../../lib/universalPolytopeData';
-import { usePolytopeStore } from '../../lib/usePolytopeStore';
+import { usePolytopeStore, type PolytopeStoreScope } from '../../lib/usePolytopeStore';
 import { PolytopeManager } from '../PolytopeManager';
 import { AnalyticHoverCard } from './AnalyticHoverCard';
 import { Scene } from './Scene';
@@ -41,6 +41,8 @@ export interface UniversalPolytopeProps {
   onCoreClickIntent?: () => void;
   onCoreDiveComplete?: () => void;
   onCoreSurfaceComplete?: () => void;
+  /** Which persisted graph to use when `departments` is not passed (default: twin /3d) */
+  storeScope?: PolytopeStoreScope;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -65,6 +67,7 @@ export default function UniversalPolytope({
   onCoreClickIntent,
   onCoreDiveComplete,
   onCoreSurfaceComplete,
+  storeScope = 'twin',
 }: UniversalPolytopeProps) {
   const [selectedId, setSelectedIdRaw] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -80,7 +83,7 @@ export default function UniversalPolytope({
     onDepartmentChange?.(id);
   };
 
-  const store = usePolytopeStore();
+  const store = usePolytopeStore(storeScope);
   const displayDepartments = departments ?? store.departments;
 
   return (
