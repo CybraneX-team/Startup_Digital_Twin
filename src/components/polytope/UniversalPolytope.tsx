@@ -30,6 +30,10 @@ export interface UniversalPolytopeProps {
   draftInternalNode?: { deptId: string; node: UInternalNode } | null;
   /** Ref written by Scene each frame with screen-space position of the draft internal node */
   draftInternalNodeScreenPosRef?: MutableRefObject<{ x: number; y: number } | null>;
+  /** Optional departments list to synchronize with external state store */
+  departments?: UExternalNode[];
+  /** Optional current selected internal path to synchronize drill-down state */
+  selectedInternalPath?: string[];
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -47,6 +51,8 @@ export default function UniversalPolytope({
   draftNodeScreenPosRef,
   draftInternalNode,
   draftInternalNodeScreenPosRef,
+  departments,
+  selectedInternalPath,
 }: UniversalPolytopeProps) {
   const [selectedId, setSelectedIdRaw] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -63,6 +69,7 @@ export default function UniversalPolytope({
   };
 
   const store = usePolytopeStore();
+  const displayDepartments = departments ?? store.departments;
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -79,7 +86,7 @@ export default function UniversalPolytope({
           companyName={companyName}
           hoveredId={hoveredId}
           setHoveredId={setHoveredId}
-          departments={store.departments}
+          departments={displayDepartments}
           onExitIntent={onExitIntent}
           cameraResetTrigger={cameraResetTrigger}
           requestSelectDeptId={requestSelectDeptId}
@@ -88,14 +95,15 @@ export default function UniversalPolytope({
           draftNodeScreenPosRef={draftNodeScreenPosRef}
           draftInternalNode={draftInternalNode}
           draftInternalNodeScreenPosRef={draftInternalNodeScreenPosRef}
+          selectedInternalPathProps={selectedInternalPath}
         />
       </Canvas>
 
-      <AnalyticHoverCard hoveredId={hoveredId} departments={store.departments} />
+      <AnalyticHoverCard hoveredId={hoveredId} departments={displayDepartments} />
 
       {!transparent && (
         <PolytopeManager
-          departments={store.departments}
+          departments={displayDepartments}
           onAddDepartment={store.addDepartment}
           onUpdateDepartment={store.updateDepartment}
           onDeleteDepartment={store.deleteDepartment}

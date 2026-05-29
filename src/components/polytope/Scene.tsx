@@ -11,7 +11,7 @@ import { symmetricDirs, seededShuffle } from './geometry';
 import { vertexShader, fragmentShader } from './shaders';
 import { GlowRing } from './GlowRing';
 import { ExternalNode } from './ExternalNode';
-import { computeDraftInternalNodePosition } from './internalNodeLayout';
+import { computeDraftInternalNodePosition, computeInternalNodePosition } from './internalNodeLayout';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,6 +36,62 @@ export interface SceneProps {
   draftInternalNode?: { deptId: string; node: UInternalNode } | null;
   /** Ref that Scene writes the draft internal node's screen-space position to each frame */
   draftInternalNodeScreenPosRef?: MutableRefObject<{ x: number; y: number } | null>;
+  selectedInternalPathProps?: string[];
+}
+
+function findNodePosition(
+  deptPos: THREE.Vector3,
+  internalNodes: UInternalNode[],
+  path: string[],
+  currentDepth: number = 1
+): THREE.Vector3 | null {
+  if (path.length === 0) return deptPos;
+  
+  const targetId = path[0];
+  const idx = internalNodes.findIndex(n => n.id === targetId);
+  if (idx === -1) return null;
+  
+  const node = internalNodes[idx];
+  const nodePos = computeInternalNodePosition(deptPos, idx, internalNodes.length);
+  
+  if (path.length === 1) return nodePos;
+  
+  return findChildNodePosition(node, nodePos, path.slice(1), currentDepth);
+}
+
+function findChildNodePosition(
+  parentNode: UInternalNode,
+  parentPos: THREE.Vector3,
+  path: string[],
+  depth: number
+): THREE.Vector3 | null {
+  if (path.length === 0) return parentPos;
+  if (!parentNode.children || parentNode.children.length === 0) return null;
+  
+  const targetId = path[0];
+  const idx = parentNode.children.findIndex(c => c.id === targetId);
+  if (idx === -1) return null;
+  
+  const node = parentNode.children[idx];
+  const count = parentNode.children.length;
+  const ringRadius = 1.4 * Math.pow(0.7, depth - 1);
+
+  const dir = parentPos.clone().normalize();
+  const localUp = new THREE.Vector3(0, 1, 0);
+  if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
+  const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();
+  const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+
+  const depthStep = 3.0;
+  const childCenter = parentPos.clone().add(dir.clone().multiplyScalar(depthStep));
+
+  const angle = (idx / count) * Math.PI * 2;
+  const childPos = childCenter.clone()
+    .add(right.clone().multiplyScalar(Math.cos(angle) * ringRadius))
+    .add(up.clone().multiplyScalar(Math.sin(angle) * ringRadius));
+    
+  if (path.length === 1) return childPos;
+  return findChildNodePosition(node, childPos, path.slice(1), depth + 1);
 }
 
 // ── Scene ────────────────────────────────────────────────────────────────────
@@ -57,6 +113,7 @@ export function Scene({
   draftNodeScreenPosRef,
   draftInternalNode,
   draftInternalNodeScreenPosRef,
+  selectedInternalPathProps,
 }: SceneProps) {
   // ── Derive geometry ───────────────────────────────────────────────────────
   // Draft dept is included so the convex hull + shader preview the exact final state.
@@ -190,6 +247,46 @@ export function Scene({
 
   const [selectedInternalPath, setSelectedInternalPath] = useState<string[]>([]);
   const isDeepDrillDown = selectedInternalPath.length > 0;
+
+  const prevPathPropsRef = useRef<string[]>([]);
+  useEffect(() => {
+    const nextPath = selectedInternalPathProps ?? [];
+    if (nextPath.length === prevPathPropsRef.current.length &&
+        nextPath.every((id, idx) => id === prevPathPropsRef.current[idx])) {
+      return;
+    }
+    prevPathPropsRef.current = nextPath;
+    
+    if (nextPath.length === selectedInternalPath.length &&
+        nextPath.every((id, idx) => id === selectedInternalPath[idx])) {
+      return;
+    }
+    
+    setSelectedInternalPath(nextPath);
+    
+    if (selectedId === null) return;
+    const deptIdx = ACTIVE_NODES.findIndex(n => n.id === selectedId);
+    if (deptIdx === -1) return;
+    const deptPos = ACTIVE_NODE_POSITIONS[deptIdx];
+    
+    if (nextPath.length === 0) {
+      if (orbitRef.current && deptPos) {
+        gsap.to(orbitRef.current.target, { x: deptPos.x, y: deptPos.y, z: deptPos.z, duration: 1.2, ease: 'power2.inOut' });
+        const dir = deptPos.clone().normalize();
+        const targetCamPos = dir.multiplyScalar(24);
+        gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.2, ease: 'power2.inOut' });
+      }
+    } else {
+      const targetPos = findNodePosition(deptPos, ACTIVE_NODES[deptIdx].internalNodes, nextPath);
+      if (targetPos && orbitRef.current) {
+        gsap.to(orbitRef.current.target, { x: targetPos.x, y: targetPos.y, z: targetPos.z, duration: 1.0, ease: 'power2.inOut' });
+        const dir = targetPos.clone().normalize();
+        const zoomDist = 10;
+        const targetCamPos = targetPos.clone().add(dir.multiplyScalar(zoomDist));
+        gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.0, ease: 'power2.inOut' });
+      }
+    }
+  }, [selectedInternalPathProps, selectedId, ACTIVE_NODES, ACTIVE_NODE_POSITIONS, camera, selectedInternalPath]);
 
   useEffect(() => {
     setSelectedInternalPath([]);

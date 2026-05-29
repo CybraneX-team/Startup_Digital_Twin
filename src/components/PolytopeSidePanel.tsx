@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Command, ArrowLeft, Plus, ChevronRight } from 'lucide-react';
+import { Search, Command, ArrowLeft, Plus, ChevronRight, Pencil, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
 import { U_DOMAIN_COLOR } from '../lib/universalPolytopeData';
@@ -17,6 +17,13 @@ export interface PolytopeSidePanelProps {
   /** Company polytope only — leave interior and return to subdomain solar system */
   onExitToSubdomain?: () => void;
   exitToSubdomainLabel?: string;
+  onUpdateDepartment?: (id: string, updates: Partial<Omit<UExternalNode, 'id' | 'internalNodes'>>) => void;
+  onDeleteDepartment?: (id: string) => void;
+  onUpdateNode?: (deptId: string, nodeId: string, updates: Partial<Omit<UInternalNode, 'id' | 'children'>>) => void;
+  onDeleteNode?: (deptId: string, nodeId: string) => void;
+  onNodeSelect?: (path: string[]) => void;
+  onEditDepartment?: (dept: UExternalNode) => void;
+  onEditNode?: (dept: UExternalNode, node: UInternalNode) => void;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -83,6 +90,13 @@ export function PolytopeSidePanel({
   onInternalBack,
   onExitToSubdomain,
   exitToSubdomainLabel,
+  onUpdateDepartment,
+  onDeleteDepartment,
+  onUpdateNode,
+  onDeleteNode,
+  onNodeSelect,
+  onEditDepartment,
+  onEditNode,
 }: PolytopeSidePanelProps) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -385,10 +399,9 @@ export function PolytopeSidePanel({
                 const color = U_DOMAIN_COLOR[dept.domain] ?? '#6366f1';
                 const isActiveDept = dept.id === selectedDeptId;
                 return (
-                  <button
+                  <div
                     key={dept.id}
-                    onClick={() => onDeptSelect(dept.id)}
-                    className={`panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-all group ${!isActiveDept ? 'hover:bg-white/[0.06]' : ''}`}
+                    className={`panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-all group/row ${!isActiveDept ? 'hover:bg-white/[0.06]' : ''}`}
                     style={{
                       animationDelay: `${i * 22}ms`,
                       background: isActiveDept ? `${color}18` : 'transparent',
@@ -399,31 +412,65 @@ export function PolytopeSidePanel({
                   >
                     {/* Color dot */}
                     <span
-                      className="w-2 h-2 rounded-full shrink-0 transition-transform group-hover:scale-125"
+                      className="w-2 h-2 rounded-full shrink-0 transition-transform group-hover/row:scale-125"
                       style={{
                         background: color,
                         boxShadow: isActiveDept ? `0 0 12px ${color}` : `0 0 8px ${color}70`,
                         transform: isActiveDept ? 'scale(1.3)' : undefined,
                       }}
                     />
-                    {/* Text */}
-                    <span className="flex-1 min-w-0">
+
+                    {/* Text clickable area */}
+                    <div
+                      onClick={() => onDeptSelect(dept.id)}
+                      className="flex-1 min-w-0 cursor-pointer"
+                    >
                       <span
-                        className="block text-[12px] leading-tight truncate transition-colors"
-                        style={{ color: isActiveDept ? '#ffffff' : '#d1d5db', fontWeight: isActiveDept ? 600 : 400 }}
+                        className="block text-[12px] leading-tight truncate transition-colors text-gray-300 group-hover/row:text-white"
+                        style={{ fontWeight: isActiveDept ? 600 : 400 }}
                       >
                         {dept.label}
                       </span>
                       <span className="block text-[10px] leading-tight mt-0.5" style={{ color: isActiveDept ? `${color}cc` : '#4b5563' }}>
                         {dept.internalNodes.length} domain{dept.internalNodes.length !== 1 ? 's' : ''}
                       </span>
-                    </span>
-                    {/* Chevron */}
-                    <ChevronRight
-                      className="w-3 h-3 shrink-0 transition-all"
-                      style={{ color: isActiveDept ? color : '#6b7280', opacity: isActiveDept ? 0.9 : 0 }}
-                    />
-                  </button>
+                    </div>
+
+                    {/* Action buttons (pencil, trash) on hover / Chevron otherwise */}
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      <div className="hidden group-hover/row:flex items-center gap-0.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditDepartment?.(dept);
+                          }}
+                          className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+                          title="Edit"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (window.confirm(`Delete department "${dept.label}"?`)) {
+                              if (selectedDeptId === dept.id) {
+                                onDeptSelect(null);
+                              }
+                              onDeleteDepartment?.(dept.id);
+                            }
+                          }}
+                          className="p-1 text-gray-400 hover:text-rose-400 hover:bg-white/10 rounded transition-colors"
+                          title="Delete"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <ChevronRight
+                        className="w-3 h-3 shrink-0 transition-all group-hover/row:hidden"
+                        style={{ color: isActiveDept ? color : '#6b7280', opacity: isActiveDept ? 0.9 : 0 }}
+                      />
+                    </div>
+                  </div>
                 );
               })
             )
@@ -437,17 +484,20 @@ export function PolytopeSidePanel({
               visibleNodes.map((node, i) => {
                 const typeColor = TYPE_COLORS[node.type] ?? '#94a3b8';
                 return (
-                  <button
+                  <div
                     key={node.id}
-                    className="panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group"
+                    className="panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group/row"
                     style={{ animationDelay: `${i * 22}ms` }}
                   >
                     <span
                       className="w-1.5 h-1.5 rounded-full shrink-0 flex-shrink-0"
                       style={{ background: deptColor, opacity: 0.85 }}
                     />
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-[12px] text-gray-300 group-hover:text-white transition-colors leading-tight truncate">
+                    <div
+                      onClick={() => onNodeSelect?.([...selectedInternalPath, node.id])}
+                      className="flex-1 min-w-0 cursor-pointer"
+                    >
+                      <span className="block text-[12px] text-gray-300 group-hover/row:text-white transition-colors leading-tight truncate">
                         {node.label}
                       </span>
                       <span className="flex items-center gap-1.5 mt-0.5">
@@ -459,11 +509,39 @@ export function PolytopeSidePanel({
                             border: `1px solid ${typeColor}30`,
                           }}
                         >
-                          {node.type}
+                            {node.type}
                         </span>
                       </span>
-                    </span>
-                  </button>
+                    </div>
+
+                    {/* Action buttons (pencil, trash) on hover */}
+                    <div className="hidden group-hover/row:flex items-center gap-0.5 shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (effectiveDept) {
+                            onEditNode?.(effectiveDept, node);
+                          }
+                        }}
+                        className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+                        title="Edit"
+                      >
+                        <Pencil className="w-3 h-3" />
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          if (window.confirm(`Delete node "${node.label}"?`)) {
+                            onDeleteNode?.(selectedDeptId ?? effectiveDept?.id ?? '', node.id);
+                          }
+                        }}
+                        className="p-1 text-gray-400 hover:text-rose-400 hover:bg-white/10 rounded transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </div>
                 );
               })
             )

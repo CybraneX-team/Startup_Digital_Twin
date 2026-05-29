@@ -41,7 +41,17 @@ export default function UniversalPage() {
 
   // PolytopeManager (CRUD modal) — only used for edit/delete flows now
   const [managerOpen, setManagerOpen] = useState(false);
-  const [managerView, _setManagerView] = useState<any>({ type: 'home' });
+  const [managerView, setManagerView] = useState<any>({ type: 'home' });
+
+  const handleEditDepartment = (dept: UExternalNode) => {
+    setManagerView({ type: 'editDept', dept });
+    setManagerOpen(true);
+  };
+
+  const handleEditNode = (dept: UExternalNode, node: UInternalNode) => {
+    setManagerView({ type: 'editNode', dept, node });
+    setManagerOpen(true);
+  };
 
   // Use the actual company name from the database, fallback to heuristic if loading
   const companyName = company?.name || (profile?.company_id
@@ -162,6 +172,8 @@ export default function UniversalPage() {
         draftInternalNode={draftInternalNode}
         draftInternalNodeScreenPosRef={draftInternalNodeScreenPosRef}
         cameraResetTrigger={polytopeResetTrigger}
+        departments={store.departments}
+        selectedInternalPath={internalPath}
       />
 
       {/* ── Left sidebar panel — hidden when create panel is shown ── */}
@@ -175,6 +187,13 @@ export default function UniversalPage() {
             onAddDepartment={handleAddDepartment}
             onAddNode={handleAddNode}
             onInternalBack={() => setInternalBackStep(c => c + 1)}
+            onUpdateDepartment={store.updateDepartment}
+            onDeleteDepartment={store.deleteDepartment}
+            onUpdateNode={store.updateNode}
+            onDeleteNode={store.deleteNode}
+            onNodeSelect={setInternalPath}
+            onEditDepartment={handleEditDepartment}
+            onEditNode={handleEditNode}
           />
         </div>
       )}

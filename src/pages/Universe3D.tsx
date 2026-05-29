@@ -211,7 +211,18 @@ export default function Universe3DPage() {
   const [polytopeDeptId, setPolytopeDeptId] = useState<string | null>(null);
   const [polytopeInternalPath, setPolytopeInternalPath] = useState<string[]>([]);
   const [polytopeManagerOpen, setPolytopeManagerOpen] = useState(false);
-  const [polytopeManagerView, _setPolytopeManagerView] = useState<any>({ type: 'home' });
+  const [polytopeManagerView, setPolytopeManagerView] = useState<any>({ type: 'home' });
+
+  const handleEditDepartment = useCallback((dept: UExternalNode) => {
+    setPolytopeManagerView({ type: 'editDept', dept });
+    setPolytopeManagerOpen(true);
+  }, []);
+
+  const handleEditNode = useCallback((dept: UExternalNode, node: UInternalNode) => {
+    setPolytopeManagerView({ type: 'editNode', dept, node });
+    setPolytopeManagerOpen(true);
+  }, []);
+
   // Separate state so clicking sidebar triggers camera fly-in without looping
   const [polytopeRequestSelectDeptId, setPolytopeRequestSelectDeptId] = useState<string | null | undefined>(undefined);
   // Counter incremented by sidebar back button to go back one internal level
@@ -522,6 +533,8 @@ export default function Universe3DPage() {
             draftNodeScreenPosRef={polytopeDraftDeptScreenPosRef}
             draftInternalNode={polytopeDraftInternalNode}
             draftInternalNodeScreenPosRef={polytopeDraftInternalNodeScreenPosRef}
+            departments={polytopeStore.departments}
+            selectedInternalPath={polytopeInternalPath}
           />
         )}
       </div>
@@ -550,6 +563,8 @@ export default function Universe3DPage() {
             onDepartmentChange={handleCompanyPolytopeDeptChange}
             onInternalPathChange={setCompanyPolytopeInternalPath}
             requestBackStep={companyPolytopeInternalBackStep}
+            departments={polytopeStore.departments}
+            selectedInternalPath={companyPolytopeInternalPath}
           />
         )}
       </div>
@@ -591,6 +606,13 @@ export default function Universe3DPage() {
                   ? (navPath.find(p => p.level === 'subdomain')?.name ?? 'Subdomain')
                   : 'Galaxy'
               }
+              onUpdateDepartment={polytopeStore.updateDepartment}
+              onDeleteDepartment={polytopeStore.deleteDepartment}
+              onUpdateNode={polytopeStore.updateNode}
+              onDeleteNode={polytopeStore.deleteNode}
+              onNodeSelect={insideBH ? setPolytopeInternalPath : setCompanyPolytopeInternalPath}
+              onEditDepartment={handleEditDepartment}
+              onEditNode={handleEditNode}
             />
           ) : (
             <>
