@@ -50,16 +50,17 @@ export function ExternalNode({
   const shortLabel = fullLabel.split(/[\s_\-]/)[0] || fullLabel;
 
   const internalPositions = useMemo(() => {
-    const count = node.internalNodes.length + (draftChildNode ? 1 : 0);
+    const isDraftAtRoot = selectedInternalPath.length === 0;
+    const count = node.internalNodes.length + (draftChildNode && isDraftAtRoot ? 1 : 0);
     const pts: THREE.Vector3[] = [];
     for (let i = 0; i < node.internalNodes.length; i++) {
       pts.push(computeInternalNodePosition(pos, i, count));
     }
-    if (draftChildNode) {
+    if (draftChildNode && isDraftAtRoot) {
       pts.push(computeInternalNodePosition(pos, node.internalNodes.length, count));
     }
     return pts;
-  }, [node.internalNodes.length, draftChildNode, pos]);
+  }, [node.internalNodes.length, draftChildNode, pos, selectedInternalPath]);
 
   const internalEdgesGeometry = useMemo(() => {
     if (internalPositions.length === 0) return null;
@@ -175,11 +176,12 @@ export function ExternalNode({
             isVisible={isChildVisible}
             parentLabel={node.label}
             setBackInfo={setBackInfo}
+            draftChildNode={draftChildNode}
           />
         );
       })}
 
-      {isSelected && draftChildNode && (
+      {isSelected && draftChildNode && selectedInternalPath.length === 0 && (
         <InternalNode
           key={draftChildNode.id}
           node={draftChildNode}

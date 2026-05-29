@@ -24,6 +24,8 @@ export interface PolytopeSidePanelProps {
   onNodeSelect?: (path: string[]) => void;
   onEditDepartment?: (dept: UExternalNode) => void;
   onEditNode?: (dept: UExternalNode, node: UInternalNode) => void;
+  onDeleteDepartmentClick?: (dept: UExternalNode) => void;
+  onDeleteNodeClick?: (dept: UExternalNode, node: UInternalNode) => void;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -97,6 +99,8 @@ export function PolytopeSidePanel({
   onNodeSelect,
   onEditDepartment,
   onEditNode,
+  onDeleteDepartmentClick,
+  onDeleteNodeClick,
 }: PolytopeSidePanelProps) {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
@@ -452,7 +456,9 @@ export function PolytopeSidePanel({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (window.confirm(`Delete department "${dept.label}"?`)) {
+                            if (onDeleteDepartmentClick) {
+                              onDeleteDepartmentClick(dept);
+                            } else if (window.confirm(`Delete department "${dept.label}"?`)) {
                               if (selectedDeptId === dept.id) {
                                 onDeptSelect(null);
                               }
@@ -531,7 +537,9 @@ export function PolytopeSidePanel({
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          if (window.confirm(`Delete node "${node.label}"?`)) {
+                          if (onDeleteNodeClick && effectiveDept) {
+                            onDeleteNodeClick(effectiveDept, node);
+                          } else if (window.confirm(`Delete node "${node.label}"?`)) {
                             onDeleteNode?.(selectedDeptId ?? effectiveDept?.id ?? '', node.id);
                           }
                         }}

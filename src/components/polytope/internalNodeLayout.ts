@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { UInternalNode } from '../../lib/universalPolytopeData';
 
 /** World position for an internal node ring slot (must match ExternalNode layout). */
 export function computeInternalNodePosition(
@@ -32,4 +33,36 @@ export function computeDraftInternalNodePosition(
 ): THREE.Vector3 {
   const total = existingInternalCount + 1;
   return computeInternalNodePosition(deptPos, existingInternalCount, total);
+}
+
+export function findNodeAtPath(nodes: UInternalNode[], path: string[]): UInternalNode | null {
+  if (path.length === 0) return null;
+  const node = nodes.find(n => n.id === path[0]);
+  if (!node) return null;
+  if (path.length === 1) return node;
+  return findNodeAtPath(node.children ?? [], path.slice(1));
+}
+
+export function computeDraftChildNodePosition(
+  parentPos: THREE.Vector3,
+  existingCount: number,
+  depth: number
+): THREE.Vector3 {
+  const count = existingCount + 1;
+  const idx = existingCount;
+  const ringRadius = 1.4 * Math.pow(0.7, depth - 1);
+
+  const dir = parentPos.clone().normalize();
+  const localUp = new THREE.Vector3(0, 1, 0);
+  if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
+  const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();
+  const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+
+  const depthStep = 3.0;
+  const childCenter = parentPos.clone().add(dir.clone().multiplyScalar(depthStep));
+
+  const angle = (idx / count) * Math.PI * 2;
+  return childCenter.clone()
+    .add(right.clone().multiplyScalar(Math.cos(angle) * ringRadius))
+    .add(up.clone().multiplyScalar(Math.sin(angle) * ringRadius));
 }

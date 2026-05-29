@@ -11,7 +11,7 @@ import { symmetricDirs, seededShuffle } from './geometry';
 import { vertexShader, fragmentShader } from './shaders';
 import { GlowRing } from './GlowRing';
 import { ExternalNode } from './ExternalNode';
-import { computeDraftInternalNodePosition, computeInternalNodePosition } from './internalNodeLayout';
+import { computeDraftInternalNodePosition, computeInternalNodePosition, findNodeAtPath, computeDraftChildNodePosition } from './internalNodeLayout';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -262,6 +262,19 @@ export function Scene({
       return;
     }
     
+    // If drilling deeper from sidebar selection, save current camera to history
+    if (nextPath.length > selectedInternalPath.length && orbitRef.current) {
+      cameraHistoryRef.current.push({
+        path: [...selectedInternalPath],
+        orbitTarget: orbitRef.current.target.clone(),
+        camPos: camera.position.clone(),
+      });
+    } else if (nextPath.length < selectedInternalPath.length) {
+      // If we are jumping to a shallower path direct from sidebar (not back button),
+      // we can truncate history to match the new path length to keep history in sync.
+      cameraHistoryRef.current = cameraHistoryRef.current.filter(h => h.path.length < nextPath.length);
+    }
+    
     setSelectedInternalPath(nextPath);
     
     if (selectedId === null) return;
@@ -370,8 +383,9 @@ export function Scene({
         if (extPos) {
           gsap.to(orbitRef.current.target, { x: extPos.x, y: extPos.y, z: extPos.z, duration: 1.2, ease: 'power2.inOut' });
           const dir = extPos.clone().normalize();
+          const targetCamPos = dir.multiplyScalar(24);
           gsap.to(camera.position, {
-            x: dir.multiplyScalar(24).x, y: dir.multiplyScalar(24).y, z: dir.multiplyScalar(24).z,
+            x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z,
             duration: 1.2, ease: 'power2.inOut',
           });
         }
@@ -447,11 +461,33 @@ export function Scene({
     if (draftInternalNodeScreenPosRef && draftInternalNode && selectedId === draftInternalNode.deptId) {
       const deptIdx = ACTIVE_NODES.findIndex(n => n.id === draftInternalNode.deptId);
       if (deptIdx !== -1) {
+        const dept = ACTIVE_NODES[deptIdx];
         const deptPos = ACTIVE_NODE_POSITIONS[deptIdx];
-        const draftPos = computeDraftInternalNodePosition(
-          deptPos,
-          ACTIVE_NODES[deptIdx].internalNodes.length,
-        );
+        
+        let draftPos: THREE.Vector3;
+        const path = selectedInternalPathProps ?? [];
+        if (path.length === 0) {
+          draftPos = computeDraftInternalNodePosition(
+            deptPos,
+            dept.internalNodes.length,
+          );
+        } else {
+          const parentNode = findNodeAtPath(dept.internalNodes, path);
+          const parentPos = findNodePosition(deptPos, dept.internalNodes, path);
+          if (parentNode && parentPos) {
+            draftPos = computeDraftChildNodePosition(
+              parentPos,
+              parentNode.children?.length ?? 0,
+              path.length + 1
+            );
+          } else {
+            draftPos = computeDraftInternalNodePosition(
+              deptPos,
+              dept.internalNodes.length,
+            );
+          }
+        }
+        
         const wp3 = draftPos.clone().project(cam);
         const rect = renderer.domElement.getBoundingClientRect();
         draftInternalNodeScreenPosRef.current = {
@@ -506,6 +542,7 @@ export function Scene({
     prevRequestRef.current = requestSelectDeptId;
     if (requestSelectDeptId === null) { setSelectedId(null); return; }
     if (requestSelectDeptId === undefined) return;
+    if (selectedId === requestSelectDeptId) return;
     const idx = ACTIVE_NODES.findIndex(n => n.id === requestSelectDeptId);
     if (idx === -1) return;
     const pos = ACTIVE_NODE_POSITIONS[idx];

@@ -53,6 +53,16 @@ export default function UniversalPage() {
     setManagerOpen(true);
   };
 
+  const handleDeleteDepartmentClick = (dept: UExternalNode) => {
+    setManagerView({ type: 'deleteDept', dept });
+    setManagerOpen(true);
+  };
+
+  const handleDeleteNodeClick = (dept: UExternalNode, node: UInternalNode) => {
+    setManagerView({ type: 'deleteNode', dept, node });
+    setManagerOpen(true);
+  };
+
   // Use the actual company name from the database, fallback to heuristic if loading
   const companyName = company?.name || (profile?.company_id
     ? profile?.first_name ? `${profile.first_name}'s workspace` : 'My workspace'
@@ -129,18 +139,18 @@ export default function UniversalPage() {
   const handleDraftNodeCreated = (data: Omit<UInternalNode, 'id' | 'children'>) => {
     if (!draftInternalNode) return;
     const deptId = draftInternalNode.deptId;
-    store.addNode(deptId, data);
+    store.addNode(deptId, data, internalPath);
     setDraftInternalNode(null);
     setSelectedDeptId(deptId);
   };
 
-  // When dept is selected in 3D scene → update sidebar highlight only (no camera retrigger)
+  // When dept is selected in 3D scene → update sidebar highlight
   const handleDepartmentChange = (id: string | null) => {
     selectionFromScene.current = true;
     setSelectedDeptId(id);
+    setRequestSelectDeptId(id);
     if (id === null) {
       setInternalPath([]);
-      setRequestSelectDeptId(null);
       setInternalBackStep(0);
     }
     setTimeout(() => { selectionFromScene.current = false; }, 0);
@@ -194,6 +204,8 @@ export default function UniversalPage() {
             onNodeSelect={setInternalPath}
             onEditDepartment={handleEditDepartment}
             onEditNode={handleEditNode}
+            onDeleteDepartmentClick={handleDeleteDepartmentClick}
+            onDeleteNodeClick={handleDeleteNodeClick}
           />
         </div>
       )}
@@ -230,7 +242,13 @@ export default function UniversalPage() {
         departments={store.departments}
         onAddDepartment={store.addDepartment}
         onUpdateDepartment={store.updateDepartment}
-        onDeleteDepartment={store.deleteDepartment}
+        onDeleteDepartment={(id) => {
+          if (selectedDeptId === id) {
+            setSelectedDeptId(null);
+            setRequestSelectDeptId(null);
+          }
+          store.deleteDepartment(id);
+        }}
         onAddNode={store.addNode}
         onUpdateNode={store.updateNode}
         onDeleteNode={store.deleteNode}

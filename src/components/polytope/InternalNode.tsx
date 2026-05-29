@@ -19,6 +19,7 @@ interface InternalNodeProps {
   parentLabel: string;
   setBackInfo: (info: { label: string; onClick: () => void } | null) => void;
   isDraft?: boolean;
+  draftChildNode?: UInternalNode | null;
 }
 
 export function InternalNode({
@@ -35,6 +36,7 @@ export function InternalNode({
   parentLabel,
   setBackInfo,
   isDraft = false,
+  draftChildNode = null,
 }: InternalNodeProps) {
   const groupRef = useRef<THREE.Group>(null);
   const currentPos = useRef(startPos.clone());
@@ -47,9 +49,12 @@ export function InternalNode({
   const myPath = [...pathContext, node.id];
 
   const childPositions = useMemo(() => {
-    if (!node.children || node.children.length === 0) return [];
+    const hasDraft = isMeActiveCenter && draftChildNode;
+    const existingCount = node.children?.length ?? 0;
+    const totalCount = existingCount + (hasDraft ? 1 : 0);
+    if (totalCount === 0) return [];
+    
     const pts: THREE.Vector3[] = [];
-    const count = node.children.length;
     const ringRadius = 1.4 * Math.pow(0.7, depth - 1);
 
     const dir = targetPos.clone().normalize();
@@ -61,15 +66,15 @@ export function InternalNode({
     const depthStep = 3.0;
     const childCenter = targetPos.clone().add(dir.clone().multiplyScalar(depthStep));
 
-    for (let i = 0; i < count; i++) {
-      const angle = (i / count) * Math.PI * 2;
+    for (let i = 0; i < totalCount; i++) {
+      const angle = (i / totalCount) * Math.PI * 2;
       const pt = childCenter.clone()
         .add(right.clone().multiplyScalar(Math.cos(angle) * ringRadius))
         .add(up.clone().multiplyScalar(Math.sin(angle) * ringRadius));
       pts.push(pt);
     }
     return pts;
-  }, [node, targetPos, depth]);
+  }, [node.children, targetPos, depth, isMeActiveCenter, draftChildNode]);
 
   const visibleChildIndices = useMemo(() => {
     if (!node.children) return [];
@@ -81,20 +86,28 @@ export function InternalNode({
   }, [node.children, isMeActiveCenter, selectedPath]);
 
   const childEdges = useMemo(() => {
-    if (visibleChildIndices.length === 0 || childPositions.length === 0) return null;
+    const hasDraft = isMeActiveCenter && draftChildNode;
+    const totalVisibleCount = visibleChildIndices.length + (hasDraft ? 1 : 0);
+    if (totalVisibleCount === 0 || childPositions.length === 0) return null;
+    
     const pts: THREE.Vector3[] = [];
-    for (let i = 0; i < visibleChildIndices.length; i++) {
-      const idx = visibleChildIndices[i];
+    const indicesToDraw = [...visibleChildIndices];
+    if (hasDraft) {
+      indicesToDraw.push(childPositions.length - 1);
+    }
+    
+    for (let i = 0; i < indicesToDraw.length; i++) {
+      const idx = indicesToDraw[i];
       pts.push(targetPos.clone());
       pts.push(childPositions[idx].clone());
-      if (visibleChildIndices.length > 1) {
-        const nextIdx = visibleChildIndices[(i + 1) % visibleChildIndices.length];
+      if (indicesToDraw.length > 1) {
+        const nextIdx = indicesToDraw[(i + 1) % indicesToDraw.length];
         pts.push(childPositions[idx].clone());
         pts.push(childPositions[nextIdx].clone());
       }
     }
     return new THREE.BufferGeometry().setFromPoints(pts);
-  }, [visibleChildIndices, childPositions, targetPos]);
+  }, [visibleChildIndices, childPositions, targetPos, isMeActiveCenter, draftChildNode]);
 
   useEffect(() => {
     if (groupRef.current) {
@@ -201,9 +214,29 @@ export function InternalNode({
             isVisible={isChildVisible}
             parentLabel={node.label}
             setBackInfo={setBackInfo}
+            draftChildNode={draftChildNode}
           />
         );
       })}
+
+      {isMeActiveCenter && draftChildNode && (
+        <InternalNode
+          key={draftChildNode.id}
+          node={draftChildNode}
+          targetPos={childPositions[childPositions.length - 1]}
+          startPos={targetPos}
+          color={color}
+          depth={depth + 1}
+          selectedPath={selectedPath}
+          onSelectPath={onSelectPath}
+          pathContext={myPath}
+          parentPos={targetPos}
+          isVisible={true}
+          parentLabel={node.label}
+          setBackInfo={setBackInfo}
+          isDraft
+        />
+      )}
 
       {isMeActiveCenter && childEdges && (
         <lineSegments geometry={childEdges}>

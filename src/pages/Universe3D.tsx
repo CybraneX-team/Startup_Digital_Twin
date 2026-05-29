@@ -223,6 +223,16 @@ export default function Universe3DPage() {
     setPolytopeManagerOpen(true);
   }, []);
 
+  const handleDeleteDepartmentClick = useCallback((dept: UExternalNode) => {
+    setPolytopeManagerView({ type: 'deleteDept', dept });
+    setPolytopeManagerOpen(true);
+  }, []);
+
+  const handleDeleteNodeClick = useCallback((dept: UExternalNode, node: UInternalNode) => {
+    setPolytopeManagerView({ type: 'deleteNode', dept, node });
+    setPolytopeManagerOpen(true);
+  }, []);
+
   // Separate state so clicking sidebar triggers camera fly-in without looping
   const [polytopeRequestSelectDeptId, setPolytopeRequestSelectDeptId] = useState<string | null | undefined>(undefined);
   // Counter incremented by sidebar back button to go back one internal level
@@ -270,12 +280,12 @@ export default function Universe3DPage() {
     }
   }, [polytopeStore.departments, polytopeDeptId]);
 
-  // Called when the 3D scene selects a dept — only update sidebar, no camera re-trigger
+  // Called when the 3D scene selects a dept
   const handlePolytopeDeptChange = useCallback((id: string | null) => {
     setPolytopeDeptId(id);
+    setPolytopeRequestSelectDeptId(id);
     if (id === null) {
       setPolytopeInternalPath([]);
-      setPolytopeRequestSelectDeptId(null);
       setPolytopeInternalBackStep(0);
     }
   }, []);
@@ -344,9 +354,9 @@ export default function Universe3DPage() {
   // Called when the 3D scene selects a dept inside company polytope
   const handleCompanyPolytopeDeptChange = useCallback((id: string | null) => {
     setCompanyPolytopeDeptId(id);
+    setCompanyPolytopeRequestSelectDeptId(id);
     if (id === null) {
       setCompanyPolytopeInternalPath([]);
-      setCompanyPolytopeRequestSelectDeptId(null);
       setCompanyPolytopeInternalBackStep(0);
     }
   }, []);
@@ -558,11 +568,15 @@ export default function Universe3DPage() {
           <UniversalPolytope
             companyName={activeCompany?.name ?? 'My Company'}
             transparent={true}
-            cameraResetTrigger={companyPolytopeEntryCount}
+            cameraResetTrigger={companyPolytopeEntryCount + polytopeDraftResetTrigger}
             requestSelectDeptId={companyPolytopeRequestSelectDeptId}
             onDepartmentChange={handleCompanyPolytopeDeptChange}
             onInternalPathChange={setCompanyPolytopeInternalPath}
             requestBackStep={companyPolytopeInternalBackStep}
+            draftDept={polytopeDraftDept}
+            draftNodeScreenPosRef={polytopeDraftDeptScreenPosRef}
+            draftInternalNode={polytopeDraftInternalNode}
+            draftInternalNodeScreenPosRef={polytopeDraftInternalNodeScreenPosRef}
             departments={polytopeStore.departments}
             selectedInternalPath={companyPolytopeInternalPath}
           />
@@ -613,6 +627,8 @@ export default function Universe3DPage() {
               onNodeSelect={insideBH ? setPolytopeInternalPath : setCompanyPolytopeInternalPath}
               onEditDepartment={handleEditDepartment}
               onEditNode={handleEditNode}
+              onDeleteDepartmentClick={handleDeleteDepartmentClick}
+              onDeleteNodeClick={handleDeleteNodeClick}
             />
           ) : (
             <>
@@ -698,7 +714,18 @@ export default function Universe3DPage() {
         departments={polytopeStore.departments}
         onAddDepartment={polytopeStore.addDepartment}
         onUpdateDepartment={polytopeStore.updateDepartment}
-        onDeleteDepartment={polytopeStore.deleteDepartment}
+        onDeleteDepartment={(id) => {
+          if (insideBH ? (polytopeDeptId === id) : (companyPolytopeDeptId === id)) {
+            if (insideBH) {
+              setPolytopeDeptId(null);
+              setPolytopeRequestSelectDeptId(null);
+            } else {
+              setCompanyPolytopeDeptId(null);
+              setCompanyPolytopeRequestSelectDeptId(null);
+            }
+          }
+          polytopeStore.deleteDepartment(id);
+        }}
         onAddNode={polytopeStore.addNode}
         onUpdateNode={polytopeStore.updateNode}
         onDeleteNode={polytopeStore.deleteNode}
@@ -748,7 +775,8 @@ export default function Universe3DPage() {
             }}
             onCreated={(data) => {
               const deptId = polytopeDraftInternalNode.deptId;
-              polytopeStore.addNode(deptId, data as Omit<UInternalNode, 'id' | 'children'>);
+              const path = insideBH ? polytopeInternalPath : companyPolytopeInternalPath;
+              polytopeStore.addNode(deptId, data as Omit<UInternalNode, 'id' | 'children'>, path);
               setPolytopeDraftInternalNode(null);
               setPolytopeDeptId(deptId);
             }}
@@ -791,22 +819,24 @@ export default function Universe3DPage() {
       )}
 
       {/* Legend */}
-      <div
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 text-xs px-4 py-2 rounded-full backdrop-blur-md z-10"
-        style={{ background: 'rgba(0,0,0,0.55)', color: '#5E5E5E', border: '1px solid rgba(255,255,255,0.06)' }}
-      >
-        {[
-          { color: '#7c3aed', label: 'Galaxy' },
-          { color: '#C1AEFF', label: 'Subdomain' },
-          { color: '#38bdf8', label: 'Company' },
-          { color: '#2dd4bf', label: 'Department' },
-        ].map((l) => (
-          <div key={l.label} className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full" style={{ background: l.color }} />
-            {l.label}
-          </div>
-        ))}
-      </div>
+      {!insideBH && !insideCompanyPolytope && (
+        <div
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 text-xs px-4 py-2 rounded-full backdrop-blur-md z-10"
+          style={{ background: 'rgba(0,0,0,0.55)', color: '#5E5E5E', border: '1px solid rgba(255,255,255,0.06)' }}
+        >
+          {[
+            { color: '#7c3aed', label: 'Galaxy' },
+            { color: '#C1AEFF', label: 'Subdomain' },
+            { color: '#38bdf8', label: 'Company' },
+            { color: '#2dd4bf', label: 'Department' },
+          ].map((l) => (
+            <div key={l.label} className="flex items-center gap-1.5">
+              <span className="w-2 h-2 rounded-full" style={{ background: l.color }} />
+              {l.label}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Keyboard hint */}
       <div
