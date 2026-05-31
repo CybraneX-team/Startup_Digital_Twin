@@ -71,13 +71,13 @@ function collectAllInternalNodes(
 
 // ── Node type badge ───────────────────────────────────────────────────────────
 const TYPE_COLORS: Record<string, string> = {
-  team:     '#60a5fa',
-  process:  '#a78bfa',
-  project:  '#34d399',
+  team: '#60a5fa',
+  process: '#a78bfa',
+  project: '#34d399',
   resource: '#fbbf24',
   decision: '#f472b6',
-  risk:     '#f87171',
-  metric:   '#22d3ee',
+  risk: '#f87171',
+  metric: '#22d3ee',
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -116,28 +116,28 @@ export function PolytopeSidePanel({
   // When inside a dept, search filters that dept's nodes; otherwise global search
   const deptResults = isSearchActive && !showingNodes
     ? activeDepts.filter(d =>
-        d.label.toLowerCase().includes(q) ||
-        d.domain.toLowerCase().includes(q) ||
-        d.cluster.toLowerCase().includes(q)
-      )
+      d.label.toLowerCase().includes(q) ||
+      d.domain.toLowerCase().includes(q) ||
+      d.cluster.toLowerCase().includes(q)
+    )
     : activeDepts;
 
   const internalNodeResults: InternalNodeResult[] = (isSearchActive && !showingNodes)
     ? activeDepts.flatMap(dept => {
-        const color = U_DOMAIN_COLOR[dept.domain] ?? '#6366f1';
-        return collectAllInternalNodes(dept.internalNodes, dept, color).filter(r =>
-          r.node.label.toLowerCase().includes(q) ||
-          r.node.type.toLowerCase().includes(q)
-        );
-      })
+      const color = U_DOMAIN_COLOR[dept.domain] ?? '#6366f1';
+      return collectAllInternalNodes(dept.internalNodes, dept, color).filter(r =>
+        r.node.label.toLowerCase().includes(q) ||
+        r.node.type.toLowerCase().includes(q)
+      );
+    })
     : [];
 
   // Fallback: if selectedDept is null but we have an internalPath, search for the dept that owns the path root
   const fallbackDept = !selectedDept && selectedInternalPath.length > 0
     ? activeDepts.find(d => {
-        const root = d.internalNodes.find(n => n.id === selectedInternalPath[0]);
-        return root !== undefined;
-      }) ?? null
+      const root = d.internalNodes.find(n => n.id === selectedInternalPath[0]);
+      return root !== undefined;
+    }) ?? null
     : null;
   const effectiveDept = selectedDept ?? fallbackDept;
 
@@ -146,9 +146,9 @@ export function PolytopeSidePanel({
   // Filter by search query when inside a dept
   const visibleNodes = (showingNodes && isSearchActive)
     ? allVisibleNodes.filter(n =>
-        n.label.toLowerCase().includes(q) ||
-        n.type.toLowerCase().includes(q)
-      )
+      n.label.toLowerCase().includes(q) ||
+      n.type.toLowerCase().includes(q)
+    )
     : allVisibleNodes;
   const deptColor = effectiveDept ? (U_DOMAIN_COLOR[effectiveDept.domain] ?? '#6366f1') : '#C1AEFF';
 
@@ -205,14 +205,14 @@ export function PolytopeSidePanel({
   const sectionLabel = isSearchActive && !showingNodes
     ? 'SEARCH RESULTS'
     : !showingNodes
-    ? 'DEPARTMENTS'
-    : selectedInternalPath.length === 0
-    ? 'INTERNAL NODES'
-    : 'SUB-NODES';
+      ? 'DEPARTMENTS'
+      : selectedInternalPath.length === 0
+        ? 'INTERNAL NODES'
+        : 'SUB-NODES';
 
   return (
     <div className="flex flex-col items-start gap-3">
-      
+
 
       {/* ── Search bar — always visible ── */}
       <div
@@ -513,7 +513,7 @@ export function PolytopeSidePanel({
                             border: `1px solid ${typeColor}30`,
                           }}
                         >
-                            {node.type}
+                          {node.type}
                         </span>
                       </span>
                     </div>

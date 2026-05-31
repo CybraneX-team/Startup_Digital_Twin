@@ -208,7 +208,7 @@ export function ProductWorkspace({
     setDragOverZone(prev => (prev === zoneId ? null : prev));
   };
 
-  const zoneItemClass = (zoneId: WorkspaceZoneId, active: boolean, isDrop: boolean) => {
+  const zoneItemClass = (_zoneId: WorkspaceZoneId, active: boolean, isDrop: boolean) => {
     const base =
       'w-full text-left rounded-xl px-3 py-2.5 transition-all duration-200 cursor-pointer border border-transparent';
     if (isDrop) return `${base} workspace-zone-drop-target`;

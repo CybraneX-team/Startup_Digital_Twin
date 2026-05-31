@@ -329,8 +329,8 @@ export default function Universe3DPage() {
 
   // ── Company Polytope (live/user-created company) ──────────────────────────
   const [insideCompanyPolytope, setInsideCompanyPolytope] = useState(false);
-  const [companyPolytopeMounted, setCompanyPolytopeMounted] = useState(false);
-  const [companyPolytopeEntryCount, setCompanyPolytopeEntryCount] = useState(0);
+  const [companyPolytopeMounted] = useState(false);
+  const [companyPolytopeEntryCount] = useState(0);
   const [activeCompany, setActiveCompany] = useState<any>(null);
 
   // Company polytope sidebar state — mirrors the BH polytope pattern
@@ -339,16 +339,9 @@ export default function Universe3DPage() {
   const [companyPolytopeRequestSelectDeptId, setCompanyPolytopeRequestSelectDeptId] = useState<string | null | undefined>(undefined);
   const [companyPolytopeInternalBackStep, setCompanyPolytopeInternalBackStep] = useState(0);
 
-  const handleEnterCompanyPolytope = useCallback((company: any) => {
-    setActiveCompany(company);
-    setCompanyPolytopeMounted(true);
-    setInsideCompanyPolytope(true);
-    setCompanyPolytopeEntryCount(c => c + 1);
-    // Reset sidebar for fresh entry
-    setCompanyPolytopeDeptId(null);
-    setCompanyPolytopeInternalPath([]);
-    setCompanyPolytopeRequestSelectDeptId(undefined);
-    setCompanyPolytopeInternalBackStep(0);
+  const handleEnterCompanyPolytope = useCallback((_company: any) => {
+    // Disabled: The polytope must not be accessed by clicking any planet or universal search in 3d universe
+    return;
   }, []);
 
   // Called when the 3D scene selects a dept inside company polytope

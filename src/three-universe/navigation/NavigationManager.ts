@@ -404,51 +404,12 @@ export class NavigationManager {
       ? this._subdomainSolarSystem.getCompanyWorldPosition(company.id)
       : this.systemParticles.getCompanyPosition(industry.id, subdomain.id, company.id);
 
-    // Catalog company — single fly, no polytope interior
-    if (!company.isLive) {
-      this.cameraCtrl.flyTo(wp, 28, ZOOM_LEVELS.COMPANY, () => {
-        this.currentLevel = ZOOM_LEVELS.COMPANY;
-        this.navigationPath = earlyPath;
-        if (this.onNavigate) this.onNavigate(this.navigationPath, this.currentLevel);
-      });
-      return;
-    }
-
-    // ── Live company: industry→subdomain style multi-phase entry ───────────
-    const sss = this._subdomainSolarSystem;
-    if (sss?.group) sss.morphOutSiblings(company.id, 0.4, 1.3);
-
-    // Phase 1: fly INTO the company planet surface (longer duration for smooth approach)
-    this.cameraCtrl.flyTo(wp, 6, ZOOM_LEVELS.COMPANY, () => {
-      // Phase 2: fade-swap — leave solar system, enter interior space
-      this._fadeSwap(
-        () => {
-          if (sss?.group) sss.group.visible = false;
-          this.camera.position.set(0, 500, 4500);
-          this.cameraCtrl.controls.target.set(0, 0, 0);
-          this.cameraCtrl.controls.update();
-        },
-        () => {
-          // Phase 3: warp-zoom inward while polytope fades in (synced with React overlay)
-          if (this.onEnterCompanyPolytope) this.onEnterCompanyPolytope(company);
-
-          this.cameraCtrl.isTransitioning = true;
-          gsap.to(this.camera.position, {
-            x: 0, y: 60, z: 220,
-            duration: 2.6,
-            ease: 'power3.in',
-            onUpdate: () => { this.cameraCtrl.controls.update(); },
-            onComplete: () => {
-              this.cameraCtrl.isTransitioning = false;
-              this.currentLevel = ZOOM_LEVELS.COMPANY;
-              this.navigationPath = earlyPath;
-              if (this.onNavigate) this.onNavigate(this.navigationPath, this.currentLevel);
-            },
-          });
-          gsap.to(this.cameraCtrl.controls.target, { x: 0, y: 0, z: 0, duration: 2.6, ease: 'power3.in' });
-        }
-      );
-    }, 2.2);
+    // All companies — single fly to the planet, no interior polytope transition
+    this.cameraCtrl.flyTo(wp, 28, ZOOM_LEVELS.COMPANY, () => {
+      this.currentLevel = ZOOM_LEVELS.COMPANY;
+      this.navigationPath = earlyPath;
+      if (this.onNavigate) this.onNavigate(this.navigationPath, this.currentLevel);
+    });
   }
 
   // ═══ EXIT LIVE COMPANY POLYTOPE (reverse of navigateToCompany) ═══
