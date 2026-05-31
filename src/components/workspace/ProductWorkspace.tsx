@@ -15,6 +15,8 @@ import {
   Wallet,
   Activity,
   LayoutGrid,
+  MousePointerClick,
+  Layers,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { DbCompany } from '../../lib/supabase';
@@ -38,7 +40,6 @@ export interface ProductWorkspaceProps {
   exiting?: boolean;
 }
 
-/** Custom + text/plain — browsers often only expose text/plain on drop. */
 const DND_INSIGHT = 'application/x-bdt-insight';
 
 function parseInsightFromTransfer(
@@ -80,16 +81,16 @@ const VITAL_ICONS: Record<string, LucideIcon> = {
   Alignment: Target,
 };
 
-function RelevanceBar({ score, color }: { score: number; color: string }) {
+function RelevanceBar({ score }: { score: number }) {
   return (
     <div className="flex items-center gap-2">
       <div className="flex-1 h-1 rounded-full bg-white/8 overflow-hidden">
         <div
-          className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${score}%`, background: color }}
+          className="h-full rounded-full transition-all duration-500 bg-gradient-to-r from-[#F9C6FF]/80 to-[#C1AEFF]/90"
+          style={{ width: `${score}%` }}
         />
       </div>
-      <span className="text-[10px] font-medium tabular-nums text-white/50 w-8 text-right">{score}%</span>
+      <span className="text-[10px] font-medium tabular-nums text-white/45 w-8 text-right">{score}%</span>
     </div>
   );
 }
@@ -98,15 +99,38 @@ function CompanyInitial({ name, color }: { name: string; color: string }) {
   const letter = (name.trim()[0] ?? 'C').toUpperCase();
   return (
     <div
-      className="w-11 h-11 rounded-xl flex items-center justify-center text-lg font-bold shrink-0"
+      className="w-10 h-10 rounded-xl flex items-center justify-center text-base font-bold shrink-0 ws-glass-panel"
       style={{
-        background: `linear-gradient(135deg, ${color}33, ${color}12)`,
-        border: `1px solid ${color}55`,
         color,
-        boxShadow: `0 0 24px ${color}25`,
+        boxShadow: `0 0 20px ${color}20`,
       }}
     >
       {letter}
+    </div>
+  );
+}
+
+function FlowStep({
+  step,
+  label,
+  active,
+}: {
+  step: number;
+  label: string;
+  active?: boolean;
+}) {
+  return (
+    <div
+      className={`flex items-center gap-2 text-[11px] ${active ? 'text-white/80' : 'text-white/35'}`}
+    >
+      <span
+        className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-semibold tabular-nums ${
+          active ? 'ws-zone-active' : 'ws-glass'
+        }`}
+      >
+        {step}
+      </span>
+      <span className="hidden sm:inline font-medium">{label}</span>
     </div>
   );
 }
@@ -148,6 +172,7 @@ export function ProductWorkspace({
   const ZoneIcon = ZONE_ICONS[activeZoneMeta.icon];
   const zonePins = pinsForZone(activeZone);
   const pinnedIds = new Set(pins.map(p => p.id));
+  const isDragging = dragOverZone !== null;
 
   const handleDragStart = (e: React.DragEvent, insight: ContextInsight) => {
     draggedInsightRef.current = insight;
@@ -183,95 +208,93 @@ export function ProductWorkspace({
     setDragOverZone(prev => (prev === zoneId ? null : prev));
   };
 
-  return (
-    <div className="absolute inset-0 z-[70] flex flex-col overflow-hidden workspace-bg-grid">
-      {/* Ambient layers */}
-      <div
-        className="pointer-events-none absolute inset-0"
-        style={{
-          background:
-            'radial-gradient(ellipse 90% 50% at 50% -20%, rgba(30,58,138,0.45) 0%, transparent 55%), radial-gradient(ellipse 60% 40% at 100% 50%, rgba(193,174,255,0.08) 0%, transparent 50%), #07070a',
-        }}
-      />
+  const zoneItemClass = (zoneId: WorkspaceZoneId, active: boolean, isDrop: boolean) => {
+    const base =
+      'w-full text-left rounded-xl px-3 py-2.5 transition-all duration-200 cursor-pointer border border-transparent';
+    if (isDrop) return `${base} workspace-zone-drop-target`;
+    if (active) return `${base} ws-zone-active`;
+    return `${base} hover:bg-white/[0.04] hover:border-white/[0.06]`;
+  };
 
+  return (
+    <div className="absolute inset-0 z-[70] flex flex-col overflow-hidden ws-shell workspace-bg-grid">
       {/* Header */}
-      <header className="relative shrink-0 border-b border-white/[0.06] backdrop-blur-xl bg-black/50">
-        <div className="flex items-center justify-between gap-4 px-5 py-3.5 max-w-[1800px] mx-auto w-full">
-          <div className="flex items-center gap-4 min-w-0">
+      <header className="relative shrink-0 ws-glass-strong border-b border-white/[0.06]">
+        <div className="flex items-center justify-between gap-4 px-4 sm:px-6 py-3 max-w-[1800px] mx-auto w-full">
+          <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={onBackToCompany}
               disabled={exiting}
-              className="group flex items-center gap-2 text-sm font-medium shrink-0 pl-2.5 pr-3.5 py-2 rounded-xl transition-all disabled:opacity-50 hover:brightness-110"
-              style={{
-                background: 'linear-gradient(135deg, rgba(249,198,255,0.15), rgba(193,174,255,0.1))',
-                border: '1px solid rgba(193,174,255,0.35)',
-                boxShadow: '0 4px 20px rgba(193,174,255,0.12)',
-              }}
+              className="ws-btn-primary group flex items-center gap-2 text-sm font-medium shrink-0 px-3 py-2 rounded-xl disabled:opacity-50"
             >
               <ArrowLeft className="w-4 h-4 transition-transform group-hover:-translate-x-0.5" />
-              Back to company
+              <span className="hidden sm:inline">Back</span>
             </button>
 
-            <div className="h-8 w-px bg-white/10 shrink-0 hidden sm:block" />
+            <div className="h-7 w-px bg-white/10 shrink-0 hidden sm:block" />
 
             <div className="flex items-center gap-3 min-w-0">
               <CompanyInitial name={companyName} color={industry.color} />
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-base sm:text-lg font-semibold text-white truncate">{companyName}</h1>
+                  <h1 className="text-base font-semibold text-white truncate tracking-tight">
+                    {companyName}
+                  </h1>
                   <span
-                    className="text-[10px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider"
-                    style={{
-                      color: industry.color,
-                      background: `${industry.color}14`,
-                      border: `1px solid ${industry.color}40`,
-                    }}
+                    className="text-[9px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider ws-glass"
+                    style={{ color: industry.color }}
                   >
                     {industry.label}
                   </span>
                 </div>
-                <p className="text-[11px] text-white/45 mt-0.5 flex items-center gap-1">
+                <p className="text-[10px] text-white/40 mt-0.5 flex items-center gap-1">
                   <span className="gradient-text font-medium">Industry OS</span>
-                  <ChevronRight className="w-3 h-3 opacity-40" />
-                  <span>Your product workspace</span>
+                  <ChevronRight className="w-3 h-3 opacity-30" />
+                  <span>Workspace</span>
                 </p>
               </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-            <div
-              className="hidden md:flex items-center gap-3 px-3 py-2 rounded-xl"
-              style={{
-                background: 'rgba(255,255,255,0.04)',
-                border: '1px solid rgba(255,255,255,0.08)',
-              }}
-            >
+          <div className="flex items-center gap-2 shrink-0">
+            <div className="hidden md:flex items-center gap-4 px-3 py-1.5 rounded-xl ws-glass">
               <div className="text-right">
-                <p className="text-[9px] uppercase tracking-wider text-white/35">Saved</p>
+                <p className="text-[9px] uppercase tracking-wider text-white/30">Saved</p>
                 <p className="text-sm font-semibold text-white tabular-nums">{pins.length}</p>
               </div>
-              <div className="w-px h-8 bg-white/10" />
+              <div className="w-px h-6 bg-white/10" />
               <div className="text-right">
-                <p className="text-[9px] uppercase tracking-wider text-white/35">Twin health</p>
-                <p className="text-sm font-semibold tabular-nums" style={{ color: '#C1AEFF' }}>
-                  {avgScore}
-                </p>
+                <p className="text-[9px] uppercase tracking-wider text-white/30">Twin health</p>
+                <p className="text-sm font-semibold tabular-nums gradient-text">{avgScore}</p>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Flow hint */}
+        <div className="px-4 sm:px-6 pb-3 max-w-[1800px] mx-auto w-full">
+          <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 sm:gap-6 py-2 px-3 rounded-xl ws-glass">
+            <FlowStep step={1} label="Browse signals" active={!isDragging && pins.length === 0} />
+            <ChevronRight className="w-3 h-3 text-white/20 hidden sm:block" />
+            <FlowStep step={2} label="Drag or pin" active={isDragging} />
+            <ChevronRight className="w-3 h-3 text-white/20 hidden sm:block" />
+            <FlowStep step={3} label="Build your board" active={pins.length > 0 && !isDragging} />
+          </div>
+        </div>
       </header>
 
-      <div className="relative flex-1 flex min-h-0 max-w-[1800px] mx-auto w-full">
+      <div className="relative flex-1 flex min-h-0 gap-2 sm:gap-3 p-2 sm:p-3 max-w-[1800px] mx-auto w-full">
         {/* Zone rail */}
-        <aside className="w-56 lg:w-60 shrink-0 border-r border-white/[0.06] flex flex-col bg-black/30 backdrop-blur-sm">
-          <div className="p-4 pb-2">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/30">Workspace areas</p>
+        <aside className="w-[13.5rem] lg:w-56 shrink-0 flex flex-col rounded-2xl ws-glass-strong overflow-hidden">
+          <div className="p-3 pb-1">
+            <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-white/28 flex items-center gap-1.5">
+              <Layers className="w-3 h-3" />
+              Areas
+            </p>
           </div>
           <nav
-            className="flex-1 overflow-y-auto px-2 pb-4 space-y-0.5"
+            className="flex-1 overflow-y-auto px-2 pb-2 space-y-1"
             onDragOver={allowDrop}
             onDrop={e => dropInsightOnZone(e, activeZone)}
           >
@@ -296,50 +319,26 @@ export function ProductWorkspace({
                   onDragOver={e => handleZoneDragOver(e, zone.id)}
                   onDragLeave={e => handleZoneDragLeave(e, zone.id)}
                   onDrop={e => dropInsightOnZone(e, zone.id)}
-                  className={`w-full text-left rounded-xl px-3 py-3 transition-all duration-200 cursor-pointer ${
-                    isDrop ? 'workspace-zone-drop-target' : ''
-                  }`}
-                  style={{
-                    background: isDrop
-                      ? `${zone.accent}18`
-                      : active
-                        ? 'rgba(255,255,255,0.07)'
-                        : 'transparent',
-                    border: isDrop
-                      ? `1px dashed ${zone.accent}`
-                      : active
-                        ? `1px solid ${zone.accent}40`
-                        : '1px solid transparent',
-                  }}
+                  className={zoneItemClass(zone.id, active, isDrop)}
                 >
-                  <div className="flex items-start gap-2.5">
+                  <div className="flex items-center gap-2.5">
                     <div
-                      className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                      style={{
-                        background: active ? `${zone.accent}22` : 'rgba(255,255,255,0.05)',
-                        color: active ? zone.accent : 'rgba(255,255,255,0.5)',
-                      }}
+                      className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ws-glass ${
+                        active ? 'text-[#C1AEFF]' : 'text-white/45'
+                      }`}
                     >
                       <Icon className="w-4 h-4" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between gap-1">
-                        <span
-                          className="text-sm font-medium truncate"
-                          style={{ color: active ? '#fff' : 'rgba(255,255,255,0.8)' }}
-                        >
-                          {zone.label}
-                        </span>
+                        <span className="text-sm font-medium truncate text-white/90">{zone.label}</span>
                         {count > 0 && (
-                          <span
-                            className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold tabular-nums shrink-0"
-                            style={{ background: `${zone.accent}28`, color: zone.accent }}
-                          >
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-md font-semibold tabular-nums shrink-0 ws-glass text-[#C1AEFF]">
                             {count}
                           </span>
                         )}
                       </div>
-                      <p className="text-[10px] text-white/38 mt-0.5 leading-snug line-clamp-2">
+                      <p className="text-[10px] text-white/32 mt-0.5 leading-snug line-clamp-1 hidden lg:block">
                         {zone.description}
                       </p>
                     </div>
@@ -348,43 +347,30 @@ export function ProductWorkspace({
               );
             })}
           </nav>
-          <div
-            className="m-3 p-3 rounded-xl text-[10px] leading-relaxed text-white/40"
-            style={{
-              background: 'linear-gradient(135deg, rgba(193,174,255,0.08), rgba(30,58,138,0.12))',
-              border: '1px solid rgba(193,174,255,0.15)',
-            }}
-          >
-            Use the <strong className="text-white/60">⠿ grip</strong> on a signal to drag it into an area, or tap{' '}
-            <strong className="text-white/60">Pin</strong> to save instantly.
+          <div className="m-2 p-2.5 rounded-xl ws-glass text-[10px] leading-relaxed text-white/38">
+            <MousePointerClick className="w-3.5 h-3.5 text-[#C1AEFF]/70 mb-1.5" />
+            Drag via <span className="text-white/55">⠿</span> or tap <span className="text-white/55">Pin</span>
           </div>
         </aside>
 
-        {/* Main */}
-        <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-          {/* Vitals strip */}
-          <div className="shrink-0 p-4 sm:p-5 border-b border-white/[0.05]">
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+        {/* Main canvas */}
+        <main className="flex-1 flex flex-col min-w-0 rounded-2xl ws-glass-strong overflow-hidden">
+          {/* Vitals */}
+          <div className="shrink-0 p-3 sm:p-4 border-b border-white/[0.05]">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
               {vitals.map(v => {
                 const VitalIcon = VITAL_ICONS[v.label] ?? Activity;
                 const trendColor =
                   v.trend === 'up' ? '#34d399' : v.trend === 'down' ? '#f87171' : '#94a3b8';
                 return (
-                  <div
-                    key={v.label}
-                    className="rounded-xl p-3 sm:p-4 transition-colors hover:bg-white/[0.03]"
-                    style={{
-                      background: 'rgba(255,255,255,0.03)',
-                      border: '1px solid rgba(255,255,255,0.06)',
-                    }}
-                  >
-                    <div className="flex items-center justify-between mb-2">
-                      <p className="text-[10px] font-medium uppercase tracking-wider text-white/40">{v.label}</p>
-                      <VitalIcon className="w-3.5 h-3.5 text-white/25" />
+                  <div key={v.label} className="rounded-xl p-3 ws-glass-panel transition-colors hover:bg-white/[0.05]">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <p className="text-[9px] font-medium uppercase tracking-wider text-white/35">{v.label}</p>
+                      <VitalIcon className="w-3 h-3 text-white/20" />
                     </div>
-                    <p className="text-xl sm:text-2xl font-semibold text-white tracking-tight">{v.value}</p>
+                    <p className="text-lg sm:text-xl font-semibold text-white tracking-tight">{v.value}</p>
                     {v.delta && (
-                      <p className="text-xs mt-1 font-medium" style={{ color: trendColor }}>
+                      <p className="text-[11px] mt-0.5 font-medium" style={{ color: trendColor }}>
                         {v.delta}
                       </p>
                     )}
@@ -394,49 +380,33 @@ export function ProductWorkspace({
             </div>
           </div>
 
-          {/* Zone hero + content */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-5">
+          <div className="flex-1 overflow-y-auto p-3 sm:p-4">
+            {/* Zone header */}
             <div
-              className={`rounded-2xl p-4 sm:p-5 mb-5 transition-all duration-200 ${
-                dragOverZone === activeZone ? 'workspace-zone-drop-target' : ''
+              className={`rounded-xl p-4 mb-4 ws-glass-panel transition-all duration-200 ${
+                dragOverZone === activeZone ? 'workspace-zone-drop-target ws-drop-surface-active' : ''
               }`}
-              style={{
-                background: `linear-gradient(135deg, ${activeZoneMeta.accent}12, rgba(0,0,0,0.2))`,
-                border:
-                  dragOverZone === activeZone
-                    ? `1px dashed ${activeZoneMeta.accent}`
-                    : `1px solid ${activeZoneMeta.accent}30`,
-              }}
               onDragEnter={e => handleZoneDragOver(e, activeZone)}
               onDragOver={e => handleZoneDragOver(e, activeZone)}
               onDragLeave={e => handleZoneDragLeave(e, activeZone)}
               onDrop={e => dropInsightOnZone(e, activeZone)}
             >
-              <div className="flex items-start justify-between gap-4">
+              <div className="flex items-start justify-between gap-3">
                 <div className="flex items-start gap-3">
-                  <div
-                    className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                    style={{ background: `${activeZoneMeta.accent}25`, color: activeZoneMeta.accent }}
-                  >
-                    <ZoneIcon className="w-5 h-5" />
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ws-glass text-[#C1AEFF]">
+                    <ZoneIcon className="w-4 h-4" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-semibold text-white">{activeZoneMeta.label}</h2>
-                    <p className="text-sm text-white/50 mt-0.5 max-w-lg">{activeZoneMeta.description}</p>
+                    <h2 className="text-base font-semibold text-white tracking-tight">{activeZoneMeta.label}</h2>
+                    <p className="text-xs text-white/45 mt-0.5 max-w-lg">{activeZoneMeta.description}</p>
                   </div>
                 </div>
-                <span
-                  className="text-xs font-medium px-2.5 py-1 rounded-lg shrink-0 tabular-nums"
-                  style={{
-                    background: 'rgba(255,255,255,0.06)',
-                    color: zonePins.length > 0 ? activeZoneMeta.accent : 'rgba(255,255,255,0.4)',
-                  }}
-                >
+                <span className="text-[11px] font-medium px-2 py-1 rounded-lg ws-glass tabular-nums text-white/50">
                   {zonePins.length} saved
                 </span>
               </div>
               {company?.description && activeZone === 'strategy' && (
-                <p className="text-sm text-white/55 mt-4 pt-4 border-t border-white/[0.06] leading-relaxed max-w-3xl">
+                <p className="text-xs text-white/50 mt-3 pt-3 border-t border-white/[0.06] leading-relaxed max-w-3xl">
                   {company.description}
                 </p>
               )}
@@ -444,75 +414,60 @@ export function ProductWorkspace({
 
             {zonePins.length === 0 ? (
               <div
-                className={`flex flex-col items-center justify-center py-20 px-6 rounded-2xl border border-dashed transition-all duration-200 ${
-                  dragOverZone === activeZone ? 'workspace-zone-drop-target border-white/25' : 'border-white/10'
+                className={`flex flex-col items-center justify-center py-16 sm:py-20 px-6 rounded-2xl ws-drop-surface transition-all duration-200 ${
+                  dragOverZone === activeZone ? 'workspace-zone-drop-target ws-drop-surface-active' : ''
                 }`}
-                style={{ background: 'rgba(255,255,255,0.02)' }}
                 onDragEnter={e => handleZoneDragOver(e, activeZone)}
                 onDragOver={e => handleZoneDragOver(e, activeZone)}
                 onDragLeave={e => handleZoneDragLeave(e, activeZone)}
                 onDrop={e => dropInsightOnZone(e, activeZone)}
               >
-                <div
-                  className="w-14 h-14 rounded-2xl flex items-center justify-center mb-4"
-                  style={{ background: `${activeZoneMeta.accent}15`, color: activeZoneMeta.accent }}
-                >
-                  <BookmarkPlus className="w-7 h-7" />
+                <div className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3 ws-glass text-[#C1AEFF]">
+                  <BookmarkPlus className="w-6 h-6" />
                 </div>
-                <p className="text-sm font-medium text-white/70">Nothing saved in {activeZoneMeta.label} yet</p>
-                <p className="text-xs text-white/40 mt-2 text-center max-w-sm leading-relaxed">
-                  Pull insights from other industries on the right — they stay relevant to your sector and
-                  stack up here for later decisions.
+                <p className="text-sm font-medium text-white/75">Drop signals here</p>
+                <p className="text-xs text-white/38 mt-2 text-center max-w-xs leading-relaxed">
+                  Nothing in {activeZoneMeta.label} yet. Pull cross-sector insights from the feed on the right.
                 </p>
               </div>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 {zonePins.map(pin => (
-                  <article
-                    key={pin.id}
-                    className="workspace-pin-card rounded-xl p-4 relative group"
-                    style={{
-                      background: 'rgba(27,27,29,0.95)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                    }}
-                  >
+                  <article key={pin.id} className="workspace-pin-card rounded-xl p-4 relative group">
                     <button
                       type="button"
                       onClick={() => unpinInsight(pin.id)}
-                      className="absolute top-3 right-3 p-1.5 rounded-lg bg-white/5 text-white/35 hover:text-red-400 hover:bg-red-500/10 opacity-0 group-hover:opacity-100 sm:opacity-100 transition-all"
+                      className="absolute top-3 right-3 p-1.5 rounded-lg ws-btn-ghost text-white/35 hover:text-red-400 hover:border-red-400/30 opacity-0 group-hover:opacity-100 sm:opacity-100 transition-all"
                       aria-label="Remove"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                     <span
-                      className="inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-md mb-2"
-                      style={{
-                        color: pin.sourceIndustryColor,
-                        background: `${pin.sourceIndustryColor}18`,
-                      }}
+                      className="inline-flex text-[10px] font-semibold px-2 py-0.5 rounded-md mb-2 ws-glass"
+                      style={{ color: pin.sourceIndustryColor }}
                     >
                       {pin.sourceIndustry}
                     </span>
                     <h3 className="text-sm font-semibold text-white pr-8 leading-snug">{pin.title}</h3>
-                    <p className="text-xs text-white/48 mt-2 leading-relaxed line-clamp-3">{pin.summary}</p>
+                    <p className="text-xs text-white/45 mt-2 leading-relaxed line-clamp-3">{pin.summary}</p>
                     <div className="flex flex-wrap gap-1 mt-3">
                       {pin.tags.map(tag => (
                         <span
                           key={tag}
-                          className="text-[9px] px-1.5 py-0.5 rounded-md bg-white/[0.06] text-white/45"
+                          className="text-[9px] px-1.5 py-0.5 rounded-md bg-white/[0.05] text-white/40"
                         >
                           {tag}
                         </span>
                       ))}
                     </div>
                     <div className="flex flex-wrap gap-1 mt-3 pt-3 border-t border-white/[0.06]">
-                      <span className="text-[9px] text-white/30 w-full mb-0.5">Move to</span>
+                      <span className="text-[9px] text-white/28 w-full mb-0.5">Move to</span>
                       {WORKSPACE_ZONES.filter(z => z.id !== activeZone && z.id !== 'insights').map(z => (
                         <button
                           key={z.id}
                           type="button"
                           onClick={() => movePin(pin.id, z.id)}
-                          className="text-[9px] px-2 py-1 rounded-md bg-white/[0.04] text-white/45 hover:text-white hover:bg-white/10 transition-colors"
+                          className="text-[9px] px-2 py-1 rounded-md ws-btn-ghost text-white/45 hover:text-white"
                         >
                           {z.label}
                         </button>
@@ -524,23 +479,21 @@ export function ProductWorkspace({
             )}
 
             {activeZone === 'operations' && (
-              <div className="mt-8">
-                <h3 className="text-[10px] font-semibold uppercase tracking-[0.15em] text-white/35 mb-3">
-                  Live polytope departments
+              <div className="mt-6">
+                <h3 className="text-[9px] font-semibold uppercase tracking-[0.15em] text-white/30 mb-2">
+                  Live departments
                 </h3>
                 <div className="flex flex-wrap gap-2">
                   {deptNodes.map(d => (
                     <span
                       key={d.id}
-                      className="text-xs px-3 py-1.5 rounded-lg font-medium"
+                      className="text-xs px-2.5 py-1 rounded-lg font-medium ws-glass"
                       style={{
-                        background: `${U_DOMAIN_COLOR[d.domain as UDomain]}14`,
                         color: U_DOMAIN_COLOR[d.domain as UDomain],
-                        border: `1px solid ${U_DOMAIN_COLOR[d.domain as UDomain]}35`,
                       }}
                     >
                       {d.label}
-                      <span className="opacity-60 ml-1.5 tabular-nums">{d.score}</span>
+                      <span className="opacity-50 ml-1 tabular-nums">{d.score}</span>
                     </span>
                   ))}
                 </div>
@@ -549,16 +502,17 @@ export function ProductWorkspace({
           </div>
         </main>
 
-        {/* Insight feed */}
-        <aside className="w-72 lg:w-80 shrink-0 border-l border-white/[0.06] flex flex-col bg-black/40 backdrop-blur-sm">
-          <div className="p-4 border-b border-white/[0.06] space-y-3">
+        {/* Signal feed */}
+        <aside className="w-[17rem] lg:w-72 shrink-0 flex flex-col rounded-2xl ws-glass-strong overflow-hidden">
+          <div className="p-3 border-b border-white/[0.06] space-y-2.5">
             <div>
-              <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-                <Sparkles className="w-4 h-4" style={{ color: '#C1AEFF' }} />
-                Cross-sector signals
+              <h2 className="text-sm font-semibold text-white flex items-center gap-2 tracking-tight">
+                <Sparkles className="w-4 h-4 text-[#C1AEFF]" />
+                Signals
               </h2>
-              <p className="text-[11px] text-white/42 mt-1">
-                Curated for <span style={{ color: industry.color }}>{industry.label}</span>
+              <p className="text-[10px] text-white/38 mt-0.5">
+                For <span style={{ color: industry.color }}>{industry.label}</span>
+                <span className="text-white/25"> · {filteredInsights.length}</span>
               </p>
             </div>
             <div className="relative">
@@ -567,19 +521,15 @@ export function ProductWorkspace({
                 type="search"
                 value={insightQuery}
                 onChange={e => setInsightQuery(e.target.value)}
-                placeholder="Search signals…"
-                className="w-full pl-8 pr-3 py-2 text-xs rounded-lg text-white placeholder:text-white/30 outline-none focus:ring-1 transition-shadow"
-                style={{
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.08)',
-                }}
+                placeholder="Search…"
+                className="ws-input w-full pl-8 pr-3 py-2 text-xs rounded-lg text-white placeholder:text-white/28"
               />
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto p-3 space-y-2.5">
+          <div className="flex-1 overflow-y-auto p-2 space-y-2">
             {filteredInsights.length === 0 ? (
-              <p className="text-xs text-white/40 text-center py-8">No signals match your search.</p>
+              <p className="text-xs text-white/35 text-center py-10">No matches</p>
             ) : (
               filteredInsights.map(insight => {
                 const isPinned = pinnedIds.has(insight.id);
@@ -587,76 +537,52 @@ export function ProductWorkspace({
                 return (
                   <div
                     key={insight.id}
-                    className={`workspace-insight-card rounded-xl p-3.5 ${
-                      isPinned ? 'workspace-insight-card--pinned opacity-50' : ''
+                    className={`workspace-insight-card rounded-xl p-3 ${
+                      isPinned ? 'workspace-insight-card--pinned opacity-45' : ''
                     }`}
-                    style={{
-                      background: 'rgba(255,255,255,0.04)',
-                      border: '1px solid rgba(255,255,255,0.07)',
-                    }}
                   >
-                    <div className="flex items-stretch gap-2">
+                    <div className="flex items-stretch gap-1.5">
                       {!isPinned ? (
                         <div
                           draggable
                           onDragStart={e => handleDragStart(e, insight)}
                           onDragEnd={handleDragEnd}
-                          className="flex items-center shrink-0 cursor-grab active:cursor-grabbing touch-none px-0.5 -ml-0.5 rounded-md hover:bg-white/5 self-stretch"
-                          title="Drag to a workspace area"
+                          className="flex items-center shrink-0 cursor-grab active:cursor-grabbing touch-none px-1 rounded-md hover:bg-white/[0.06] self-stretch"
+                          title="Drag to an area"
                         >
-                          <GripVertical className="w-4 h-4 text-white/35" />
+                          <GripVertical className="w-4 h-4 text-[#C1AEFF]/50" />
                         </div>
                       ) : (
-                        <GripVertical className="w-4 h-4 text-white/15 shrink-0 mt-1" />
+                        <GripVertical className="w-4 h-4 text-white/12 shrink-0 mt-1" />
                       )}
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <span
-                            className="text-[10px] font-semibold px-1.5 py-0.5 rounded"
-                            style={{
-                              color: insight.sourceIndustryColor,
-                              background: `${insight.sourceIndustryColor}15`,
-                            }}
-                          >
-                            {insight.sourceIndustry}
-                          </span>
-                        </div>
+                        <span
+                          className="text-[9px] font-semibold px-1.5 py-0.5 rounded ws-glass inline-block mb-1"
+                          style={{ color: insight.sourceIndustryColor }}
+                        >
+                          {insight.sourceIndustry}
+                        </span>
                         <h3 className="text-xs font-semibold text-white leading-snug">{insight.title}</h3>
-                        <p className="text-[11px] text-white/45 mt-1.5 leading-relaxed line-clamp-3">
+                        <p className="text-[11px] text-white/42 mt-1 leading-relaxed line-clamp-2">
                           {insight.summary}
                         </p>
-                        <div className="mt-2.5">
-                          <RelevanceBar score={insight.relevanceScore} color={insight.sourceIndustryColor} />
-                        </div>
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {insight.tags.slice(0, 3).map(tag => (
-                            <span
-                              key={tag}
-                              className="text-[9px] px-1.5 py-0.5 rounded bg-white/[0.05] text-white/40"
-                            >
-                              {tag}
-                            </span>
-                          ))}
+                        <div className="mt-2">
+                          <RelevanceBar score={insight.relevanceScore} />
                         </div>
                         {!isPinned ? (
                           <button
                             type="button"
                             draggable={false}
                             onClick={() => pinInsight(insight, insight.suggestedZone)}
-                            className="mt-3 w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-[11px] font-semibold transition-all hover:brightness-110"
-                            style={{
-                              background: 'linear-gradient(135deg, rgba(249,198,255,0.2), rgba(193,174,255,0.12))',
-                              border: '1px solid rgba(193,174,255,0.3)',
-                              color: '#E8DEFF',
-                            }}
+                            className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[10px] font-semibold ws-btn-primary"
                           >
                             <BookmarkPlus className="w-3.5 h-3.5" />
-                            Pin to {suggested?.label ?? 'workspace'}
+                            Pin · {suggested?.label ?? 'area'}
                           </button>
                         ) : (
-                          <p className="mt-3 text-[10px] text-center text-emerald-400/80 font-medium flex items-center justify-center gap-1">
+                          <p className="mt-2 text-[10px] text-center text-emerald-400/75 font-medium flex items-center justify-center gap-1">
                             <Bookmark className="w-3 h-3" />
-                            Saved in workspace
+                            Saved
                           </p>
                         )}
                       </div>

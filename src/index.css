@@ -165,5 +165,122 @@
 
   .workspace-zone-drop-target {
     animation: workspace-zone-pulse 1.2s ease-in-out infinite;
+    border-color: rgba(193, 174, 255, 0.45) !important;
+    background: rgba(193, 174, 255, 0.06) !important;
+  }
+
+  /* Industry OS workspace — glassmorphic shell */
+  .ws-shell {
+    background:
+      radial-gradient(ellipse 120% 80% at 50% -30%, rgba(193, 174, 255, 0.12) 0%, transparent 50%),
+      radial-gradient(ellipse 70% 50% at 0% 80%, rgba(30, 58, 138, 0.2) 0%, transparent 45%),
+      radial-gradient(ellipse 50% 40% at 100% 20%, rgba(249, 198, 255, 0.06) 0%, transparent 40%),
+      #0c0c0e;
+  }
+
+  .ws-glass {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  }
+
+  .ws-glass-strong {
+    background: rgba(22, 22, 24, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(24px) saturate(1.5);
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    box-shadow:
+      0 4px 24px rgba(0, 0, 0, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .ws-glass-panel {
+    background: linear-gradient(
+      165deg,
+      rgba(255, 255, 255, 0.07) 0%,
+      rgba(255, 255, 255, 0.02) 100%
+    );
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+
+  .ws-zone-active {
+    background: rgba(193, 174, 255, 0.08) !important;
+    border-color: rgba(193, 174, 255, 0.28) !important;
+    box-shadow:
+      0 0 0 1px rgba(193, 174, 255, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  }
+
+  .ws-input {
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+
+  .ws-input:focus {
+    border-color: rgba(193, 174, 255, 0.35);
+    box-shadow: 0 0 0 3px rgba(193, 174, 255, 0.1);
+    outline: none;
+  }
+
+  .ws-btn-ghost {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    transition: background 0.2s ease, border-color 0.2s ease;
+  }
+
+  .ws-btn-ghost:hover {
+    background: rgba(255, 255, 255, 0.09);
+    border-color: rgba(255, 255, 255, 0.16);
+  }
+
+  .ws-btn-primary {
+    background: linear-gradient(135deg, rgba(249, 198, 255, 0.22), rgba(193, 174, 255, 0.14));
+    border: 1px solid rgba(193, 174, 255, 0.35);
+    color: #f0e8ff;
+    transition: filter 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  .ws-btn-primary:hover {
+    filter: brightness(1.08);
+    box-shadow: 0 4px 20px rgba(193, 174, 255, 0.15);
+  }
+
+  .ws-drop-surface {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px dashed rgba(255, 255, 255, 0.12);
+    transition: border-color 0.2s ease, background 0.2s ease;
+  }
+
+  .ws-drop-surface-active {
+    border-color: rgba(193, 174, 255, 0.4) !important;
+    background: rgba(193, 174, 255, 0.04) !important;
+  }
+
+  .workspace-insight-card {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.07) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+  }
+
+  .workspace-pin-card {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.09) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .workspace-pin-card:hover {
+    border-color: rgba(193, 174, 255, 0.2) !important;
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
   }
 }
