@@ -45,12 +45,13 @@ export class CameraController {
     this.controls.enableDamping = true;
     this.controls.dampingFactor = 0.04;
 
-    // Zoom range limits
     this.controls.minDistance = 3;
     this.controls.maxDistance = 38000;
 
     // Smooth zoom speed
-    this.controls.zoomSpeed = 0.6;
+    this._baseZoomSpeed = 0.6;
+    this._baseDamping = 0.04;
+    this.controls.zoomSpeed = this._baseZoomSpeed;
 
     // Pan
     this.controls.enablePan = true;
@@ -234,6 +235,41 @@ export class CameraController {
       0,
       1
     );
+  }
+
+  /**
+   * Progressive zoom/damping easing as the camera approaches the galactic center
+   * (black hole). Replaces abrupt on/off speed changes with a smooth curve.
+   */
+  updateBlackHoleApproach(distFromOrigin) {
+    if (this.isTransitioning || !this.controls.enableZoom) return;
+
+    const SLOW_START = 2400;
+    const SLOW_END   = 1050;
+
+    if (distFromOrigin >= SLOW_START) {
+      this.resetBlackHoleApproach();
+      return;
+    }
+
+    const t = THREE.MathUtils.clamp(
+      (SLOW_START - distFromOrigin) / (SLOW_START - SLOW_END),
+      0,
+      1,
+    );
+    const ease = t * t * (3 - 2 * t); // smoothstep
+
+    this.controls.zoomSpeed = THREE.MathUtils.lerp(this._baseZoomSpeed, 0.22, ease);
+    this.controls.dampingFactor = THREE.MathUtils.lerp(this._baseDamping, 0.065, ease);
+    // Prevent overshooting into minDistance=3 before interior capture takes over
+    this.controls.minDistance = THREE.MathUtils.lerp(3, 140, ease);
+  }
+
+  /** Restore default scroll/orbit feel after leaving the BH approach zone. */
+  resetBlackHoleApproach() {
+    this.controls.zoomSpeed = this._baseZoomSpeed;
+    this.controls.dampingFactor = this._baseDamping;
+    this.controls.minDistance = 3;
   }
 
   update() {

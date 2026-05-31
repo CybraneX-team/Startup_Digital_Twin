@@ -49,6 +49,8 @@ export interface UniverseCallbacks {
 }
 
 const _orbitPos = new THREE.Vector3();
+const _bhCaptureDir = new THREE.Vector3();
+const _bhCapturePos = new THREE.Vector3();
 
 export class UniverseController {
   private container: HTMLElement;
@@ -76,6 +78,7 @@ export class UniverseController {
     this._data = data;
     this._callbacks = callbacks ?? {};
     this._exitingBH = false;
+    this._bhCapturing = false;
 
     this._init(data);
   }
@@ -138,27 +141,13 @@ export class UniverseController {
       this.polytopeRenderer = new PolytopeRenderer(this.engine.scene);
       this.polytopeRenderer.renderPolytope("Work OS Orbit", industries, "#4ade80");
 
-      // Black-hole pre-zone: slow zoom as camera enters the 1800-unit pre-zone
-      // so users always get the same smooth, deliberate approach sensation.
-      this.galaxyParticles.onNearBH = (near: boolean) => {
-        if (this.cameraCtrl?.controls) {
-          this.cameraCtrl.controls.zoomSpeed = near ? 0.28 : 0.6;
-        }
-      };
-
       // Black-hole interior callbacks (wired after both deps exist)
       this.galaxyParticles.onEnterBH = () => {
-        this._exitingBH = false; // allow exit to work if user re-enters
-        // Freeze the vanilla camera immediately — stops OrbitControls damping
-        // from coasting the camera past the trigger zone all the way to minDistance.
-        // Without this, camera can reach distance ~3 on first entry, making flyToGalaxy
-        // compute a bad exit direction, and making the second approach feel totally different.
-        this.cameraCtrl.controls.enableZoom = false;
-        this.systemParticles?.setVisible(false);
-        this.polytopeRenderer?.setVisible(false);
-        this._callbacks?.onEnterBH?.();
+        this._exitingBH = false;
+        this._smoothCaptureBlackHole();
       };
       this.galaxyParticles.onExitBH = () => {
+        this.cameraCtrl?.resetBlackHoleApproach();
         this.systemParticles?.setVisible(true);
         // Force-restore galaxy visibility — setSubdomainLevel(true) may have hidden it
         this.galaxyParticles?.setVisible(true);
@@ -418,10 +407,73 @@ export class UniverseController {
     });
   }
 
+  private _smoothCaptureBlackHole(): void {
+    const ctrl = this.cameraCtrl;
+    const cam  = this.engine?.camera;
+    if (!ctrl || !cam || this._bhCapturing) return;
+    this._bhCapturing = true;
+
+    // Stop scroll input — GSAP handles the final approach.
+    ctrl.controls.enableZoom = false;
+    ctrl.isTransitioning = true;
+
+    gsap.killTweensOf(cam.position);
+    gsap.killTweensOf(ctrl.controls.target);
+    if (ctrl._flyTimeline) { ctrl._flyTimeline.kill(); ctrl._flyTimeline = null; }
+
+    const CAPTURE_DIST = 460;
+    const camLen = cam.position.length();
+    if (camLen > 1) {
+      _bhCaptureDir.copy(cam.position).divideScalar(camLen);
+    } else {
+      _bhCaptureDir.set(0.4, 0.35, 0.85).normalize();
+    }
+    // Land near capture distance; skip a long pull-in if already close to the trigger zone
+    const settleDist = camLen <= CAPTURE_DIST * 1.2
+      ? camLen
+      : THREE.MathUtils.lerp(camLen, CAPTURE_DIST, 0.55);
+    _bhCapturePos.copy(_bhCaptureDir).multiplyScalar(settleDist);
+
+    // Hide industry systems during interior view — particle groups stay alive.
+    this.systemParticles?.setVisible(false);
+    this.polytopeRenderer?.setVisible(false);
+    this._callbacks?.onEnterBH?.();
+
+    const captureDur = camLen <= CAPTURE_DIST * 1.2 ? 0.35 : 0.9;
+    gsap.to(cam.position, {
+      x: _bhCapturePos.x,
+      y: _bhCapturePos.y,
+      z: _bhCapturePos.z,
+      duration: captureDur,
+      ease: 'power2.inOut',
+      onUpdate: () => ctrl.controls.update(),
+      onComplete: () => {
+        ctrl.isTransitioning = false;
+        ctrl.controls.update();
+        this._bhCapturing = false;
+      },
+    });
+    gsap.to(ctrl.controls.target, {
+      x: 0, y: 0, z: 0,
+      duration: captureDur,
+      ease: 'power2.inOut',
+    });
+  }
+
   private _update(delta: number, elapsed: number, industries: any[]) {
     if (this._disposed) return;
 
     this.cameraCtrl.update();
+
+    // Progressive BH zoom easing at galaxy level (before interior capture).
+    if (
+      this.cameraCtrl.currentLevel === ZOOM_LEVELS.GALAXY &&
+      !this.galaxyParticles._insideBH &&
+      !this._bhCapturing &&
+      this.galaxyParticles._bhEnabled
+    ) {
+      this.cameraCtrl.updateBlackHoleApproach(this.engine.camera.position.length());
+    }
 
     let zoomLevelFactor = 1.0;
     if (this.cameraCtrl.currentLevel === ZOOM_LEVELS.INDUSTRY) zoomLevelFactor = 0.3;
@@ -608,6 +660,7 @@ export class UniverseController {
     gsap.killTweensOf(ctrl.controls.target);
     if (ctrl._flyTimeline) { ctrl._flyTimeline.kill(); ctrl._flyTimeline = null; }
     ctrl.isTransitioning = false;
+    this._bhCapturing = false;
 
     // Disable zoom only — prevents user scroll fighting the fly animation.
     ctrl.controls.enableZoom = false;
@@ -635,10 +688,11 @@ export class UniverseController {
     setTimeout(() => {
       ctrl.controls.enableZoom = true;
       ctrl.controls.enabled    = true;
-      ctrl.controls.zoomSpeed  = 0.6; // restore full speed (pre-zone callback restores on exit anyway, but be explicit)
+      ctrl.resetBlackHoleApproach();
       ctrl.isTransitioning     = false;
       ctrl.controls.update();
       this._exitingBH = false;
+      this._bhCapturing = false;
     }, 3500);
   }
 
