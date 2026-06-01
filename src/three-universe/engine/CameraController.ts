@@ -104,6 +104,40 @@ export class CameraController {
   }
 
   /**
+   * Teleport camera to target — no zoom animation (logged-in company interior).
+   */
+  snapTo(targetPosition, distance, level, onComplete, overrideDir) {
+    if (this._flyTimeline) this._flyTimeline.kill();
+    this.isTransitioning = false;
+    this.controls.autoRotate = false;
+
+    let currentDir;
+    if (overrideDir) {
+      currentDir = overrideDir.clone().normalize();
+    } else {
+      const toCam = new THREE.Vector3().subVectors(this.camera.position, this.controls.target);
+      const toCamLen = toCam.length();
+      currentDir = toCamLen < 150
+        ? new THREE.Vector3(0.4, 0.35, 0.85).normalize()
+        : toCam.divideScalar(toCamLen);
+      if (Math.abs(currentDir.y) > 0.9) {
+        currentDir.set(0.5, 0.4, 0.5).normalize();
+      }
+    }
+
+    const newCamPos = new THREE.Vector3()
+      .copy(targetPosition)
+      .add(currentDir.multiplyScalar(distance));
+    newCamPos.y = Math.max(newCamPos.y, targetPosition.y + distance * 0.25);
+
+    this.camera.position.copy(newCamPos);
+    this.controls.target.copy(targetPosition);
+    this.controls.update();
+    this.currentLevel = level;
+    if (onComplete) onComplete();
+  }
+
+  /**
    * Fly the camera to a target with cinematic GSAP transition.
    */
   flyTo(targetPosition, distance, level, onComplete, durationOverride) {

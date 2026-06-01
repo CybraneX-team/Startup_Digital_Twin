@@ -37,7 +37,14 @@ interface ScopeState {
   focusedCompany: string | null;   // which company is open
   companyFocus: number;            // smooth 0-1
   clusterFilter: ClusterFilter;
+  instantCompanyEnter?: boolean;   // one-frame snap for logged-in company
 }
+
+type EnterCompanyOptions = {
+  /** Skip camera zoom / focus fade (logged-in user's company). */
+  instant?: boolean;
+  industryId?: string;
+};
 
 type ScopeLevel = 'galaxy' | 'cluster' | 'company';
 type ClusterFilter = 'all' | 'competitors' | 'allies';
@@ -269,8 +276,24 @@ const _c2 = new THREE.Color();
 interface CameraHandle {
   enterIndustry(id: string, center: [number,number,number]): void;
   exitToGalaxy(): void;
-  enterCompany(id: string, pos: [number,number,number]): void;
+  enterCompany(id: string, pos: [number,number,number], opts?: EnterCompanyOptions): void;
   exitToCluster(): void;
+}
+
+function applyCompanyOrbitControls(
+  controls: any,
+  camera: THREE.Camera,
+  companyCenter: THREE.Vector3,
+) {
+  const camPos = companyCenter.clone().add(new THREE.Vector3(0, 18, 15));
+  camera.position.copy(camPos);
+  controls.target.copy(companyCenter);
+  controls.update();
+  controls.enabled = true;
+  controls.enableZoom = false;
+  controls.minDistance = 6;
+  controls.maxDistance = 32;
+  controls.autoRotate = false;
 }
 
 function CameraWatcher({
@@ -339,15 +362,27 @@ function CameraWatcher({
         if (controls) { controls.enabled = false; controls.autoRotate = false; controls.enableZoom = true; }
         onExitCompany?.();
       },
-      enterCompany(id, pos) {
+      enterCompany(id, pos, opts) {
         const controls = controlsRef.current;
         const p = new THREE.Vector3(...pos);
         targetTarget.current.copy(p);
         targetPos.current.copy(p).add(new THREE.Vector3(0, 18, 15));
-        targetClF.current = 1; targetCpF.current = 1;
+        targetClF.current = 1;
+        targetCpF.current = 1;
         const s = scopeRef.current!;
-        s.level = 'company'; s.focusedCompany = id;
-        if (controls) controls.enabled = false;
+        s.level = 'company';
+        s.focusedCompany = id;
+        if (opts?.industryId && !s.focusedCluster) {
+          s.focusedCluster = opts.industryId;
+        }
+        if (opts?.instant) {
+          s.clusterFocus = 1;
+          s.companyFocus = 1;
+          s.instantCompanyEnter = true;
+          if (controls) applyCompanyOrbitControls(controls, camera, p);
+        } else if (controls) {
+          controls.enabled = false;
+        }
         onEnterCompany?.(id);
       },
       exitToCluster() {
@@ -411,6 +446,10 @@ function CameraWatcher({
           controls.autoRotate = false;
         }
       }
+    }
+
+    if (s.instantCompanyEnter) {
+      s.instantCompanyEnter = false;
     }
 
     /* Level change notification */
@@ -591,6 +630,27 @@ function NodeSphere({
       animReveal.current = THREE.MathUtils.lerp(animReveal.current, scope.revealFactor, 0.18);
     }
 
+    const myParentId = parentOf ? parentOf(node.id) : EMERGE_PARENT[node.id];
+    const snapLayout = !!s.instantCompanyEnter
+      && s.level === 'company'
+      && s.focusedCompany !== null
+      && myParentId === s.focusedCompany;
+
+    const companyViewBoost = (isDept || isFeature) && s.companyFocus > 0.3
+      ? THREE.MathUtils.lerp(1, 1.5, smoothstep(0.3, 0.8, s.companyFocus))
+      : 1;
+    const interactMult = isSelected ? 1.35 : isHovered ? 1.18 : 1;
+
+    if (snapLayout) {
+      animOp.current = scope.opacity;
+      animEmerge.current = scope.emergeFactor;
+      if (isCompany) animReveal.current = scope.revealFactor;
+      animScale.current = Math.max(
+        0.01,
+        baseScale * scope.scaleMult * interactMult * companyViewBoost,
+      );
+    }
+
     const op = animOp.current;
     const emerge = animEmerge.current;
     const reveal = animReveal.current;
@@ -610,10 +670,13 @@ function NodeSphere({
     }
 
     /* flat 2D layout transition in company view */
-    const myParentId = parentOf ? parentOf(node.id) : EMERGE_PARENT[node.id];
-    if (flatVec && s.focusedCompany && myParentId === s.focusedCompany && s.companyFocus > 0.2) {
-      const flatT = smoothstep(0.2, 0.7, s.companyFocus);
-      groupRef.current.position.lerp(flatVec, flatT);
+    if (flatVec && s.focusedCompany && myParentId === s.focusedCompany) {
+      if (snapLayout || s.companyFocus > 0.95) {
+        groupRef.current.position.copy(flatVec);
+      } else if (s.companyFocus > 0.2) {
+        const flatT = smoothstep(0.2, 0.7, s.companyFocus);
+        groupRef.current.position.lerp(flatVec, flatT);
+      }
     }
 
     /* material */
@@ -662,10 +725,6 @@ function NodeSphere({
     }
 
     /* scale — departments and features scale up in company view */
-    const companyViewBoost = (isDept || isFeature) && s.companyFocus > 0.3
-      ? THREE.MathUtils.lerp(1, 1.5, smoothstep(0.3, 0.8, s.companyFocus))
-      : 1;
-    const interactMult = isSelected ? 1.35 : isHovered ? 1.18 : 1;
     const targetScale = baseScale * scope.scaleMult * interactMult * companyViewBoost;
     animScale.current = THREE.MathUtils.lerp(animScale.current, Math.max(0.01, targetScale), 0.18);
     meshRef.current.scale.setScalar(animScale.current);
@@ -890,7 +949,8 @@ function CompanyViewLink({
     const visible = s.focusedCompany === companyId && s.companyFocus > 0.3;
     lineRef.current.visible = visible;
     if (visible && lineRef.current.material) {
-      lineRef.current.material.opacity = smoothstep(0.4, 0.8, s.companyFocus) * 0.5;
+      const linkFade = s.companyFocus > 0.95 ? 1 : smoothstep(0.4, 0.8, s.companyFocus);
+      lineRef.current.material.opacity = linkFade * 0.5;
     }
   });
 
@@ -1108,13 +1168,17 @@ function Scene({
         if (scopeRef.current?.level === 'company' && scopeRef.current?.focusedCompany === node.id) {
           cameraHandleRef.current.exitToCluster();
         } else {
-          cameraHandleRef.current.enterCompany(node.id, pos);
+          const isMyCompany = node.id === 'comp-you' || (!!myCompanyId && node.id === myCompanyId);
+          cameraHandleRef.current.enterCompany(node.id, pos, {
+            instant: isMyCompany,
+            industryId: mergedIndustry[node.id],
+          });
         }
       }
       return;
     }
     onSelect(selectedNode === node.id ? null : node.id);
-  }, [selectedNode, onSelect, onNavigate, mergedPos]);
+  }, [selectedNode, onSelect, onNavigate, mergedPos, myCompanyId, mergedIndustry]);
 
   return (
     <ScopeCtx.Provider value={scopeRef}>

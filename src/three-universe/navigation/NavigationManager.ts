@@ -35,8 +35,13 @@ export class NavigationManager {
     this.onNavigateBegin = null; // fires immediately at nav start — for early label/UI updates
     this.onHover = null;
     this.onSelect = null;
-    this.onEnterCompanyPolytope = null; // fires after zooming into a live (user-created) company
-    this.onExitCompanyPolytope  = null; // fires whenever leaving COMPANY level (back button or scroll-out)
+    this.onEnterCompanyPolytope = null;
+    this.onEnterCompanyInterior = null;
+    this.onExitCompanyPolytope  = null;
+    this.onInteriorLevelChange = null;
+    this.myCompanyNodeId = null;
+    this._companyDepartments = [];
+    this._interiorCameraLock = false;
 
     this._afterNextNavigate = null;
 
@@ -76,8 +81,14 @@ export class NavigationManager {
   _onClick(e) { if (!this.cameraCtrl.isTransitioning) { this._setMouse(e); this._click(); } }
   _onKey(e) { 
     if (e.key === 'Escape') { 
-      // Allow OrganisationPolytope to handle Escape internally at this level
-      if (this.currentLevel === ZOOM_LEVELS.COMPANY) return;
+      if (this.currentLevel === ZOOM_LEVELS.COMPANY) {
+        const sss = this._subdomainSolarSystem;
+        if (sss?.interiorView?.active && sss.interiorView.drillBack()) {
+          e.preventDefault();
+          this._refocusCompanyInteriorCamera(true);
+          return;
+        }
+      }
       e.preventDefault(); 
       this.goBack(); 
     } 
@@ -124,8 +135,13 @@ export class NavigationManager {
         : this.systemParticles.getCompanyMeshes(this.selectedIndustry.id, this.selectedSubdomain.id);
       hits = this.raycaster.intersectObjects(meshes);
     } else if (this.currentLevel === ZOOM_LEVELS.COMPANY && this.selectedCompany) {
-      const meshes = this.systemParticles.getDeptMeshes(this.selectedIndustry.id, this.selectedSubdomain.id, this.selectedCompany.id);
-      hits = this.raycaster.intersectObjects(meshes);
+      const interior = this._subdomainSolarSystem?.getInteriorNodeMeshes?.() ?? [];
+      if (interior.length) {
+        hits = this.raycaster.intersectObjects(interior);
+      } else {
+        const meshes = this.systemParticles.getDeptMeshes(this.selectedIndustry.id, this.selectedSubdomain.id, this.selectedCompany.id);
+        hits = this.raycaster.intersectObjects(meshes);
+      }
     }
 
     if (hits.length > 0) {
@@ -171,6 +187,86 @@ export class NavigationManager {
     this._subdomainSolarSystem = sss;
   }
 
+  setMyCompanyNodeId(id) {
+    this.myCompanyNodeId = id;
+  }
+
+  setCompanyDepartments(departments) {
+    this._companyDepartments = departments ?? [];
+    const iv = this._subdomainSolarSystem?.interiorView;
+    if (iv?.active) {
+      iv.departments = this._companyDepartments;
+      iv._buildRing(iv._nodesAtCurrentLevel(), false);
+    }
+  }
+
+  _isLoggedInCompany(company) {
+    if (!company) return false;
+    if (this.myCompanyNodeId) return company.id === this.myCompanyNodeId;
+    return !!company.isLive;
+  }
+
+  _refocusCompanyInteriorCamera(animateForward = false) {
+    const sss = this._subdomainSolarSystem;
+    if (!sss?.interiorView?.active) return;
+    const wp = sss.getInteriorFocusPosition();
+    if (!wp) return;
+    const dist = sss.getInteriorCameraDistance();
+
+    if (!animateForward) {
+      this.cameraCtrl.snapTo(wp, dist, ZOOM_LEVELS.COMPANY, null);
+      return;
+    }
+
+    const toCam = new THREE.Vector3().subVectors(this.camera.position, this.cameraCtrl.controls.target);
+    const len = toCam.length();
+    const dir = len < 1
+      ? new THREE.Vector3(0.4, 0.35, 0.85).normalize()
+      : toCam.divideScalar(len);
+    const newCamPos = new THREE.Vector3().copy(wp).add(dir.multiplyScalar(dist));
+    newCamPos.y = Math.max(newCamPos.y, wp.y + dist * 0.25);
+
+    gsap.to(this.camera.position, {
+      x: newCamPos.x, y: newCamPos.y, z: newCamPos.z,
+      duration: 0.7, ease: 'power2.inOut',
+      onUpdate: () => { this.cameraCtrl.controls.update(); },
+    });
+    gsap.to(this.cameraCtrl.controls.target, {
+      x: wp.x, y: wp.y, z: wp.z,
+      duration: 0.7, ease: 'power2.inOut',
+      onUpdate: () => { this.cameraCtrl.controls.update(); },
+    });
+  }
+
+  _enterLoggedInCompanyView(industry, subdomain, company, wp, earlyPath) {
+    // Sync departments for in-scene interior (no Universal Polytope overlay)
+    if (this.onEnterCompanyInterior) this.onEnterCompanyInterior(company);
+
+    const sss = this._subdomainSolarSystem;
+    if (sss?.group?.visible) {
+      // Keep other planets visible when entering company view
+      // sss.morphOutSiblings(company.id, 0, 0.4);
+      const mesh = sss.companyMeshes.find(m => m.userData.company?.id === company.id);
+      if (mesh) {
+        sss.enterCompanyInterior(mesh, this._companyDepartments, industry?.color);
+        sss.interiorView.onLevelChange = () => {
+          if (this.onInteriorLevelChange) {
+            this.onInteriorLevelChange(sss.interiorView.depth, [...sss.interiorView.path]);
+          }
+        };
+        const focus = sss.getInteriorFocusPosition();
+        if (focus) wp.copy(focus);
+      }
+    }
+
+    // Do not zoom or snap the camera. Let the nodes appear at the current zoom level.
+    // updateInteriorCamera will smoothly pan the target to follow the orbiting planet.
+    this.currentLevel = ZOOM_LEVELS.COMPANY;
+    this.navigationPath = earlyPath;
+    this._onNavigateDone(this.navigationPath, this.currentLevel);
+    this._interiorCameraLock = true;
+  }
+
   _click() {
     this.raycaster.setFromCamera(this.mouse, this.camera);
 
@@ -208,6 +304,19 @@ export class NavigationManager {
         return;
       }
     } else if (this.currentLevel === ZOOM_LEVELS.COMPANY && this.selectedCompany) {
+      const sss = this._subdomainSolarSystem;
+      const interiorMeshes = sss?.getInteriorNodeMeshes?.() ?? [];
+      if (interiorMeshes.length) {
+        const hits = this.raycaster.intersectObjects(interiorMeshes);
+        if (hits.length > 0) {
+          const ud = hits[0].object.userData;
+          if (ud.canDrill && sss.interiorView.drillInto(ud.nodeId)) {
+            // Do not zoom in or move camera on node click
+            // this._refocusCompanyInteriorCamera(true);
+          }
+          return;
+        }
+      }
       const meshes = this.systemParticles.getDeptMeshes(this.selectedIndustry.id, this.selectedSubdomain.id, this.selectedCompany.id);
       const hits = this.raycaster.intersectObjects(meshes);
       if (hits.length > 0) {
@@ -216,6 +325,17 @@ export class NavigationManager {
         return;
       }
     }
+  }
+
+  /** Keep orbit target on company sphere while exploring interior nodes */
+  updateInteriorCamera() {
+    if (!this._interiorCameraLock || this.currentLevel !== ZOOM_LEVELS.COMPANY) return;
+    const sss = this._subdomainSolarSystem;
+    if (!sss?.interiorView?.active) return;
+    const wp = sss.getInteriorFocusPosition();
+    if (!wp) return;
+    this.cameraCtrl.controls.target.lerp(wp, 0.14);
+    this.cameraCtrl.controls.update();
   }
 
   // ═══ NAVIGATE TO INDUSTRY ═══
@@ -404,8 +524,14 @@ export class NavigationManager {
       ? this._subdomainSolarSystem.getCompanyWorldPosition(company.id)
       : this.systemParticles.getCompanyPosition(industry.id, subdomain.id, company.id);
 
-    // All companies — single fly to the planet, no interior polytope transition
-    this.cameraCtrl.flyTo(wp, 28, ZOOM_LEVELS.COMPANY, () => {
+    if (this._isLoggedInCompany(company)) {
+      this._enterLoggedInCompanyView(industry, subdomain, company, wp, earlyPath);
+      return;
+    }
+
+    // Do not zoom in. Just pan the target to the company and maintain current distance.
+    const currentDist = this.cameraCtrl.getDistanceToTarget();
+    this.cameraCtrl.flyTo(wp, currentDist, ZOOM_LEVELS.COMPANY, () => {
       this.currentLevel = ZOOM_LEVELS.COMPANY;
       this.navigationPath = earlyPath;
       if (this.onNavigate) this.onNavigate(this.navigationPath, this.currentLevel);
@@ -469,7 +595,8 @@ export class NavigationManager {
     if (this.cameraCtrl.isTransitioning) return;
 
     const wp = this.systemParticles.getDeptPosition(industry.id, subdomain.id, company.id, department.id);
-    this.cameraCtrl.flyTo(wp, 12, ZOOM_LEVELS.DEPARTMENT, () => {
+    const currentDist = this.cameraCtrl.getDistanceToTarget();
+    this.cameraCtrl.flyTo(wp, currentDist, ZOOM_LEVELS.DEPARTMENT, () => {
       this.currentLevel = ZOOM_LEVELS.DEPARTMENT;
       this.navigationPath = [
         { level: ZOOM_LEVELS.INDUSTRY, id: industry.id, name: industry.name, data: industry },
@@ -510,11 +637,18 @@ export class NavigationManager {
 
       const sss = this._subdomainSolarSystem;
       const wasLivePolytope = company.isLive && sss?.group && !sss.group.visible;
+      const wasLoggedInSolar = this._isLoggedInCompany(company) && sss?.group?.visible;
 
       if (wasLivePolytope) {
         this._exitLiveCompanyPolytope(industry, subdomain, company, sss);
         return;
       }
+
+      if (wasLoggedInSolar) {
+        sss.exitCompanyInterior();
+        sss.restoreFromCompanyEntry();
+      }
+      this._interiorCameraLock = false;
 
       // Catalog company — restore particle-system groups and fly back
       const sdMesh2 = this.systemParticles.getSubdomainMesh(industry.id, subdomain.id);

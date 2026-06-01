@@ -10,11 +10,17 @@ interface UniverseCanvasProps {
   onEnterBH?: () => void;
   onExitBH?: () => void;
   onEnterCompanyPolytope?: (company: any) => void;
+  onEnterCompanyInterior?: (company: any) => void;
+  onInteriorLevelChange?: (depth: number, path: string[]) => void;
   onExitCompanyPolytope?: () => void;
   controllerRef?: React.MutableRefObject<UniverseController | null>;
 }
 
-export default function UniverseCanvas({ data, onNavigate, onHover, onCreateCompany, onEnterBH, onExitBH, onEnterCompanyPolytope, onExitCompanyPolytope, controllerRef }: UniverseCanvasProps) {
+export default function UniverseCanvas({
+  data, onNavigate, onHover, onCreateCompany, onEnterBH, onExitBH,
+  onEnterCompanyPolytope, onEnterCompanyInterior, onInteriorLevelChange, onExitCompanyPolytope,
+  controllerRef,
+}: UniverseCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const ctrlRef = useRef<UniverseController | null>(null);
 
@@ -30,6 +36,10 @@ export default function UniverseCanvas({ data, onNavigate, onHover, onCreateComp
   stableOnExitBH.current = onExitBH;
   const stableOnEnterCompanyPolytope = useRef(onEnterCompanyPolytope);
   stableOnEnterCompanyPolytope.current = onEnterCompanyPolytope;
+  const stableOnEnterCompanyInterior = useRef(onEnterCompanyInterior);
+  stableOnEnterCompanyInterior.current = onEnterCompanyInterior;
+  const stableOnInteriorLevelChange = useRef(onInteriorLevelChange);
+  stableOnInteriorLevelChange.current = onInteriorLevelChange;
   const stableOnExitCompanyPolytope = useRef(onExitCompanyPolytope);
   stableOnExitCompanyPolytope.current = onExitCompanyPolytope;
 
@@ -46,6 +56,8 @@ export default function UniverseCanvas({ data, onNavigate, onHover, onCreateComp
         onEnterBH: () => stableOnEnterBH.current?.(),
         onExitBH: () => stableOnExitBH.current?.(),
         onEnterCompanyPolytope: (company) => stableOnEnterCompanyPolytope.current?.(company),
+        onEnterCompanyInterior: (company) => stableOnEnterCompanyInterior.current?.(company),
+        onInteriorLevelChange: (depth, path) => stableOnInteriorLevelChange.current?.(depth, path),
         onExitCompanyPolytope: () => stableOnExitCompanyPolytope.current?.(),
       },
     );

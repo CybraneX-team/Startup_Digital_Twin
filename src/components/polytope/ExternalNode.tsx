@@ -200,11 +200,6 @@ export function ExternalNode({
         />
       )}
 
-      {isSelected && internalEdgesGeometry && (
-        <lineSegments geometry={internalEdgesGeometry}>
-          <lineBasicMaterial ref={linesMaterialRef} color={color} transparent opacity={0} />
-        </lineSegments>
-      )}
     </group>
   );
 }

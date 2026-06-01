@@ -12,6 +12,7 @@ import starFragmentShader from '../shaders/star/fragment.glsl';
 import atmVert from '../shaders/atmosphere/vertex.glsl';
 import atmFrag from '../shaders/atmosphere/fragment.glsl';
 import { TextureGenerator } from '../engine/TextureGenerator.js';
+import { CompanyInteriorView } from './CompanyInteriorView.js';
 
 function generatePlanetTexture(baseColor: THREE.Color, seed: number) {
   const canvas = document.createElement('canvas');
@@ -86,6 +87,7 @@ export class SubdomainSolarSystem {
     this.companyMeshes = [];  // exposed for raycasting
     this._frozen = false;    // when true, all planets stop orbiting
     this._frozenAngle = new Map(); // companyId → frozen angle
+    this.interiorView = new CompanyInteriorView();
   }
 
   // ── BUILD ────────────────────────────────────────────────────────────────
@@ -214,6 +216,7 @@ export class SubdomainSolarSystem {
   update(elapsed) {
     if (!this.group) return;
     if (this._sunMat) this._sunMat.uniforms.uTime.value = elapsed;
+    if (this.interiorView?.active) this.interiorView.update(elapsed);
     if (this._frozen) return;  // planets are stopped — skip orbit update
     const ts = 0.016 * 0.12;
     this._containers.forEach(cc => {
@@ -236,6 +239,7 @@ export class SubdomainSolarSystem {
   // ── DESTROY ──────────────────────────────────────────────────────────────
   destroy() {
     if (!this.group) return;
+    this.exitCompanyInterior();
     if (this._starMat) gsap.to(this._starMat, { opacity: 0, duration: 0.2 });
     this.scene.remove(this.group);
     this.group.traverse(o => {
@@ -354,7 +358,32 @@ export class SubdomainSolarSystem {
     return this.group.position.clone();
   }
 
-  /** Scale down sibling planets, sun, and star field during company entry */
+  enterCompanyInterior(companyMesh, departments, industryColorHex) {
+    if (!companyMesh) return;
+    this.freeze();
+    this.interiorView.enter(companyMesh, departments, industryColorHex);
+  }
+
+  exitCompanyInterior() {
+    this.interiorView.exit();
+    this.unfreeze();
+  }
+
+  getInteriorNodeMeshes() {
+    return this.interiorView?.active ? this.interiorView.getNodeMeshes() : [];
+  }
+
+  getInteriorFocusPosition() {
+    return this.interiorView?.active
+      ? this.interiorView.getFocusWorldPosition()
+      : null;
+  }
+
+  getInteriorCameraDistance() {
+    return this.interiorView?.active ? this.interiorView.getCameraDistance() : 28;
+  }
+
+  /** Scale down sibling planets during company interior view */
   morphOutSiblings(keepCompanyId, delay = 0.4, duration = 1.2) {
     if (!this.group) return;
     this.freeze();

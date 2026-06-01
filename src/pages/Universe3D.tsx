@@ -347,57 +347,34 @@ export default function Universe3DPage() {
     controllerRef.current?.exitBlackHole();
   }, []);
 
-  // ── Company Polytope (live/user-created company) ──────────────────────────
-  const [insideCompanyPolytope, setInsideCompanyPolytope] = useState(false);
-  const [companyPolytopeMounted] = useState(false);
-  const [companyPolytopeEntryCount] = useState(0);
+  // ── Company in-scene interior (logged-in company — no Universal Polytope overlay) ──
+  const [insideCompanyInterior, setInsideCompanyInterior] = useState(false);
   const [activeCompany, setActiveCompany] = useState<any>(null);
+  const [companyInteriorPath, setCompanyInteriorPath] = useState<string[]>([]);
 
-  // Company polytope sidebar state — mirrors the BH polytope pattern
-  const [companyPolytopeDeptId, setCompanyPolytopeDeptId] = useState<string | null>(null);
-  const [companyPolytopeInternalPath, setCompanyPolytopeInternalPath] = useState<string[]>([]);
-  const [companyPolytopeRequestSelectDeptId, setCompanyPolytopeRequestSelectDeptId] = useState<string | null | undefined>(undefined);
-  const [companyPolytopeInternalBackStep, setCompanyPolytopeInternalBackStep] = useState(0);
+  const handleEnterCompanyInterior = useCallback((company: any) => {
+    controllerRef.current?.syncCompanyDepartments(polytopeStore.departments);
+    setInsideCompanyInterior(true);
+    setActiveCompany(company);
+    setCompanyInteriorPath([]);
+  }, [polytopeStore.departments]);
 
-  const handleEnterCompanyPolytope = useCallback((_company: any) => {
-    // Disabled: The polytope must not be accessed by clicking any planet or universal search in 3d universe
-    return;
+  const handleInteriorLevelChange = useCallback((_depth: number, path: string[]) => {
+    setCompanyInteriorPath(path);
   }, []);
 
-  // Called when the 3D scene selects a dept inside company polytope
-  const handleCompanyPolytopeDeptChange = useCallback((id: string | null) => {
-    setCompanyPolytopeDeptId(id);
-    setCompanyPolytopeRequestSelectDeptId(id);
-    if (id === null) {
-      setCompanyPolytopeInternalPath([]);
-      setCompanyPolytopeInternalBackStep(0);
-    }
-  }, []);
-
-  // Called when the sidebar selects a dept — triggers camera fly-in
-  const handleCompanyPolytopeSidebarDeptSelect = useCallback((id: string | null) => {
-    setCompanyPolytopeDeptId(id);
-    if (id === null) {
-      setCompanyPolytopeInternalPath([]);
-      setCompanyPolytopeRequestSelectDeptId(null);
-      setCompanyPolytopeInternalBackStep(0);
-    } else {
-      setCompanyPolytopeRequestSelectDeptId(id);
-    }
-  }, []);
+  useEffect(() => {
+    controllerRef.current?.syncCompanyDepartments(polytopeStore.departments);
+  }, [polytopeStore.departments]);
 
   // Called by NavigationManager whenever leaving COMPANY level (back button, ESC, or scroll-out)
   const handleExitCompanyPolytope = useCallback(() => {
-    setInsideCompanyPolytope(false);
+    setInsideCompanyInterior(false);
     setActiveCompany(null);
-    setCompanyPolytopeDeptId(null);
-    setCompanyPolytopeInternalPath([]);
-    setCompanyPolytopeRequestSelectDeptId(null);
-    setCompanyPolytopeInternalBackStep(0);
+    setCompanyInteriorPath([]);
   }, []);
 
-  // Sidebar only — 3D journey + overlay fade handled in NavigationManager
-  const handleCompanyPolytopeBackToSubdomain = useCallback(() => {
+  const handleExitCompanyInterior = useCallback(() => {
     controllerRef.current?.exitCompanyPolytope();
   }, []);
 
@@ -444,19 +421,17 @@ export default function Universe3DPage() {
       return () => cancelAnimationFrame(rafId);
     }
 
-    // Left 3D twin — close polytope overlays so BDT (/universal) is fully independent
+    // Left 3D twin — close overlays so BDT (/universal) is fully independent
     setInsideBH(false);
-    setInsideCompanyPolytope(false);
+    setInsideCompanyInterior(false);
+    setActiveCompany(null);
+    setCompanyInteriorPath([]);
     setPolytopeDraftDept(null);
     setPolytopeDraftInternalNode(null);
     setPolytopeDeptId(null);
     setPolytopeInternalPath([]);
     setPolytopeRequestSelectDeptId(null);
     setPolytopeInternalBackStep(0);
-    setCompanyPolytopeDeptId(null);
-    setCompanyPolytopeInternalPath([]);
-    setCompanyPolytopeRequestSelectDeptId(undefined);
-    setCompanyPolytopeInternalBackStep(0);
     controllerRef.current?.exitBlackHole();
     controllerRef.current?.exitCompanyPolytope();
   }, [pathname]);
@@ -534,7 +509,8 @@ export default function Universe3DPage() {
           onCreateCompany={handleCreateFromSun}
           onEnterBH={handleEnterBH}
           onExitBH={handleExitBH}
-          onEnterCompanyPolytope={handleEnterCompanyPolytope}
+          onEnterCompanyInterior={handleEnterCompanyInterior}
+          onInteriorLevelChange={handleInteriorLevelChange}
           onExitCompanyPolytope={handleExitCompanyPolytope}
           controllerRef={controllerRef}
         />
@@ -579,41 +555,6 @@ export default function Universe3DPage() {
         )}
       </div>
 
-      {/* ── Company Polytope overlay (live / user-created companies only) ──
-           Same visibility:hidden pattern as BH overlay — children stay event-dead
-           while fading out so the 3D canvas underneath is interactive. */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          zIndex: 5,
-          opacity: insideCompanyPolytope ? 1 : 0,
-          visibility: insideCompanyPolytope ? 'visible' : 'hidden',
-          transition: insideCompanyPolytope
-            ? 'opacity 1.4s ease-in-out'
-            : 'opacity 1.4s ease-in-out, visibility 0s 1.4s',
-        }}
-      >
-        {companyPolytopeMounted && (
-          <UniversalPolytope
-            companyName={activeCompany?.name ?? 'My Company'}
-            storeScope="twin"
-            transparent={true}
-            cameraResetTrigger={companyPolytopeEntryCount + polytopeDraftResetTrigger}
-            requestSelectDeptId={companyPolytopeRequestSelectDeptId}
-            onDepartmentChange={handleCompanyPolytopeDeptChange}
-            onInternalPathChange={setCompanyPolytopeInternalPath}
-            requestBackStep={companyPolytopeInternalBackStep}
-            draftDept={polytopeDraftDept}
-            draftNodeScreenPosRef={polytopeDraftDeptScreenPosRef}
-            draftInternalNode={polytopeDraftInternalNode}
-            draftInternalNodeScreenPosRef={polytopeDraftInternalNodeScreenPosRef}
-            departments={polytopeStore.departments}
-            selectedInternalPath={companyPolytopeInternalPath}
-          />
-        )}
-      </div>
-
       {/* ── Create Company Floating Panel ── */}
       {createModal && (
         <CreateCompanyModal
@@ -632,22 +573,26 @@ export default function Universe3DPage() {
       {/* Bottom-left column: hidden when create modal is active OR drafting dept/node */}
       {!createModal && !polytopeDraftDept && !polytopeDraftInternalNode && (
         <div className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3">
-          {/* When inside BH or Company polytope — show polytope dept sidebar */}
-          {(insideBH || insideCompanyPolytope) ? (
+          {/* When inside BH or logged-in company interior — dept sidebar */}
+          {(insideBH || insideCompanyInterior) ? (
             <PolytopeSidePanel
               departments={polytopeStore.departments}
-              selectedDeptId={insideBH ? polytopeDeptId : companyPolytopeDeptId}
-              onDeptSelect={insideBH ? handlePolytopeSidebarDeptSelect : handleCompanyPolytopeSidebarDeptSelect}
-              selectedInternalPath={insideBH ? polytopeInternalPath : companyPolytopeInternalPath}
+              selectedDeptId={insideBH ? polytopeDeptId : (companyInteriorPath[0] ?? null)}
+              onDeptSelect={insideBH ? handlePolytopeSidebarDeptSelect : (id) => {
+                if (id === null) {
+                  controllerRef.current?.drillInteriorBack?.();
+                }
+              }}
+              selectedInternalPath={insideBH ? polytopeInternalPath : companyInteriorPath.slice(1)}
               onAddDepartment={handlePolytopeAddDepartment}
               onAddNode={handlePolytopeAddNode}
               onInternalBack={insideBH
                 ? () => setPolytopeInternalBackStep(c => c + 1)
-                : () => setCompanyPolytopeInternalBackStep(c => c + 1)
+                : () => controllerRef.current?.drillInteriorBack?.()
               }
-              onExitToSubdomain={insideCompanyPolytope ? handleCompanyPolytopeBackToSubdomain : handleBHExitIntent}
+              onExitToSubdomain={insideCompanyInterior ? handleExitCompanyInterior : handleBHExitIntent}
               exitToSubdomainLabel={
-                insideCompanyPolytope
+                insideCompanyInterior
                   ? (navPath.find(p => p.level === 'subdomain')?.name ?? 'Subdomain')
                   : 'Galaxy'
               }
@@ -655,7 +600,7 @@ export default function Universe3DPage() {
               onDeleteDepartment={polytopeStore.deleteDepartment}
               onUpdateNode={polytopeStore.updateNode}
               onDeleteNode={polytopeStore.deleteNode}
-              onNodeSelect={insideBH ? setPolytopeInternalPath : setCompanyPolytopeInternalPath}
+              onNodeSelect={insideBH ? setPolytopeInternalPath : () => {}}
               onEditDepartment={handleEditDepartment}
               onEditNode={handleEditNode}
               onDeleteDepartmentClick={handleDeleteDepartmentClick}
@@ -746,16 +691,12 @@ export default function Universe3DPage() {
         onAddDepartment={polytopeStore.addDepartment}
         onUpdateDepartment={polytopeStore.updateDepartment}
         onDeleteDepartment={(id) => {
-          if (insideBH ? (polytopeDeptId === id) : (companyPolytopeDeptId === id)) {
-            if (insideBH) {
-              setPolytopeDeptId(null);
-              setPolytopeRequestSelectDeptId(null);
-            } else {
-              setCompanyPolytopeDeptId(null);
-              setCompanyPolytopeRequestSelectDeptId(null);
-            }
+          if (insideBH && polytopeDeptId === id) {
+            setPolytopeDeptId(null);
+            setPolytopeRequestSelectDeptId(null);
           }
           polytopeStore.deleteDepartment(id);
+          controllerRef.current?.syncCompanyDepartments(polytopeStore.departments);
         }}
         onAddNode={polytopeStore.addNode}
         onUpdateNode={polytopeStore.updateNode}
@@ -767,7 +708,7 @@ export default function Universe3DPage() {
       />
 
       {/* Draft Dept Creation Panel — BH/Company polytope */}
-      {(insideBH || insideCompanyPolytope) && polytopeDraftDept && (
+      {insideBH && polytopeDraftDept && (
         <CreateDepartmentPanel
           mode="department"
           draftNodeScreenPosRef={polytopeDraftDeptScreenPosRef}
@@ -790,7 +731,7 @@ export default function Universe3DPage() {
       )}
 
       {/* Draft Internal Node Creation Panel — BH/Company polytope */}
-      {(insideBH || insideCompanyPolytope) && polytopeDraftInternalNode && (() => {
+      {insideBH && polytopeDraftInternalNode && (() => {
         const dept = polytopeStore.departments.find(d => d.id === polytopeDraftInternalNode.deptId);
         if (!dept) return null;
         return (
@@ -806,7 +747,7 @@ export default function Universe3DPage() {
             }}
             onCreated={(data) => {
               const deptId = polytopeDraftInternalNode.deptId;
-              const path = insideBH ? polytopeInternalPath : companyPolytopeInternalPath;
+              const path = polytopeInternalPath;
               polytopeStore.addNode(deptId, data as Omit<UInternalNode, 'id' | 'children'>, path);
               setPolytopeDraftInternalNode(null);
               setPolytopeDeptId(deptId);
@@ -850,7 +791,7 @@ export default function Universe3DPage() {
       )}
 
       {/* Legend */}
-      {!insideBH && !insideCompanyPolytope && (
+      {!insideBH && !insideCompanyInterior && (
         <div
           className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 text-xs px-4 py-2 rounded-full backdrop-blur-md z-10"
           style={{ background: 'rgba(0,0,0,0.55)', color: '#5E5E5E', border: '1px solid rgba(255,255,255,0.06)' }}

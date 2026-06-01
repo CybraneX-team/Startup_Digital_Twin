@@ -42,9 +42,12 @@ export interface UniverseCallbacks {
   onCreateCompany?: (industry: any, subdomain: any) => void;
   onEnterBH?: () => void;
   onExitBH?: () => void;
-  /** Fired when user clicks a live (user-created) company planet — show polytope overlay */
+  /** @deprecated use onEnterCompanyInterior */
   onEnterCompanyPolytope?: (company: any) => void;
-  /** Fired whenever navigating back from COMPANY level — hide polytope overlay */
+  /** Fired when entering logged-in company in-scene interior (no polytope overlay) */
+  onEnterCompanyInterior?: (company: any) => void;
+  onInteriorLevelChange?: (depth: number, path: string[]) => void;
+  /** Fired whenever navigating back from COMPANY level */
   onExitCompanyPolytope?: () => void;
 }
 
@@ -192,6 +195,7 @@ export class UniverseController {
       // 8c. Subdomain Solar System
       this.subdomainSolarSystem = new SubdomainSolarSystem(this.engine.scene);
       this.navigation.setSubdomainSolarSystem(this.subdomainSolarSystem);
+      this.navigation.setMyCompanyNodeId(data.myCompanyNodeId ?? null);
 
       // 9. Wire navigation callbacks → React
       this._setupNavigationCallbacks(industries);
@@ -312,9 +316,25 @@ export class UniverseController {
     this.navigation.onEnterCompanyPolytope = (company) => {
       this._callbacks?.onEnterCompanyPolytope?.(company);
     };
+    this.navigation.onEnterCompanyInterior = (company) => {
+      this._callbacks?.onEnterCompanyInterior?.(company);
+    };
+    this.navigation.onInteriorLevelChange = (depth, path) => {
+      this._refreshInteriorLabels();
+      this._callbacks?.onInteriorLevelChange?.(depth, path);
+    };
     this.navigation.onExitCompanyPolytope = () => {
       this._callbacks?.onExitCompanyPolytope?.();
     };
+  }
+
+  private _refreshInteriorLabels(company?: any) {
+    this.labels.removeByPrefix('dept-');
+    const sss = this.subdomainSolarSystem;
+    const co = company ?? this.navigation?.navigationPath?.[2]?.data;
+    if (!co || !sss?.interiorView?.active) return;
+    this.labels.createDepartmentLabels(co, () => sss.getInteriorNodeMeshes());
+    this.labels.setVisibility('dept-', true);
   }
 
   private _updateLabelsForLevel(path: any[], level: string, industries: any[]) {
@@ -344,8 +364,7 @@ export class UniverseController {
       const company = path[2]?.data;
       if (industry && subdomain && company) {
         this.labels.createCompanyLabels(subdomain, () => this.subdomainSolarSystem.companyMeshes);
-        this.labels.createDepartmentLabels(company, () => this.systemParticles.getDeptMeshes(industry.id, subdomain.id, company.id));
-        this.labels.setVisibility('dept-', true);
+        this._refreshInteriorLabels(company);
       }
     } else if (level === ZOOM_LEVELS.DEPARTMENT) {
       this.labels.setVisibility('subdomain-', true);
@@ -508,6 +527,8 @@ export class UniverseController {
       this.subdomainSolarSystem.update(elapsed, delta);
     }
 
+    this.navigation?.updateInteriorCamera?.();
+
     if (this.iconParticles) {
       this.iconParticles.update();
       const activeId = this.navigation.selectedIndustry?.id || null;
@@ -533,6 +554,7 @@ export class UniverseController {
     if (this._disposed) return;
     this._data = data;
     this._industries = this._mapIndustries(data);
+    this.navigation?.setMyCompanyNodeId(data.myCompanyNodeId ?? null);
 
     // If we are currently inside a subdomain, update it live
     if (
@@ -694,6 +716,20 @@ export class UniverseController {
       this._exitingBH = false;
       this._bhCapturing = false;
     }, 3500);
+  }
+
+  /** Sync polytope departments before / during logged-in company interior view */
+  syncCompanyDepartments(departments: unknown[]): void {
+    this.navigation?.setCompanyDepartments(departments);
+  }
+
+  drillInteriorBack(): boolean {
+    const sss = this.subdomainSolarSystem;
+    if (!sss?.interiorView?.active) return false;
+    if (!sss.interiorView.drillBack()) return false;
+    this.navigation?._refocusCompanyInteriorCamera(true);
+    this._refreshInteriorLabels();
+    return true;
   }
 
   /** Called by React when the user scrolls out of a live-company polytope overlay */
