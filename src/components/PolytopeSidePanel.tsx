@@ -110,26 +110,50 @@ export function PolytopeSidePanel({
   const showingNodes = (selectedDeptId !== null && selectedDept !== null) || selectedInternalPath.length > 0;
   const isSearchActive = searchQuery.trim().length > 0;
 
+  // ── Search Relevance Helper ──────────────────────────────────────────────────
+  const getRelevance = (text: string, query: string) => {
+    if (!text) return 0;
+    const lower = text.toLowerCase();
+    if (lower === query) return 3;
+    if (lower.startsWith(query)) return 2;
+    if (lower.includes(query)) return 1;
+    return 0;
+  };
+
   // ── Search results: departments + all internal nodes ──────────────────────
   const q = searchQuery.toLowerCase();
 
   // When inside a dept, search filters that dept's nodes; otherwise global search
   const deptResults = isSearchActive && !showingNodes
-    ? activeDepts.filter(d =>
-      d.label.toLowerCase().includes(q) ||
-      d.domain.toLowerCase().includes(q) ||
-      d.cluster.toLowerCase().includes(q)
-    )
+    ? activeDepts
+        .map(d => ({
+          dept: d,
+          score: Math.max(
+            getRelevance(d.label, q),
+            getRelevance(d.domain, q),
+            getRelevance(d.cluster, q)
+          )
+        }))
+        .filter(x => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(x => x.dept)
     : activeDepts;
 
   const internalNodeResults: InternalNodeResult[] = (isSearchActive && !showingNodes)
     ? activeDepts.flatMap(dept => {
       const color = U_DOMAIN_COLOR[dept.domain] ?? '#6366f1';
-      return collectAllInternalNodes(dept.internalNodes, dept, color).filter(r =>
-        r.node.label.toLowerCase().includes(q) ||
-        r.node.type.toLowerCase().includes(q)
-      );
+      return collectAllInternalNodes(dept.internalNodes, dept, color)
+        .map(r => ({
+          result: r,
+          score: Math.max(
+            getRelevance(r.node.label, q),
+            getRelevance(r.node.type, q)
+          )
+        }))
+        .filter(x => x.score > 0);
     })
+    .sort((a, b) => b.score - a.score)
+    .map(x => x.result)
     : [];
 
   // Fallback: if selectedDept is null but we have an internalPath, search for the dept that owns the path root
@@ -145,10 +169,17 @@ export function PolytopeSidePanel({
   const allVisibleNodes = effectiveDept ? getNodesAtPath(effectiveDept, selectedInternalPath) : [];
   // Filter by search query when inside a dept
   const visibleNodes = (showingNodes && isSearchActive)
-    ? allVisibleNodes.filter(n =>
-      n.label.toLowerCase().includes(q) ||
-      n.type.toLowerCase().includes(q)
-    )
+    ? allVisibleNodes
+        .map(n => ({
+          node: n,
+          score: Math.max(
+            getRelevance(n.label, q),
+            getRelevance(n.type, q)
+          )
+        }))
+        .filter(x => x.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .map(x => x.node)
     : allVisibleNodes;
   const deptColor = effectiveDept ? (U_DOMAIN_COLOR[effectiveDept.domain] ?? '#6366f1') : '#C1AEFF';
 

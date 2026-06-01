@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Loader2, Plus, Search, Command } from 'lucide-react';
 import UniverseCanvas from '../three-universe/UniverseCanvas';
@@ -14,6 +14,7 @@ import { UniverseNavBackButton, getUniverseBackLabel } from '../components/Unive
 import { PolytopeManager } from '../components/PolytopeManager';
 import CreateDepartmentPanel from '../components/CreateDepartmentPanel';
 import { usePolytopeStore } from '../lib/usePolytopeStore';
+import { SearchTrie} from '../lib/SearchTrie';
 import type { UExternalNode, UInternalNode } from '../lib/usePolytopeStore';
 
 // ── Side Panel ───────────────────────────────────────────────────────────────
@@ -49,28 +50,47 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany, s
 
   const isSearchActive = searchQuery.trim().length > 0;
 
-  if (isSearchActive) {
-    const q = searchQuery.toLowerCase();
-    const results: typeof items = [];
-    
-    data?.industries.forEach(ind => {
-      if (ind.name.toLowerCase().includes(q)) {
-        results.push({ id: ind.id, name: ind.name, color: ind.color, meta: 'Industry', onClick: () => { controllerRef.current?.routeTo('industry', ind.id); setSearchQuery(''); } });
-      }
-      ind.subdomains.forEach(sub => {
-        if (sub.name.toLowerCase().includes(q)) {
-          results.push({ id: sub.id, name: sub.name, color: sub.color ?? ind.color, meta: `Subdomain in ${ind.name}`, onClick: () => { controllerRef.current?.routeTo('subdomain', ind.id, sub.id); setSearchQuery(''); } });
-        }
-        sub.companies.forEach(co => {
-          if (co.name.toLowerCase().includes(q)) {
-            results.push({ id: co.id, name: co.name, color: ind.color, meta: `Company in ${sub.name}`, onClick: () => { controllerRef.current?.routeTo('company', ind.id, sub.id, co.id); setSearchQuery(''); } });
-          }
+  const searchTrie = useMemo(() => {
+    const trie = new SearchTrie();
+    if (data?.industries) {
+      data.industries.forEach(ind => {
+        trie.insert(ind.name, {
+          id: ind.id, name: ind.name, color: ind.color, meta: 'Industry', type: 'industry',
+          industryId: ind.id
+        });
+        ind.subdomains.forEach(sub => {
+          trie.insert(sub.name, {
+            id: sub.id, name: sub.name, color: sub.color ?? ind.color, meta: `Subdomain in ${ind.name}`, type: 'subdomain',
+            industryId: ind.id, subdomainId: sub.id
+          });
+          sub.companies.forEach(co => {
+            trie.insert(co.name, {
+              id: co.id, name: co.name, color: ind.color, meta: `Company in ${sub.name}`, type: 'company',
+              industryId: ind.id, subdomainId: sub.id, companyId: co.id
+            });
+          });
         });
       });
-    });
+    }
+    return trie;
+  }, [data]);
+
+  if (isSearchActive) {
+    const results = searchTrie.search(searchQuery, 50);
     
     sectionLabel = 'SEARCH RESULTS';
-    items = results.slice(0, 50);
+    items = results.map(r => ({
+      id: r.id,
+      name: r.name,
+      color: r.color,
+      meta: r.meta,
+      onClick: () => {
+        if (r.type === 'industry') controllerRef.current?.routeTo('industry', r.industryId!);
+        else if (r.type === 'subdomain') controllerRef.current?.routeTo('subdomain', r.industryId!, r.subdomainId!);
+        else if (r.type === 'company') controllerRef.current?.routeTo('company', r.industryId!, r.subdomainId!, r.companyId!);
+        setSearchQuery('');
+      }
+    }));
   } else if (isGalaxy) {
     sectionLabel = 'GALAXIES';
     items = (data?.industries ?? []).map((ind) => ({
