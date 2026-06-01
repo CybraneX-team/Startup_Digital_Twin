@@ -62,17 +62,7 @@ export function ExternalNode({
     return pts;
   }, [node.internalNodes.length, draftChildNode, pos, selectedInternalPath]);
 
-  const internalEdgesGeometry = useMemo(() => {
-    if (internalPositions.length === 0) return null;
-    const pts: THREE.Vector3[] = [];
-    for (let i = 0; i < internalPositions.length; i++) {
-      pts.push(internalPositions[i].clone());
-      pts.push(internalPositions[(i + 1) % internalPositions.length].clone());
-      pts.push(internalPositions[i].clone());
-      pts.push(pos.clone());
-    }
-    return new THREE.BufferGeometry().setFromPoints(pts);
-  }, [internalPositions, pos]);
+
 
   useFrame(state => {
     if (meshRef.current) {

@@ -349,13 +349,12 @@ export default function Universe3DPage() {
 
   // ── Company in-scene interior (logged-in company — no Universal Polytope overlay) ──
   const [insideCompanyInterior, setInsideCompanyInterior] = useState(false);
-  const [activeCompany, setActiveCompany] = useState<any>(null);
+
   const [companyInteriorPath, setCompanyInteriorPath] = useState<string[]>([]);
 
-  const handleEnterCompanyInterior = useCallback((company: any) => {
+  const handleEnterCompanyInterior = useCallback((_company: any) => {
     controllerRef.current?.syncCompanyDepartments(polytopeStore.departments);
     setInsideCompanyInterior(true);
-    setActiveCompany(company);
     setCompanyInteriorPath([]);
   }, [polytopeStore.departments]);
 
@@ -370,7 +369,6 @@ export default function Universe3DPage() {
   // Called by NavigationManager whenever leaving COMPANY level (back button, ESC, or scroll-out)
   const handleExitCompanyPolytope = useCallback(() => {
     setInsideCompanyInterior(false);
-    setActiveCompany(null);
     setCompanyInteriorPath([]);
   }, []);
 
@@ -424,7 +422,6 @@ export default function Universe3DPage() {
     // Left 3D twin — close overlays so BDT (/universal) is fully independent
     setInsideBH(false);
     setInsideCompanyInterior(false);
-    setActiveCompany(null);
     setCompanyInteriorPath([]);
     setPolytopeDraftDept(null);
     setPolytopeDraftInternalNode(null);
