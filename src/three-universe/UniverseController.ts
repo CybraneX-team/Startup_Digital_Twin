@@ -727,7 +727,7 @@ export class UniverseController {
     const sss = this.subdomainSolarSystem;
     if (!sss?.interiorView?.active) return false;
     if (!sss.interiorView.drillBack()) return false;
-    this.navigation?._refocusCompanyInteriorCamera(true);
+    // this.navigation?._refocusCompanyInteriorCamera(true);
     this._refreshInteriorLabels();
     return true;
   }

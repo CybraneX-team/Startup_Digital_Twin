@@ -85,7 +85,7 @@ export class NavigationManager {
         const sss = this._subdomainSolarSystem;
         if (sss?.interiorView?.active && sss.interiorView.drillBack()) {
           e.preventDefault();
-          this._refocusCompanyInteriorCamera(true);
+          // this._refocusCompanyInteriorCamera(true);
           return;
         }
       }
@@ -259,12 +259,13 @@ export class NavigationManager {
       }
     }
 
-    // Do not zoom or snap the camera. Let the nodes appear at the current zoom level.
-    // updateInteriorCamera will smoothly pan the target to follow the orbiting planet.
     this.currentLevel = ZOOM_LEVELS.COMPANY;
     this.navigationPath = earlyPath;
     this._onNavigateDone(this.navigationPath, this.currentLevel);
     this._interiorCameraLock = true;
+    
+    // Zoom in animation to cover the structure
+    this._refocusCompanyInteriorCamera(true);
   }
 
   _click() {

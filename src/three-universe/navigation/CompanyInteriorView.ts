@@ -82,7 +82,8 @@ export class CompanyInteriorView {
   }
 
   getCameraDistance() {
-    return Math.max(14, 32 - this.depth * 5);
+    const r = this._ringRadius();
+    return Math.max(14, r * 2.2);
   }
 
   drillInto(nodeId) {
