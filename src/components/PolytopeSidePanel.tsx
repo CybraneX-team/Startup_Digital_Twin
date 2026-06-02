@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Command, ArrowLeft, Plus, ChevronRight, Pencil, Trash2 } from 'lucide-react';
+import { Search, Command, ArrowLeft, Plus, ChevronRight, Pencil, Trash2, Target, Database, Activity, Users, BarChart2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
 import { U_DOMAIN_COLOR } from '../lib/universalPolytopeData';
@@ -101,6 +101,7 @@ export function PolytopeSidePanel({
   onDeleteNodeClick,
 }: PolytopeSidePanelProps) {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState<'departments' | 'information'>('departments');
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -215,6 +216,7 @@ export function PolytopeSidePanel({
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        if (activeTab !== 'departments') setActiveTab('departments');
         e.preventDefault();
         searchInputRef.current?.focus();
       }
@@ -225,15 +227,17 @@ export function PolytopeSidePanel({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [activeTab]);
 
   // Clear search when switching between departments
   useEffect(() => {
     setSearchQuery('');
-  }, [selectedDeptId]);
+  }, [selectedDeptId, activeTab]);
 
   // Section label logic
-  const sectionLabel = isSearchActive && !showingNodes
+  const sectionLabel = activeTab === 'information'
+    ? 'INFORMATION'
+    : isSearchActive && !showingNodes
     ? 'SEARCH RESULTS'
     : !showingNodes
       ? 'DEPARTMENTS'
@@ -244,8 +248,24 @@ export function PolytopeSidePanel({
   return (
     <div className="flex flex-col items-start gap-3">
 
+      {/* ── Tabs Segmented Control ── */}
+      <div className="flex items-center p-1 bg-black/50 backdrop-blur-md rounded-xl border border-white/10 shadow-xl" style={{ width: '196px' }}>
+        <button
+          onClick={() => setActiveTab('departments')}
+          className={`flex-1 py-1.5 text-[10px] font-semibold rounded-lg transition-colors ${activeTab === 'departments' ? 'bg-white/15 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'}`}
+        >
+          Departments
+        </button>
+        <button
+          onClick={() => setActiveTab('information')}
+          className={`flex-1 py-1.5 text-[10px] font-semibold rounded-lg transition-colors ${activeTab === 'information' ? 'bg-white/15 text-white shadow-sm' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'}`}
+        >
+          Information
+        </button>
+      </div>
 
-      {/* ── Search bar — always visible ── */}
+      {/* ── Search bar — visible only in departments tab ── */}
+      {activeTab === 'departments' && (
       <div
         className="relative rounded-2xl overflow-hidden shadow-xl"
         style={{
@@ -278,8 +298,9 @@ export function PolytopeSidePanel({
           </div>
         </div>
       </div>
+      )}
 
-      {backLabel && onBackClick && (
+      {backLabel && onBackClick && activeTab === 'departments' && (
         <button
           type="button"
           onClick={onBackClick}
@@ -320,14 +341,14 @@ export function PolytopeSidePanel({
           </span>
 
           {/* Dept name sub-header when inside a dept */}
-          {showingNodes && effectiveDept && (
+          {activeTab === 'departments' && showingNodes && effectiveDept && (
             <p className="text-[11px] font-semibold mt-0.5 truncate" style={{ color: deptColor }}>
               {effectiveDept.label}
             </p>
           )}
 
           {/* Search result count */}
-          {isSearchActive && (
+          {activeTab === 'departments' && isSearchActive && (
             <p className="text-[10px] mt-0.5" style={{ color: '#4b5563' }}>
               {showingNodes
                 ? `${visibleNodes.length} result${visibleNodes.length !== 1 ? 's' : ''}`
@@ -343,7 +364,28 @@ export function PolytopeSidePanel({
           className="overflow-y-auto flex-1"
           style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
         >
-          {isSearchActive && !showingNodes ? (
+          {activeTab === 'information' ? (
+            <div className="p-2 space-y-0.5">
+              {[
+                { label: 'Strategy', path: '/twin/strategy', icon: Target, color: '#f472b6' },
+                { label: 'Data', path: '/twin/data', icon: Database, color: '#38bdf8' },
+                { label: 'Benchmarks', path: '/twin/benchmarks', icon: Activity, color: '#fbbf24' },
+                { label: 'Team', path: '/twin/team', icon: Users, color: '#a78bfa' },
+                { label: 'Analytics', path: '/twin/analytics', icon: BarChart2, color: '#2dd4bf' },
+              ].map((item) => (
+                <button
+                  key={item.label}
+                  onClick={() => navigate(item.path)}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-white/[0.06] rounded-xl group"
+                >
+                  <item.icon className="w-4 h-4 transition-transform group-hover:scale-110" style={{ color: item.color }} />
+                  <span className="text-[12px] text-gray-300 group-hover:text-white transition-colors font-medium">
+                    {item.label}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : isSearchActive && !showingNodes ? (
             /* ── GLOBAL SEARCH RESULTS: departments + internal nodes ── */
             deptResults.length === 0 && internalNodeResults.length === 0 ? (
               <div className="px-3 py-6 text-[11px] text-center" style={{ color: '#4b5563' }}>
@@ -586,6 +628,7 @@ export function PolytopeSidePanel({
         </div>
 
         {/* ── Add button — always pinned at bottom ── */}
+        {activeTab === 'departments' && (
         <div
           className="px-3 pb-3 pt-2 shrink-0"
           style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}
@@ -610,6 +653,7 @@ export function PolytopeSidePanel({
             {!showingNodes ? 'Add Department' : 'Add Internal Node'}
           </button>
         </div>
+        )}
       </div>
 
       {/* ── VC & Mentors + Startup Network pills ── */}
