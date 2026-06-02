@@ -221,6 +221,7 @@ export default function Universe3DPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [insideBH, setInsideBH] = useState(false);
+  const [bhTransitioning, setBhTransitioning] = useState(false);
   // Mount once on first BH entry — never unmount (avoids R3F OrbitControls null-connect error)
   const [bhMounted, setBhMounted] = useState(false);
   // Increments each entry so UniversalPolytope resets camera to initial view
@@ -334,7 +335,14 @@ export default function Universe3DPage() {
   const handleEnterBH = useCallback(() => {
     setBhMounted(true);
     setInsideBH(true);
+    setBhTransitioning(true);
     setBhEntryCount(c => c + 1);
+    
+    // Disable pointer events during the 1.4s fade-in transition
+    // to prevent scroll momentum from zooming inside the polytope camera
+    setTimeout(() => {
+      setBhTransitioning(false);
+    }, 1400);
   }, []);
 
   // Called from within R3F overlay when user scrolls out past OrbitControls maxDistance
@@ -526,6 +534,7 @@ export default function Universe3DPage() {
           zIndex: 5,
           opacity: insideBH ? 1 : 0,
           visibility: insideBH ? 'visible' : 'hidden',
+          pointerEvents: insideBH && !bhTransitioning ? 'auto' : 'none',
           transition: insideBH
             ? 'opacity 1.4s ease-in-out'                          // entering: fade in, visible immediately
             : 'opacity 1.4s ease-in-out, visibility 0s 1.4s',    // exiting: fade then hide
