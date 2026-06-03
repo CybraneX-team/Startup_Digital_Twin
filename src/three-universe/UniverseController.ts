@@ -49,6 +49,11 @@ export interface UniverseCallbacks {
   onInteriorLevelChange?: (depth: number, path: string[]) => void;
   /** Fired whenever navigating back from COMPANY level */
   onExitCompanyPolytope?: () => void;
+  /** After zoom to company — prompt role selection */
+  onCompanyAwaitingRole?: (ctx: { company: any; industry: any; subdomain: any }) => void;
+  /** Planet root systems visible in 3D */
+  onEnterCompanyPlanetRoots?: (company: any) => void;
+  onPlanetLevelChange?: (depth: number, path: string[]) => void;
 }
 
 const _orbitPos = new THREE.Vector3();
@@ -326,13 +331,23 @@ export class UniverseController {
     this.navigation.onExitCompanyPolytope = () => {
       this._callbacks?.onExitCompanyPolytope?.();
     };
+    this.navigation.onCompanyAwaitingRole = (ctx) => {
+      this._callbacks?.onCompanyAwaitingRole?.(ctx);
+    };
+    this.navigation.onEnterCompanyPlanetRoots = (company) => {
+      this._callbacks?.onEnterCompanyPlanetRoots?.(company);
+    };
+    this.navigation.onPlanetLevelChange = (depth, path) => {
+      this._refreshInteriorLabels();
+      this._callbacks?.onPlanetLevelChange?.(depth, path);
+    };
   }
 
   private _refreshInteriorLabels(company?: any) {
     this.labels.removeByPrefix('dept-');
     const sss = this.subdomainSolarSystem;
     const co = company ?? this.navigation?.navigationPath?.[2]?.data;
-    if (!co || !sss?.interiorView?.active) return;
+    if (!co || !sss?.interiorViewActive) return;
     this.labels.createDepartmentLabels(co, () => sss.getInteriorNodeMeshes());
     this.labels.setVisibility('dept-', true);
   }
@@ -725,11 +740,25 @@ export class UniverseController {
 
   drillInteriorBack(): boolean {
     const sss = this.subdomainSolarSystem;
-    if (!sss?.interiorView?.active) return false;
-    if (!sss.interiorView.drillBack()) return false;
-    // this.navigation?._refocusCompanyInteriorCamera(true);
+    if (!sss?.interiorViewActive) return false;
+    if (!sss.drillInteriorBack()) return false;
     this._refreshInteriorLabels();
     return true;
+  }
+
+  drillPlanetInto(nodeId: string): boolean {
+    const sss = this.subdomainSolarSystem;
+    if (!sss?.interiorViewActive) return false;
+    return sss.drillInteriorInto(nodeId);
+  }
+
+  confirmPlanetRole(
+    industry: any,
+    subdomain: any,
+    company: any,
+    tree: unknown[],
+  ): void {
+    this.navigation?.confirmPlanetRole(industry, subdomain, company, tree);
   }
 
   /** Called by React when the user scrolls out of a live-company polytope overlay */

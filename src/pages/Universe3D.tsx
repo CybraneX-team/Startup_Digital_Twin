@@ -9,10 +9,20 @@ import type { UniverseIndustry, UniverseSubdomain } from '../data/universeGraph'
 import CreateCompanyModal from '../components/CreateCompanyModal';
 import type { LocalCompany } from '../lib/localCompanies';
 import UniversalPolytope from '../components/UniversalPolytope';
+import PlanetRootNodeView from '../components/planet/PlanetRootNodeView';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
 import { UniverseNavBackButton, getUniverseBackLabel } from '../components/UniverseNavBackButton';
 import { PolytopeManager } from '../components/PolytopeManager';
 import CreateDepartmentPanel from '../components/CreateDepartmentPanel';
+import CompanyRoleModal from '../components/CompanyRoleModal';
+import CompanyPlanet2DView, { ROOT_FOCUS_TOTAL_MS } from '../components/CompanyPlanet2DView';
+import { CompanyPlanetSidePanel } from '../components/CompanyPlanetSidePanel';
+import {
+  getPlanetRootsForCompany,
+  rootsToPolytopeDepartments,
+  type UserPlanetRole,
+  type CompanyPlanetContext,
+} from '../data/companyPlanetRoots';
 import { usePolytopeStore } from '../lib/usePolytopeStore';
 import { SearchTrie} from '../lib/SearchTrie';
 import type { UExternalNode, UInternalNode } from '../lib/usePolytopeStore';
@@ -378,7 +388,113 @@ export default function Universe3DPage() {
   const handleExitCompanyPolytope = useCallback(() => {
     setInsideCompanyInterior(false);
     setCompanyInteriorPath([]);
+    setInsidePlanetRoots(false);
+    setInsideRootPolytope(false);
+    setPlanetContext(null);
+    setPlanetSearchQuery('');
+    setRoleModal(null);
+    setRootPolytopeDeptId(null);
+    setRootPolytopeInternalPath([]);
+    setRootPolytopeBackStep(0);
   }, []);
+
+  // ── Company planet root systems (Industry OS) ──
+  const [roleModal, setRoleModal] = useState<{
+    company: { id: string; name: string };
+    industry: UniverseIndustry;
+    subdomain: UniverseSubdomain;
+  } | null>(null);
+  const [insidePlanetRoots, setInsidePlanetRoots] = useState(false);
+  const [planetContext, setPlanetContext] = useState<CompanyPlanetContext | null>(null);
+  const [planetSearchQuery, setPlanetSearchQuery] = useState('');
+  const [planetIndustryColor, setPlanetIndustryColor] = useState('#C1AEFF');
+
+  // ── Root → BDT internal node layout (no convex polytope hull) ──
+  const [insideRootPolytope, setInsideRootPolytope] = useState(false);
+  const [rootPolytopeMounted, setRootPolytopeMounted] = useState(false);
+  const [rootPolytopeDepts, setRootPolytopeDepts] = useState<UExternalNode[]>([]);
+  const [rootPolytopeDeptId, setRootPolytopeDeptId] = useState<string | null>(null);
+  const [rootPolytopeInternalPath, setRootPolytopeInternalPath] = useState<string[]>([]);
+  const [rootPolytopeBackStep, setRootPolytopeBackStep] = useState(0);
+  const [rootPolytopeSwitchKey, setRootPolytopeSwitchKey] = useState(0);
+  const [requestFocusRootId, setRequestFocusRootId] = useState<string | null>(null);
+
+  const activeRootDept = useMemo(
+    () => rootPolytopeDepts.find(d => d.id === rootPolytopeDeptId && d.domain !== 'inactive') ?? null,
+    [rootPolytopeDepts, rootPolytopeDeptId],
+  );
+
+  const handleCompanyAwaitingRole = useCallback((ctx: {
+    company: { id: string; name: string };
+    industry: UniverseIndustry;
+    subdomain: UniverseSubdomain;
+  }) => {
+    setRoleModal(ctx);
+  }, []);
+
+  const handleRoleSelect = useCallback((role: UserPlanetRole) => {
+    if (!roleModal) return;
+    const ctx = getPlanetRootsForCompany(roleModal.company.id, roleModal.company.name, role);
+    setPlanetContext(ctx);
+    setRoleModal(null);
+    setPlanetIndustryColor(roleModal.industry.color);
+    setInsidePlanetRoots(true);
+  }, [roleModal]);
+
+  const handleRoleModalClose = useCallback(() => {
+    setRoleModal(null);
+    controllerRef.current?.goBack();
+  }, []);
+
+  const beginRootFocus = useCallback((rootId: string) => {
+    if (!planetContext) return;
+    setRequestFocusRootId(rootId);
+  }, [planetContext]);
+
+  const handleOpenRootPolytope = useCallback((rootId: string) => {
+    if (!planetContext) return;
+    setRootPolytopeMounted(true);
+    setRootPolytopeDepts(rootsToPolytopeDepartments(planetContext.roots));
+    setRootPolytopeDeptId(rootId);
+    setRootPolytopeInternalPath([]);
+    setRootPolytopeSwitchKey(k => k + 1);
+    setInsideRootPolytope(true);
+    setRequestFocusRootId(null);
+  }, [planetContext]);
+
+  const handleRootFocusTransitionComplete = useCallback((rootId: string) => {
+    setRequestFocusRootId(null);
+    handleOpenRootPolytope(rootId);
+  }, [handleOpenRootPolytope]);
+
+  const handleExitRootPolytope = useCallback(() => {
+    setInsideRootPolytope(false);
+    setRootPolytopeDeptId(null);
+    setRootPolytopeInternalPath([]);
+    setRootPolytopeBackStep(0);
+  }, []);
+
+  const handleExitPlanetRoots = useCallback(() => {
+    handleExitRootPolytope();
+    setInsidePlanetRoots(false);
+    setPlanetContext(null);
+    setPlanetSearchQuery('');
+    controllerRef.current?.goBack();
+  }, [handleExitRootPolytope]);
+
+  const handlePlanetRootSelect = useCallback((rootId: string) => {
+    beginRootFocus(rootId);
+  }, [beginRootFocus]);
+
+  const handlePlanetBranchSelect = useCallback((rootId: string, branchId: string) => {
+    beginRootFocus(rootId);
+    window.setTimeout(() => setRootPolytopeInternalPath([branchId]), ROOT_FOCUS_TOTAL_MS + 450);
+  }, [beginRootFocus]);
+
+  const handlePlanetActionSelect = useCallback((rootId: string, branchId: string, actionId: string) => {
+    beginRootFocus(rootId);
+    window.setTimeout(() => setRootPolytopeInternalPath([branchId, actionId]), ROOT_FOCUS_TOTAL_MS + 450);
+  }, [beginRootFocus]);
 
   const handleExitCompanyInterior = useCallback(() => {
     controllerRef.current?.exitCompanyPolytope();
@@ -431,6 +547,14 @@ export default function Universe3DPage() {
     setInsideBH(false);
     setInsideCompanyInterior(false);
     setCompanyInteriorPath([]);
+    setInsidePlanetRoots(false);
+    setInsideRootPolytope(false);
+    setPlanetContext(null);
+    setPlanetSearchQuery('');
+    setRoleModal(null);
+    setRootPolytopeDeptId(null);
+    setRootPolytopeInternalPath([]);
+    setRootPolytopeBackStep(0);
     setPolytopeDraftDept(null);
     setPolytopeDraftInternalNode(null);
     setPolytopeDeptId(null);
@@ -465,6 +589,24 @@ export default function Universe3DPage() {
         searchInputRef.current?.focus();
       }
       if (e.key === 'Escape') {
+        if (roleModal) {
+          handleRoleModalClose();
+          return;
+        }
+        if (insideRootPolytope) {
+          if (rootPolytopeInternalPath.length > 0) {
+            setRootPolytopeBackStep(c => c + 1);
+          } else if (rootPolytopeDeptId) {
+            handleExitRootPolytope();
+          } else {
+            handleExitRootPolytope();
+          }
+          return;
+        }
+        if (insidePlanetRoots && planetContext) {
+          handleExitPlanetRoots();
+          return;
+        }
         if (createModal) {
           setCreateModal(null);
           return;
@@ -475,7 +617,7 @@ export default function Universe3DPage() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [createModal]);
+  }, [createModal, roleModal, handleRoleModalClose, insideRootPolytope, insidePlanetRoots, planetContext, rootPolytopeInternalPath, rootPolytopeDeptId, handleExitRootPolytope, handleExitPlanetRoots]);
 
   if (error) {
     return (
@@ -517,6 +659,7 @@ export default function Universe3DPage() {
           onEnterCompanyInterior={handleEnterCompanyInterior}
           onInteriorLevelChange={handleInteriorLevelChange}
           onExitCompanyPolytope={handleExitCompanyPolytope}
+          onCompanyAwaitingRole={handleCompanyAwaitingRole}
           controllerRef={controllerRef}
         />
       )}
@@ -561,6 +704,70 @@ export default function Universe3DPage() {
         )}
       </div>
 
+      {roleModal && (
+        <CompanyRoleModal
+          companyName={roleModal.company.name}
+          industryColor={roleModal.industry.color}
+          onSelect={handleRoleSelect}
+          onClose={handleRoleModalClose}
+        />
+      )}
+
+      {/* ── Company Planet 2D root map (after role pick) ── */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 6,
+          opacity: insidePlanetRoots && planetContext && !insideRootPolytope ? 1 : 0,
+          visibility: insidePlanetRoots && planetContext && !insideRootPolytope ? 'visible' : 'hidden',
+          pointerEvents: insidePlanetRoots && planetContext && !insideRootPolytope ? 'auto' : 'none',
+          transition: 'opacity 0.5s ease-in-out',
+        }}
+      >
+        {planetContext && !insideRootPolytope && (
+          <CompanyPlanet2DView
+            context={planetContext}
+            depth={0}
+            path={[]}
+            requestFocusRootId={requestFocusRootId}
+            onFocusTransitionComplete={handleRootFocusTransitionComplete}
+            onDrillInto={() => {}}
+            onDrillBack={() => {}}
+            industryColor={planetIndustryColor}
+          />
+        )}
+      </div>
+
+      {/* ── Root drill-in: BDT internal node layout only (no polytope hull) ── */}
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 7,
+          opacity: insideRootPolytope ? 1 : 0,
+          visibility: insideRootPolytope ? 'visible' : 'hidden',
+          pointerEvents: insideRootPolytope ? 'auto' : 'none',
+          transition: insideRootPolytope
+            ? 'opacity 0.85s ease-out'
+            : 'opacity 0.45s ease-in, visibility 0s 0.45s',
+          background: insideRootPolytope
+            ? 'radial-gradient(ellipse at 50% 40%, rgba(18,10,36,0.98) 0%, rgba(2,2,6,0.99) 65%)'
+            : undefined,
+        }}
+      >
+        {insideRootPolytope && rootPolytopeMounted && activeRootDept && (
+          <PlanetRootNodeView
+            key={`${activeRootDept.id}-${rootPolytopeSwitchKey}`}
+            root={activeRootDept}
+            selectedInternalPath={rootPolytopeInternalPath}
+            onInternalPathChange={setRootPolytopeInternalPath}
+            requestBackStep={rootPolytopeBackStep}
+            rootSwitchKey={rootPolytopeSwitchKey}
+          />
+        )}
+      </div>
+
       {/* ── Create Company Floating Panel ── */}
       {createModal && (
         <CreateCompanyModal
@@ -579,8 +786,33 @@ export default function Universe3DPage() {
       {/* Bottom-left column: hidden when create modal is active OR drafting dept/node */}
       {!createModal && !polytopeDraftDept && !polytopeDraftInternalNode && (
         <div className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3">
-          {/* When inside BH or logged-in company interior — dept sidebar */}
-          {(insideBH || insideCompanyInterior) ? (
+          {insideRootPolytope && activeRootDept ? (
+            <PolytopeSidePanel
+              departments={[activeRootDept]}
+              selectedDeptId={activeRootDept.id}
+              onDeptSelect={() => handleExitRootPolytope()}
+              selectedInternalPath={rootPolytopeInternalPath}
+              onInternalBack={() => setRootPolytopeBackStep(c => c + 1)}
+              onExitToSubdomain={handleExitRootPolytope}
+              exitToSubdomainLabel="2D root map"
+              onNodeSelect={setRootPolytopeInternalPath}
+            />
+          ) : insidePlanetRoots && planetContext ? (
+            <CompanyPlanetSidePanel
+              context={planetContext}
+              depth={0}
+              path={[]}
+              onRootSelect={handlePlanetRootSelect}
+              onBranchSelect={handlePlanetBranchSelect}
+              onActionSelect={handlePlanetActionSelect}
+              onDrillBack={() => {}}
+              onExitToSubdomain={handleExitPlanetRoots}
+              exitToSubdomainLabel={navPath.find(p => p.level === 'subdomain')?.name ?? 'Subdomain'}
+              searchQuery={planetSearchQuery}
+              setSearchQuery={setPlanetSearchQuery}
+              industryColor={planetIndustryColor}
+            />
+          ) : (insideBH || insideCompanyInterior) ? (
             <PolytopeSidePanel
               departments={polytopeStore.departments}
               selectedDeptId={insideBH ? polytopeDeptId : (companyInteriorPath[0] ?? null)}
@@ -769,10 +1001,15 @@ export default function Universe3DPage() {
           style={{ background: 'rgba(0, 0, 0, 0.75)' }}
         >
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 mb-2 inline-block">
-            {hoverTarget.type}
+            {hoverTarget.type === 'company_planet_root' ? 'root node' : hoverTarget.type}
           </span>
           <h3 className="text-sm font-semibold text-white mt-1">
-            {hoverTarget.industry?.name || hoverTarget.subdomain?.name || hoverTarget.company?.name || hoverTarget.department?.name || ''}
+            {hoverTarget.nodeLabel
+              || hoverTarget.industry?.name
+              || hoverTarget.subdomain?.name
+              || hoverTarget.company?.name
+              || hoverTarget.department?.name
+              || ''}
           </h3>
           {(hoverTarget.industry?.description || hoverTarget.subdomain?.description || hoverTarget.company?.description) && (
             <p className="text-xs text-gray-400 mt-1 line-clamp-3">
@@ -797,7 +1034,7 @@ export default function Universe3DPage() {
       )}
 
       {/* Legend */}
-      {!insideBH && !insideCompanyInterior && (
+      {!insideBH && !insideCompanyInterior && !insidePlanetRoots && !insideRootPolytope && (
         <div
           className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 text-xs px-4 py-2 rounded-full backdrop-blur-md z-10"
           style={{ background: 'rgba(0,0,0,0.55)', color: '#5E5E5E', border: '1px solid rgba(255,255,255,0.06)' }}

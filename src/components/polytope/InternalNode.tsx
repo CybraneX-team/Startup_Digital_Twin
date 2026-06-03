@@ -47,6 +47,9 @@ export function InternalNode({
   const isMeActiveCenter = selectedPath.length > 0 && selectedPath[selectedPath.length - 1] === node.id;
   const isMeAncestor = selectedPath.includes(node.id) && !isMeActiveCenter;
   const myPath = [...pathContext, node.id];
+  /** Parent orb hides when user drills into a child (branch → action, etc.) */
+  const hasActiveChild = selectedPath.length > myPath.length;
+  const isHiddenParent = hasActiveChild && !isDraft;
 
   const childPositions = useMemo(() => {
     const hasDraft = isMeActiveCenter && draftChildNode;
@@ -139,10 +142,16 @@ export function InternalNode({
         groupRef.current.position.copy(currentPos.current);
       }
 
-      const targetScale = isVisible ? (isMeActiveCenter ? 1.5 : 1.0) : 0.0;
+      let targetScale = 0.0;
+      if (isHiddenParent) {
+        targetScale = 0.0;
+      } else if (isVisible) {
+        targetScale = isMeActiveCenter ? 1.5 : 1.0;
+      }
+      const lerpSpeed = isHiddenParent || isMeActiveCenter ? 0.14 : 0.08;
       groupRef.current.scale.lerp(
         new THREE.Vector3(targetScale, targetScale, targetScale),
-        0.08
+        lerpSpeed,
       );
     }
   });
@@ -168,12 +177,18 @@ export function InternalNode({
         <PlasmaSphere
           color={color}
           radius={radius}
-          opacity={isDraft ? 0.85 : 1.0}
-          glowIntensity={isDraft ? 2.8 : isMeActiveCenter ? 3.5 : 0.2}
-          depthWrite={true}
+          opacity={isDraft ? 0.85 : isHiddenParent ? 0.0 : 1.0}
+          glowIntensity={
+            isDraft ? 2.8
+            : isHiddenParent ? 0
+            : isMeActiveCenter ? 3.5
+            : 0.2
+          }
+          halo={false}
+          depthWrite={!isHiddenParent}
           speed={isMeActiveCenter ? 1.5 : 0.2}
         />
-        {isVisible && (
+        {isVisible && !isHiddenParent && (
           <Html position={[0, -radius * 2.5, 0]} center zIndexRange={[100, 0]}>
             <div style={{
               color: 'white',

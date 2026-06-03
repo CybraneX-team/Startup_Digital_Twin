@@ -13,12 +13,16 @@ interface UniverseCanvasProps {
   onEnterCompanyInterior?: (company: any) => void;
   onInteriorLevelChange?: (depth: number, path: string[]) => void;
   onExitCompanyPolytope?: () => void;
+  onCompanyAwaitingRole?: (ctx: { company: any; industry: any; subdomain: any }) => void;
+  onEnterCompanyPlanetRoots?: (company: any) => void;
+  onPlanetLevelChange?: (depth: number, path: string[]) => void;
   controllerRef?: React.MutableRefObject<UniverseController | null>;
 }
 
 export default function UniverseCanvas({
   data, onNavigate, onHover, onCreateCompany, onEnterBH, onExitBH,
   onEnterCompanyPolytope, onEnterCompanyInterior, onInteriorLevelChange, onExitCompanyPolytope,
+  onCompanyAwaitingRole, onEnterCompanyPlanetRoots, onPlanetLevelChange,
   controllerRef,
 }: UniverseCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -42,6 +46,12 @@ export default function UniverseCanvas({
   stableOnInteriorLevelChange.current = onInteriorLevelChange;
   const stableOnExitCompanyPolytope = useRef(onExitCompanyPolytope);
   stableOnExitCompanyPolytope.current = onExitCompanyPolytope;
+  const stableOnCompanyAwaitingRole = useRef(onCompanyAwaitingRole);
+  stableOnCompanyAwaitingRole.current = onCompanyAwaitingRole;
+  const stableOnEnterCompanyPlanetRoots = useRef(onEnterCompanyPlanetRoots);
+  stableOnEnterCompanyPlanetRoots.current = onEnterCompanyPlanetRoots;
+  const stableOnPlanetLevelChange = useRef(onPlanetLevelChange);
+  stableOnPlanetLevelChange.current = onPlanetLevelChange;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -59,6 +69,9 @@ export default function UniverseCanvas({
         onEnterCompanyInterior: (company) => stableOnEnterCompanyInterior.current?.(company),
         onInteriorLevelChange: (depth, path) => stableOnInteriorLevelChange.current?.(depth, path),
         onExitCompanyPolytope: () => stableOnExitCompanyPolytope.current?.(),
+        onCompanyAwaitingRole: (ctx) => stableOnCompanyAwaitingRole.current?.(ctx),
+        onEnterCompanyPlanetRoots: (company) => stableOnEnterCompanyPlanetRoots.current?.(company),
+        onPlanetLevelChange: (depth, path) => stableOnPlanetLevelChange.current?.(depth, path),
       },
     );
     ctrlRef.current = ctrl;

@@ -13,6 +13,7 @@ import atmVert from '../shaders/atmosphere/vertex.glsl';
 import atmFrag from '../shaders/atmosphere/fragment.glsl';
 import { TextureGenerator } from '../engine/TextureGenerator.js';
 import { CompanyInteriorView } from './CompanyInteriorView.js';
+import { CompanyPlanetRootView } from './CompanyPlanetRootView.js';
 
 function generatePlanetTexture(baseColor: THREE.Color, seed: number) {
   const canvas = document.createElement('canvas');
@@ -88,6 +89,14 @@ export class SubdomainSolarSystem {
     this._frozen = false;    // when true, all planets stop orbiting
     this._frozenAngle = new Map(); // companyId → frozen angle
     this.interiorView = new CompanyInteriorView();
+    this.planetRootView = new CompanyPlanetRootView();
+    this._interiorMode = 'none';
+  }
+
+  _activeInterior() {
+    if (this._interiorMode === 'planet') return this.planetRootView;
+    if (this._interiorMode === 'dept') return this.interiorView;
+    return null;
   }
 
   // ── BUILD ────────────────────────────────────────────────────────────────
@@ -216,7 +225,8 @@ export class SubdomainSolarSystem {
   update(elapsed) {
     if (!this.group) return;
     if (this._sunMat) this._sunMat.uniforms.uTime.value = elapsed;
-    if (this.interiorView?.active) this.interiorView.update(elapsed);
+    const iv = this._activeInterior();
+    if (iv?.active) iv.update(elapsed);
     if (this._frozen) return;  // planets are stopped — skip orbit update
     const ts = 0.016 * 0.12;
     this._containers.forEach(cc => {
@@ -360,27 +370,54 @@ export class SubdomainSolarSystem {
 
   enterCompanyInterior(companyMesh, departments, industryColorHex) {
     if (!companyMesh) return;
+    this.planetRootView.exit();
+    this._interiorMode = 'dept';
     this.freeze();
     this.interiorView.enter(companyMesh, departments, industryColorHex);
   }
 
+  enterCompanyPlanetRoots(companyMesh, tree, industryColorHex) {
+    if (!companyMesh) return;
+    this.interiorView.exit();
+    this._interiorMode = 'planet';
+    this.freeze();
+    this.planetRootView.enter(companyMesh, tree, industryColorHex);
+  }
+
   exitCompanyInterior() {
     this.interiorView.exit();
+    this.planetRootView.exit();
+    this._interiorMode = 'none';
     this.unfreeze();
   }
 
   getInteriorNodeMeshes() {
-    return this.interiorView?.active ? this.interiorView.getNodeMeshes() : [];
+    const iv = this._activeInterior();
+    return iv?.active ? iv.getNodeMeshes() : [];
   }
 
   getInteriorFocusPosition() {
-    return this.interiorView?.active
-      ? this.interiorView.getFocusWorldPosition()
-      : null;
+    const iv = this._activeInterior();
+    return iv?.active ? iv.getFocusWorldPosition() : null;
   }
 
   getInteriorCameraDistance() {
-    return this.interiorView?.active ? this.interiorView.getCameraDistance() : 28;
+    const iv = this._activeInterior();
+    return iv?.active ? iv.getCameraDistance() : 28;
+  }
+
+  drillInteriorInto(nodeId) {
+    const iv = this._activeInterior();
+    return iv?.active ? iv.drillInto(nodeId) : false;
+  }
+
+  drillInteriorBack() {
+    const iv = this._activeInterior();
+    return iv?.active ? iv.drillBack() : false;
+  }
+
+  get interiorViewActive() {
+    return !!this._activeInterior()?.active;
   }
 
   /** Scale down sibling planets during company interior view */

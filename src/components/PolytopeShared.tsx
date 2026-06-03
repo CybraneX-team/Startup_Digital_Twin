@@ -303,7 +303,24 @@ void main() {
 }
 `;
 
-export function PlasmaSphere({ color, radius, opacity = 1, glowIntensity = 1, depthWrite = true, speed = 1 }: { color: string, radius: number, opacity?: number, glowIntensity?: number, depthWrite?: boolean, speed?: number }) {
+export function PlasmaSphere({
+  color,
+  radius,
+  opacity = 1,
+  glowIntensity = 1,
+  depthWrite = true,
+  speed = 1,
+  halo = true,
+}: {
+  color: string;
+  radius: number;
+  opacity?: number;
+  glowIntensity?: number;
+  depthWrite?: boolean;
+  speed?: number;
+  /** Volumetric bloom shell — off for internal branch/action nodes */
+  halo?: boolean;
+}) {
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const haloRef = useRef<THREE.ShaderMaterial>(null);
   const col = useMemo(() => new THREE.Color(color), [color]);
@@ -316,30 +333,31 @@ export function PlasmaSphere({ color, radius, opacity = 1, glowIntensity = 1, de
       materialRef.current.uniforms.uGlowIntensity.value = glowIntensity;
       materialRef.current.uniforms.uColor.value.copy(col);
     }
-    if (haloRef.current) {
-      haloRef.current.uniforms.uOpacity.value = opacity * 0.35; // base halo opacity
+    if (halo && haloRef.current) {
+      haloRef.current.uniforms.uOpacity.value = opacity * 0.35;
       haloRef.current.uniforms.uColor.value.copy(col);
     }
   });
 
   return (
     <group>
-      {/* Soft Volumetric Bloom Halo (2.6x radius) */}
-      <mesh>
-        <sphereGeometry args={[radius * 2.6, 32, 32]} />
-        <shaderMaterial 
-          ref={haloRef}
-          vertexShader={glowVertexShader} 
-          fragmentShader={glowFragmentShader} 
-          uniforms={{
-            uColor: { value: col },
-            uOpacity: { value: opacity * 0.35 }
-          }}
-          transparent 
-          blending={THREE.AdditiveBlending} 
-          depthWrite={false} 
-        />
-      </mesh>
+      {halo && (
+        <mesh>
+          <sphereGeometry args={[radius * 2.6, 32, 32]} />
+          <shaderMaterial
+            ref={haloRef}
+            vertexShader={glowVertexShader}
+            fragmentShader={glowFragmentShader}
+            uniforms={{
+              uColor: { value: col },
+              uOpacity: { value: opacity * 0.35 },
+            }}
+            transparent
+            blending={THREE.AdditiveBlending}
+            depthWrite={false}
+          />
+        </mesh>
+      )}
       {/* Procedural Glowing Plasma Core */}
       <mesh>
         <sphereGeometry args={[radius, 64, 64]} />
