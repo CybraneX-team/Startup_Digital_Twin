@@ -9,6 +9,7 @@ import { INDUSTRIES } from '../db/industries';
 import { useSubdomainsByIndustry } from '../lib/db/subdomains';
 import type { BusinessModel, CompanyStage } from '../lib/supabase';
 import { searchCompanyBySlug, submitJoinRequest } from '../lib/db/team';
+import { api } from '../lib/api';
 
 /* ──────────────────────────────────────────────────
    Step definitions
@@ -56,6 +57,10 @@ interface FormData {
   mrr_usd: string;
   burn_rate_usd: string;
   runway_months: string;
+  cltv_usd: string;
+  cac_usd: string;
+  monthly_churn_rate: string;
+  nps_score: string;
   competitors: string;   // comma-separated
   // Step 4
   first_name: string;
@@ -68,6 +73,7 @@ const INITIAL: FormData = {
   founded_year: '', website: '',
   description: '', problem_solved: '', usp: '', target_market: '', business_model: '',
   employees: '', mrr_usd: '', burn_rate_usd: '', runway_months: '',
+  cltv_usd: '', cac_usd: '', monthly_churn_rate: '', nps_score: '',
   competitors: '',
   first_name: '', last_name: '', title: '',
 };
@@ -266,6 +272,27 @@ export default function Onboarding() {
         { id: user.id, company_id: company.id, role: 'founder', onboarding_completed: true },
         { onConflict: 'id' },
       );
+
+    // Save metrics to metric_snapshots so they appear on the home page immediately
+    const hasAnyMetric = form.mrr_usd || form.burn_rate_usd || form.employees ||
+      form.runway_months || form.cltv_usd || form.cac_usd ||
+      form.monthly_churn_rate || form.nps_score;
+    if (hasAnyMetric) {
+      try {
+        await api.post(`/api/metrics-onboarding/${company.id}/initial`, {
+          mrr:      parseFloat(form.mrr_usd)           || 0,
+          burn:     parseFloat(form.burn_rate_usd)      || 0,
+          headcount: parseInt(form.employees)           || 0,
+          runway:   parseInt(form.runway_months)        || 0,
+          ltv:      parseFloat(form.cltv_usd)           || 0,
+          cac:      parseFloat(form.cac_usd)            || 0,
+          churn:    parseFloat(form.monthly_churn_rate) || 0,
+          nps:      parseFloat(form.nps_score)          || 0,
+        });
+      } catch (metricsErr) {
+        console.error('[onboarding] metrics save failed (non-fatal)', metricsErr);
+      }
+    }
 
     await refreshProfile();
     navigate('/twin', { replace: true });
@@ -666,6 +693,42 @@ export default function Onboarding() {
                     placeholder="18"
                     value={form.runway_months}
                     onChange={e => update('runway_months', e.target.value)}
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Customer Lifetime Value / CLTV (USD)" hint="Optional">
+                  <Input
+                    type="number" min={0}
+                    placeholder="1200"
+                    value={form.cltv_usd}
+                    onChange={e => update('cltv_usd', e.target.value)}
+                  />
+                </Field>
+                <Field label="Customer Acquisition Cost / CAC (USD)" hint="Optional">
+                  <Input
+                    type="number" min={0}
+                    placeholder="95"
+                    value={form.cac_usd}
+                    onChange={e => update('cac_usd', e.target.value)}
+                  />
+                </Field>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <Field label="Monthly Churn Rate (%)" hint="Optional">
+                  <Input
+                    type="number" min={0} max={100} step={0.1}
+                    placeholder="4.2"
+                    value={form.monthly_churn_rate}
+                    onChange={e => update('monthly_churn_rate', e.target.value)}
+                  />
+                </Field>
+                <Field label="Net Promoter Score (NPS)" hint="Optional — range −100 to 100">
+                  <Input
+                    type="number" min={-100} max={100}
+                    placeholder="42"
+                    value={form.nps_score}
+                    onChange={e => update('nps_score', e.target.value)}
                   />
                 </Field>
               </div>
