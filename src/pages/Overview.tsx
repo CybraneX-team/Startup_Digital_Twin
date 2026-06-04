@@ -11,7 +11,7 @@ import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/db/companies';
 import { useCompanyMetrics } from '../lib/db/metrics';
 import { INDUSTRIES } from '../db/industries';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 import type { Metric } from '../types';
 
 const statusConfig = {
@@ -34,20 +34,16 @@ export default function Overview() {
   const displayStage = company?.stage ?? 'Seed';
 
   const [simSnapshot, setSimSnapshot] = useState<Record<string, number> | null>(null);
+  const [chartData, setChartData] = useState(revenueHistory);
 
   useEffect(() => {
     if (!profile?.company_id) return;
-    supabase
-      .from('metric_snapshots')
-      .select('metrics')
-      .eq('company_id', profile.company_id)
-      .eq('integration_id', 'simulator')
-      .order('snapshot_at', { ascending: false })
-      .limit(1)
-      .maybeSingle()
-      .then(({ data }) => {
-        if (data?.metrics) setSimSnapshot(data.metrics as Record<string, number>);
-      });
+    api.get<Record<string, number> | null>(`/api/metrics-onboarding/${profile.company_id}/latest`)
+      .then((m) => { if (m) setSimSnapshot(m); })
+      .catch(() => {});
+    api.get<{ month: string; mrr: number; burn: number }[]>(`/api/metrics-onboarding/${profile.company_id}/history`)
+      .then((rows) => { if (rows?.length) setChartData(rows); })
+      .catch(() => {});
   }, [profile?.company_id]);
 
   const liveKeyMetrics = useMemo<Metric[]>(() => {
@@ -91,28 +87,32 @@ export default function Overview() {
       .filter(Boolean) as Metric[];
   }, [metrics]);
 
-  // Fall back to company record data when no normalized metrics exist yet
+  // Fall back to company record data when no normalized metrics exist yet.
+  // Always returns a full 8-card grid so the dashboard is never empty.
   const companyFallbackMetrics = useMemo<Metric[]>(() => {
     if (!company) return [];
-    const result: Metric[] = [];
-    if (company.mrr_usd)       result.push({ name: 'Monthly Revenue',  value: company.mrr_usd,       unit: '$', change: 0 });
-    if (company.burn_rate_usd) result.push({ name: 'Monthly Burn',     value: company.burn_rate_usd, unit: '$', change: 0 });
-    if (company.employees)     result.push({ name: 'Team Size',        value: company.employees,     unit: 'people', change: 0 });
-    if (company.runway_months) result.push({ name: 'Runway',           value: company.runway_months, unit: 'months', change: 0 });
-    return result;
+    return [
+      { name: 'Monthly Revenue', value: company.mrr_usd       ?? 0, unit: '$',      change: 0 },
+      { name: 'Monthly Burn',    value: company.burn_rate_usd  ?? 0, unit: '$',      change: 0 },
+      { name: 'Team Size',       value: company.employees      ?? 0, unit: 'people', change: 0 },
+      { name: 'Runway',          value: company.runway_months  ?? 0, unit: 'months', change: 0 },
+      { name: 'CAC',             value: 0,                           unit: '$',      change: 0 },
+      { name: 'LTV / CLTV',     value: 0,                           unit: '$',      change: 0 },
+      { name: 'Churn Rate',      value: 0,                           unit: '%',      change: 0 },
+      { name: 'NPS Score',       value: 0,                           unit: '',       change: 0 },
+    ];
   }, [company]);
 
   const displayMetrics = useMemo<Metric[]>(() => {
     if (simSnapshot) {
-      const mockByName = Object.fromEntries(keyMetrics.map(m => [m.name, m]));
       return [
         { name: 'MRR',        value: simSnapshot.revenue   ?? 0, unit: '$',      change: 0 },
         { name: 'CAC',        value: simSnapshot.cpa        ?? 0, unit: '$',      change: 0 },
         { name: 'LTV',        value: simSnapshot.cltv       ?? 0, unit: '$',      change: 0 },
-        { name: 'Churn Rate', value: mockByName['Churn Rate']?.value ?? 4.2, unit: '%', change: mockByName['Churn Rate']?.change ?? -0.3 },
+        { name: 'Churn Rate', value: simSnapshot.churn      ?? 0, unit: '%',      change: 0 },
         { name: 'Burn Rate',  value: simSnapshot.burn       ?? 0, unit: '$',      change: 0 },
-        { name: 'NPS Score',  value: mockByName['NPS Score']?.value ?? 67,  unit: '',   change: mockByName['NPS Score']?.change ?? 5 },
-        { name: 'Runway',     value: mockByName['Runway']?.value ?? 8,      unit: 'months', change: 0 },
+        { name: 'NPS Score',  value: simSnapshot.nps        ?? 0, unit: '',       change: 0 },
+        { name: 'Runway',     value: simSnapshot.runway     ?? 0, unit: 'months', change: 0 },
         { name: 'Team Size',  value: simSnapshot.headcount  ?? 0, unit: 'people', change: 0 },
       ];
     }
@@ -165,7 +165,7 @@ export default function Overview() {
         <div className="glass-card p-6">
           <h3 className="text-sm font-medium text-gray-300 mb-4">Revenue vs Burn</h3>
           <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={revenueHistory}>
+            <AreaChart data={chartData}>
               <defs>
                 <linearGradient id="mrrGrad" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3} />
