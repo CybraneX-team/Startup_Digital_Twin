@@ -8,6 +8,9 @@ import IntegrationModal from '../components/IntegrationModal';
 import { integrations } from '../data/mockData';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
+import { supabase } from '../lib/supabase';
+import { useCompany } from '../lib/db/companies';
+import { INDUSTRIES } from '../db/industries';
 import { fetchConnections } from '../lib/integrations/service';
 import type { IntegrationConnection } from '../lib/integrations/types';
 import type { Integration } from '../types';
@@ -63,7 +66,9 @@ const catLabels: Record<string, string> = {
 const INGESTION_WRITE_ROLES = new Set<UserRole>(['founder', 'co_founder', 'admin', 'super_admin']);
 
 export default function DataIngestion() {
-  const { canWrite, role } = useAuth();
+  const { canWrite, role, profile } = useAuth();
+  const companyId = profile?.company_id ?? null;
+  const { company } = useCompany(companyId);
   const canManageExcel = Boolean(role && INGESTION_WRITE_ROLES.has(role) && canWrite('data'));
   const [activeTab, setActiveTab] = useState<Tab>('manual');
 
@@ -88,15 +93,50 @@ export default function DataIngestion() {
   // ──────────────────────────────────────────────────────────────────────────
 
   const [formData, setFormData] = useState<FormData>({
-    mrr: '8500',
-    burnRate: '45000',
-    teamSize: '12',
-    cac: '95',
-    ltv: '1200',
-    churnRate: '4.2',
-    nps: '42',
+    mrr: '',
+    burnRate: '',
+    teamSize: '',
+    cac: '',
+    ltv: '',
+    churnRate: '',
+    nps: '',
   });
   const [submitted, setSubmitted] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
+  // Load latest saved metrics via backend (bypasses RLS on metric_snapshots)
+  useEffect(() => {
+    if (!companyId) return;
+    api.get<Record<string, number> | null>(`/api/metrics-onboarding/${companyId}/latest`)
+      .then((m) => {
+        if (m) {
+          setFormData({
+            mrr:       m.revenue   != null ? String(m.revenue)   : '',
+            burnRate:  m.burn      != null ? String(m.burn)      : '',
+            teamSize:  m.headcount != null ? String(m.headcount) : '',
+            cac:       m.cpa       != null ? String(m.cpa)       : '',
+            ltv:       m.cltv      != null ? String(m.cltv)      : '',
+            churnRate: m.churn     != null ? String(m.churn)     : '',
+            nps:       m.nps       != null ? String(m.nps)       : '',
+          });
+        }
+      })
+      .catch(() => { /* backend may not be running — fall through to company fallback */ });
+  }, [companyId]);
+
+  // Company-record fallback: fill only empty fields so API data is not overwritten
+  useEffect(() => {
+    if (!company) return;
+    setFormData(prev => ({
+      mrr:       prev.mrr       || (company.mrr_usd       != null ? String(company.mrr_usd)       : ''),
+      burnRate:  prev.burnRate  || (company.burn_rate_usd  != null ? String(company.burn_rate_usd) : ''),
+      teamSize:  prev.teamSize  || (company.employees      != null ? String(company.employees)     : ''),
+      cac:       prev.cac,
+      ltv:       prev.ltv,
+      churnRate: prev.churnRate,
+      nps:       prev.nps,
+    }));
+  }, [company]);
   const [csvFile, setCsvFile] = useState<string | null>(null);
   const [jobId, setJobId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
@@ -113,10 +153,25 @@ export default function DataIngestion() {
   const [actingDecisionId, setActingDecisionId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setSubmitted(true);
-    setTimeout(() => setSubmitted(false), 3000);
+    if (!companyId) return;
+    setSaveError(null);
+    try {
+      await api.post(`/api/metrics-onboarding/${companyId}/initial`, {
+        mrr:       parseFloat(formData.mrr)       || 0,
+        burn:      parseFloat(formData.burnRate)   || 0,
+        headcount: parseInt(formData.teamSize)     || 0,
+        cac:       parseFloat(formData.cac)        || 0,
+        ltv:       parseFloat(formData.ltv)        || 0,
+        churn:     parseFloat(formData.churnRate)  || 0,
+        nps:       parseFloat(formData.nps)        || 0,
+      });
+      setSubmitted(true);
+      setTimeout(() => setSubmitted(false), 3000);
+    } catch (err) {
+      setSaveError(String(err));
+    }
   };
 
   const loadReviewQueue = useCallback(async () => {
@@ -218,13 +273,13 @@ export default function DataIngestion() {
   }
 
   const fields = [
-    { key: 'mrr', label: 'Monthly Recurring Revenue', unit: '$', placeholder: '8500' },
-    { key: 'burnRate', label: 'Monthly Burn Rate', unit: '$', placeholder: '45000' },
-    { key: 'teamSize', label: 'Team Size', unit: 'people', placeholder: '12' },
-    { key: 'cac', label: 'Customer Acquisition Cost', unit: '$', placeholder: '95' },
-    { key: 'ltv', label: 'Customer Lifetime Value', unit: '$', placeholder: '1200' },
-    { key: 'churnRate', label: 'Monthly Churn Rate', unit: '%', placeholder: '4.2' },
-    { key: 'nps', label: 'Net Promoter Score', unit: '', placeholder: '42' },
+    { key: 'mrr',       label: 'Monthly Recurring Revenue',  unit: '$',      placeholder: '0' },
+    { key: 'burnRate',  label: 'Monthly Burn Rate',           unit: '$',      placeholder: '0' },
+    { key: 'teamSize',  label: 'Team Size',                   unit: 'people', placeholder: '0' },
+    { key: 'cac',       label: 'Customer Acquisition Cost',   unit: '$',      placeholder: '0' },
+    { key: 'ltv',       label: 'Customer Lifetime Value',     unit: '$',      placeholder: '0' },
+    { key: 'churnRate', label: 'Monthly Churn Rate',          unit: '%',      placeholder: '0' },
+    { key: 'nps',       label: 'Net Promoter Score',          unit: '',       placeholder: '0' },
   ];
 
   const tabs: { id: Tab; icon: React.ReactNode; label: string }[] = [
@@ -295,12 +350,20 @@ export default function DataIngestion() {
           <div className="glass-card p-6 mb-6">
             <h3 className="text-sm font-medium text-gray-300 mb-4">Normalization Preview</h3>
             <div className="grid grid-cols-4 gap-4">
-              {[
-                { dim: 'Industry', value: 'SaaS', desc: 'Adjusted for SaaS benchmarks' },
-                { dim: 'Geography', value: 'India', desc: 'Regional salary & CAC norms' },
-                { dim: 'Stage', value: 'Seed', desc: 'Compared to seed-stage cohort' },
-                { dim: 'Model', value: 'B2B', desc: 'B2B unit economics applied' },
-              ].map((n) => (
+              {(() => {
+                const industryLabel = company?.industry_id
+                  ? (INDUSTRIES.find(i => i.id === company.industry_id)?.label ?? company.industry_id)
+                  : '—';
+                const country = company?.country ?? '—';
+                const stage = company?.stage ?? '—';
+                const model = company?.business_model ?? '—';
+                return [
+                  { dim: 'Industry',   value: industryLabel, desc: `Adjusted for ${industryLabel} benchmarks` },
+                  { dim: 'Geography',  value: country,       desc: `Regional salary & CAC norms for ${country}` },
+                  { dim: 'Stage',      value: stage,         desc: `Compared to ${stage}-stage cohort` },
+                  { dim: 'Model',      value: model,         desc: model !== '—' ? `${model} unit economics applied` : 'Set in company settings' },
+                ];
+              })().map((n) => (
                 <div key={n.dim} className="py-3 px-4 rounded-lg bg-gray-900/50 border border-gray-800/50">
                   <span className="text-[10px] text-gray-500 uppercase tracking-wider">{n.dim}</span>
                   <p className="text-sm font-medium text-sky-300 mt-1">{n.value}</p>
@@ -310,6 +373,12 @@ export default function DataIngestion() {
             </div>
           </div>
 
+          {saveError && (
+            <div className="flex items-center gap-2 text-sm text-red-400 mb-3">
+              <AlertCircle className="w-3.5 h-3.5" />
+              {saveError}
+            </div>
+          )}
           <button
             type="submit"
             className="flex items-center gap-2 px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg transition-all"

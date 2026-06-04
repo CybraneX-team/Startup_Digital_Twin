@@ -12,7 +12,6 @@ import { useEffect, useMemo, useState } from 'react';
 import { getAllIndustries, type DbIndustry } from '../lib/db/industries';
 import { getAllSubdomains, type DbSubdomain } from '../lib/db/subdomains';
 import { getActiveCompanies } from '../lib/db/companies';
-import { getCatalogCompanies, type CatalogCompany } from '../lib/db/catalogCompanies';
 import { getAllLocalCompanies } from '../lib/localCompanies';
 import type { DbCompany } from '../lib/supabase';
 
@@ -65,10 +64,9 @@ export function buildUniverseData(args: {
   industries: DbIndustry[];
   subdomains: DbSubdomain[];
   liveCompanies: DbCompany[];
-  catalogCompanies: CatalogCompany[];
   myCompanyId?: string | null;
 }): UniverseData {
-  const { industries, subdomains, liveCompanies, catalogCompanies, myCompanyId } = args;
+  const { industries, subdomains, liveCompanies, myCompanyId } = args;
 
   // ── Index subdomains by industry ─────────────────────────────────
   const subsByInd = new Map<string, DbSubdomain[]>();
@@ -105,61 +103,6 @@ export function buildUniverseData(args: {
       isLive: true,
       departments: [],
       raw: c,
-    });
-  }
-
-  // 2. Catalog companies (from `catalog_companies` table)
-  for (const c of catalogCompanies) {
-    // Resolve subdomain ID
-    let sdId: string | null = c.subdomain_id;
-
-    if (!sdId && c.subdomain_name) {
-      const dbSubs = subsByInd.get(c.industry_id);
-      if (dbSubs) {
-        const match = dbSubs.find(s => s.label === c.subdomain_name);
-        if (match) sdId = match.id;
-      }
-    }
-    if (!sdId) {
-      sdId = subsByInd.get(c.industry_id)?.[0]?.id ?? null;
-    }
-    if (!sdId) continue;
-
-    addToSub(sdId, {
-      id: c.id,
-      name: c.name,
-      description: c.description ?? undefined,
-      founded: c.founded_year ?? undefined,
-      funding: c.stage ?? undefined,
-      stage: c.stage ?? undefined,
-      employees: c.employees ?? undefined,
-      isLive: false,
-      departments: [],
-      raw: {
-        id: c.id,
-        name: c.name,
-        slug: c.id,
-        industry_id: c.industry_id,
-        subdomain_id: sdId,
-        stage: (c.stage ?? 'Seed') as any,
-        country: c.country ?? 'Global',
-        founded_year: c.founded_year,
-        description: c.description,
-        website: null,
-        logo_url: null,
-        mrr_usd: c.mrr_usd,
-        employees: c.employees,
-        annual_revenue: c.mrr_usd ? c.mrr_usd * 12 : null,
-        burn_rate_usd: null,
-        runway_months: null,
-        valuation: c.valuation,
-        target_market: null,
-        business_model: null,
-        problem_solved: null,
-        usp: null,
-        competitors: null,
-        status: 'active',
-      } as any,
     });
   }
 
@@ -208,13 +151,12 @@ export function useUniverseGraph(authCompanyId?: string | null): {
   refresh: () => void;
   appendLocalCompany: (company: DbCompany) => void;
 } {
-  const [industries, setIndustries]       = useState<DbIndustry[]>([]);
-  const [subdomains, setSubdomains]       = useState<DbSubdomain[]>([]);
-  const [liveCompanies, setLive]          = useState<DbCompany[]>([]);
-  const [catalogCompanies, setCatalog]    = useState<CatalogCompany[]>([]);
-  const [loading, setLoading]             = useState(true);
-  const [error, setError]                 = useState<string | null>(null);
-  const [refreshKey, setRefreshKey]       = useState(0);
+  const [industries, setIndustries]  = useState<DbIndustry[]>([]);
+  const [subdomains, setSubdomains]  = useState<DbSubdomain[]>([]);
+  const [liveCompanies, setLive]     = useState<DbCompany[]>([]);
+  const [loading, setLoading]        = useState(true);
+  const [error, setError]            = useState<string | null>(null);
+  const [refreshKey, setRefreshKey]  = useState(0);
 
   const refresh = () => setRefreshKey(k => k + 1);
 
@@ -230,13 +172,11 @@ export function useUniverseGraph(authCompanyId?: string | null): {
       getAllIndustries(),
       getAllSubdomains(),
       getActiveCompanies(),
-      getCatalogCompanies(),
     ])
-      .then(([inds, sds, live, catalog]) => {
+      .then(([inds, sds, live]) => {
         if (!alive) return;
         setIndustries(inds);
         setSubdomains(sds);
-        setCatalog(catalog);
         const localCos = getAllLocalCompanies() as unknown as DbCompany[];
         setLive([...live, ...localCos]);
         setLoading(false);
@@ -256,10 +196,9 @@ export function useUniverseGraph(authCompanyId?: string | null): {
       industries,
       subdomains,
       liveCompanies,
-      catalogCompanies,
       myCompanyId: authCompanyId ?? null,
     });
-  }, [loading, industries, subdomains, liveCompanies, catalogCompanies, authCompanyId]);
+  }, [loading, industries, subdomains, liveCompanies, authCompanyId]);
 
   return { data, loading, error, refresh, appendLocalCompany };
 }
