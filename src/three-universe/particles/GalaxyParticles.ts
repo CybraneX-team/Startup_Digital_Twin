@@ -322,7 +322,7 @@ export class GalaxyParticles {
     // in its silhouette (particles, stars, disk, whatever rendered before).
     // depthWrite:true → writes depth so ring/arc can test against it.
     const ehMesh = new THREE.Mesh(
-      new THREE.SphereGeometry(EH_R, 64, 64),
+      new THREE.SphereGeometry(EH_R, 64, 64, 0, Math.PI * 2, 0, Math.PI / 2),
       new THREE.MeshBasicMaterial({
         color: 0x000000,
         transparent: true,   // transparent bucket → renders AFTER disk/particles
@@ -331,6 +331,7 @@ export class GalaxyParticles {
         depthTest: false,
       }),
     );
+    ehMesh.scale.set(1, 0.5, 1);
     ehMesh.renderOrder = 999;
     group.add(ehMesh);
 
@@ -339,7 +340,7 @@ export class GalaxyParticles {
     // depthTest:false + renderOrder 998 → paints solid black over all
     // external geometry the moment camera crosses the event horizon.
     const occluder = new THREE.Mesh(
-      new THREE.SphereGeometry(EH_R * 0.99, 32, 32),
+      new THREE.SphereGeometry(EH_R * 0.99, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2),
       new THREE.MeshBasicMaterial({
         color: 0x000000,
         side: THREE.BackSide,
@@ -349,6 +350,7 @@ export class GalaxyParticles {
         depthTest: false,
       }),
     );
+    occluder.scale.set(1, 0.5, 1);
     occluder.renderOrder = 998;
     group.add(occluder);
 
