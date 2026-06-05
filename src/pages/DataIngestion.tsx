@@ -8,7 +8,6 @@ import IntegrationModal from '../components/IntegrationModal';
 import { integrations } from '../data/mockData';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
-import { supabase } from '../lib/supabase';
 import { useCompany } from '../lib/db/companies';
 import { INDUSTRIES } from '../db/industries';
 import { fetchConnections } from '../lib/integrations/service';
