@@ -1,5 +1,6 @@
 import { TrendingUp, TrendingDown } from 'lucide-react';
 import type { Metric } from '../types';
+import { isCurrencyPrefix } from '../lib/currency';
 
 export default function MetricCard({ metric }: { metric: Metric }) {
   const isPositive = metric.change >= 0;
@@ -25,11 +26,11 @@ export default function MetricCard({ metric }: { metric: Metric }) {
       </div>
       <div className="flex items-end gap-2">
         <span className="text-2xl font-bold text-white">
-          {metric.unit === '$' && '$'}
+          {isCurrencyPrefix(metric.unit) && metric.unit}
           {metric.value.toLocaleString()}
           {metric.unit === '%' && '%'}
         </span>
-        {metric.unit !== '$' && metric.unit !== '%' && metric.unit && (
+        {!isCurrencyPrefix(metric.unit) && metric.unit !== '%' && metric.unit && (
           <span className="text-xs mb-1" style={{ color: '#5E5E5E' }}>{metric.unit}</span>
         )}
       </div>

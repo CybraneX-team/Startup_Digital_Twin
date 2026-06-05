@@ -68,6 +68,7 @@ export interface DbCompany {
   is_public: boolean;
   stock_symbol: string | null;
   offset_3d: { x: number; y: number; z: number } | null;
+  currency: string | null;
   created_at: string;
   updated_at: string;
 }
