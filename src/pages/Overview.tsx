@@ -12,6 +12,7 @@ import { useCompany } from '../lib/db/companies';
 import { useCompanyMetrics } from '../lib/db/metrics';
 import { INDUSTRIES } from '../db/industries';
 import { api } from '../lib/api';
+import { getCurrencySymbol } from '../lib/currency';
 import type { Metric } from '../types';
 
 const statusConfig = {
@@ -25,6 +26,8 @@ export default function Overview() {
   const { profile } = useAuth();
   const { company } = useCompany(profile?.company_id);
   const { metrics } = useCompanyMetrics(profile?.company_id ?? null);
+
+  const currencySymbol = getCurrencySymbol(company?.currency);
 
   const industryLabel = company?.industry_id
     ? INDUSTRIES.find(i => i.id === company.industry_id)?.label ?? company.industry_id
@@ -47,27 +50,28 @@ export default function Overview() {
   }, [profile?.company_id]);
 
   const liveKeyMetrics = useMemo<Metric[]>(() => {
+    const c = currencySymbol;
     const ordered = [
       // Financial summary
-      { key: 'revenue',             name: 'Monthly Revenue',      unit: '$' },
-      { key: 'burn',                name: 'Monthly Burn',         unit: '$' },
-      { key: 'rent',                name: 'Monthly Rent',         unit: '$' },
-      { key: 'salaries',            name: 'Salaries',             unit: '$' },
+      { key: 'revenue',             name: 'Monthly Revenue',      unit: c },
+      { key: 'burn',                name: 'Monthly Burn',         unit: c },
+      { key: 'rent',                name: 'Monthly Rent',         unit: c },
+      { key: 'salaries',            name: 'Salaries',             unit: c },
       // Team & acquisition
       { key: 'headcount',           name: 'Team Size',            unit: 'people' },
       { key: 'signups',             name: 'User Acquisition',     unit: '/mo' },
-      { key: 'ad_spend',            name: 'Ad Spend',             unit: '$' },
-      { key: 'cost_of_sales',       name: 'Cost of Sales',        unit: '$' },
+      { key: 'ad_spend',            name: 'Ad Spend',             unit: c },
+      { key: 'cost_of_sales',       name: 'Cost of Sales',        unit: c },
       // Core startup metrics
       { key: 'buyer_count',         name: 'Buyers',               unit: 'count' },
       { key: 'conversion_rate',     name: 'Conversion Rate',      unit: '%' },
-      { key: 'avg_order_value',     name: 'Avg Order Value',      unit: '$' },
-      { key: 'cogs',                name: 'COGS',                 unit: '$' },
+      { key: 'avg_order_value',     name: 'Avg Order Value',      unit: c },
+      { key: 'cogs',                name: 'COGS',                 unit: c },
       { key: 'avg_payment_count',   name: 'Avg Payment Count',    unit: 'x' },
-      { key: 'customer_ltv',        name: 'Customer LTV',         unit: '$' },
-      { key: 'arpu',                name: 'ARPU',                 unit: '$' },
-      { key: 'cpa',                 name: 'CPA',                  unit: '$' },
-      { key: 'contribution_margin', name: 'Contribution Margin',  unit: '$' },
+      { key: 'customer_ltv',        name: 'Customer LTV',         unit: c },
+      { key: 'arpu',                name: 'ARPU',                 unit: c },
+      { key: 'cpa',                 name: 'CPA',                  unit: c },
+      { key: 'contribution_margin', name: 'Contribution Margin',  unit: c },
     ];
 
     return ordered
@@ -85,32 +89,34 @@ export default function Overview() {
         } as Metric;
       })
       .filter(Boolean) as Metric[];
-  }, [metrics]);
+  }, [metrics, currencySymbol]);
 
   // Fall back to company record data when no normalized metrics exist yet.
   // Always returns a full 8-card grid so the dashboard is never empty.
   const companyFallbackMetrics = useMemo<Metric[]>(() => {
     if (!company) return [];
+    const c = currencySymbol;
     return [
-      { name: 'Monthly Revenue', value: company.mrr_usd       ?? 0, unit: '$',      change: 0 },
-      { name: 'Monthly Burn',    value: company.burn_rate_usd  ?? 0, unit: '$',      change: 0 },
+      { name: 'Monthly Revenue', value: company.mrr_usd       ?? 0, unit: c,        change: 0 },
+      { name: 'Monthly Burn',    value: company.burn_rate_usd  ?? 0, unit: c,        change: 0 },
       { name: 'Team Size',       value: company.employees      ?? 0, unit: 'people', change: 0 },
       { name: 'Runway',          value: company.runway_months  ?? 0, unit: 'months', change: 0 },
-      { name: 'CAC',             value: 0,                           unit: '$',      change: 0 },
-      { name: 'LTV / CLTV',     value: 0,                           unit: '$',      change: 0 },
+      { name: 'CAC',             value: 0,                           unit: c,        change: 0 },
+      { name: 'LTV / CLTV',     value: 0,                           unit: c,        change: 0 },
       { name: 'Churn Rate',      value: 0,                           unit: '%',      change: 0 },
       { name: 'NPS Score',       value: 0,                           unit: '',       change: 0 },
     ];
-  }, [company]);
+  }, [company, currencySymbol]);
 
   const displayMetrics = useMemo<Metric[]>(() => {
     if (simSnapshot) {
+      const c = currencySymbol;
       return [
-        { name: 'MRR',        value: simSnapshot.revenue   ?? 0, unit: '$',      change: 0 },
-        { name: 'CAC',        value: simSnapshot.cpa        ?? 0, unit: '$',      change: 0 },
-        { name: 'LTV',        value: simSnapshot.cltv       ?? 0, unit: '$',      change: 0 },
+        { name: 'MRR',        value: simSnapshot.revenue   ?? 0, unit: c,        change: 0 },
+        { name: 'CAC',        value: simSnapshot.cpa        ?? 0, unit: c,        change: 0 },
+        { name: 'LTV',        value: simSnapshot.cltv       ?? 0, unit: c,        change: 0 },
         { name: 'Churn Rate', value: simSnapshot.churn      ?? 0, unit: '%',      change: 0 },
-        { name: 'Burn Rate',  value: simSnapshot.burn       ?? 0, unit: '$',      change: 0 },
+        { name: 'Burn Rate',  value: simSnapshot.burn       ?? 0, unit: c,        change: 0 },
         { name: 'NPS Score',  value: simSnapshot.nps        ?? 0, unit: '',       change: 0 },
         { name: 'Runway',     value: simSnapshot.runway     ?? 0, unit: 'months', change: 0 },
         { name: 'Team Size',  value: simSnapshot.headcount  ?? 0, unit: 'people', change: 0 },
@@ -119,7 +125,7 @@ export default function Overview() {
     if (liveKeyMetrics.length > 0) return liveKeyMetrics;
     if (companyFallbackMetrics.length > 0) return companyFallbackMetrics;
     return keyMetrics.slice(0, 8);
-  }, [simSnapshot, liveKeyMetrics, companyFallbackMetrics]);
+  }, [simSnapshot, liveKeyMetrics, companyFallbackMetrics, currencySymbol]);
 
   return (
     <div>
@@ -180,8 +186,8 @@ export default function Overview() {
               <XAxis dataKey="month" stroke="#6b7280" fontSize={12} />
               <YAxis stroke="#6b7280" fontSize={12} />
               <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '8px' }} labelStyle={{ color: '#9ca3af' }} />
-              <Area type="monotone" dataKey="mrr" stroke="#0ea5e9" fill="url(#mrrGrad)" name="MRR ($)" />
-              <Area type="monotone" dataKey="burn" stroke="#ef4444" fill="url(#burnGrad)" name="Burn ($)" />
+              <Area type="monotone" dataKey="mrr" stroke="#0ea5e9" fill="url(#mrrGrad)" name={`MRR (${currencySymbol})`} />
+              <Area type="monotone" dataKey="burn" stroke="#ef4444" fill="url(#burnGrad)" name={`Burn (${currencySymbol})`} />
             </AreaChart>
           </ResponsiveContainer>
         </div>

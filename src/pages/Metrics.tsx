@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { isCurrencyPrefix } from '../lib/currency';
 import {
   BarChart3, TrendingUp, TrendingDown, Database, Pencil, Radio,
   ChevronDown, ChevronUp, Target,
@@ -173,11 +174,11 @@ function MetricTile({
           </div>
           <div className="flex items-end gap-2">
             <span className="text-xl font-bold text-white">
-              {metric.unit === '$' && '$'}
+              {isCurrencyPrefix(metric.unit) && metric.unit}
               {metric.value.toLocaleString()}
               {metric.unit === '%' && '%'}
             </span>
-            {metric.unit !== '$' && metric.unit !== '%' && metric.unit && (
+            {!isCurrencyPrefix(metric.unit) && metric.unit !== '%' && metric.unit && (
               <span className="text-[10px] text-gray-500 mb-0.5">{metric.unit}</span>
             )}
           </div>
@@ -223,7 +224,7 @@ function MetricTile({
           <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1">
             <span className="flex items-center gap-1">
               <Target className="w-2.5 h-2.5" />
-              Target: {metric.unit === '$' ? '$' : ''}{metric.target.toLocaleString()}{metric.unit === '%' ? '%' : ''}
+              Target: {isCurrencyPrefix(metric.unit) ? metric.unit : ''}{metric.target.toLocaleString()}{metric.unit === '%' ? '%' : ''}
             </span>
             <span>{targetPct}%</span>
           </div>
