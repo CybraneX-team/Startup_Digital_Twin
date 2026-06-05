@@ -11,6 +11,7 @@ export default function TopBar() {
   const is3D        = location.pathname === '/3d';
   const isTwin      = (location.pathname.startsWith('/twin') || location.pathname === '/3d') && !isData;
   const isOverview  = location.pathname.startsWith('/overview');
+  const isUniversal = location.pathname === '/universal';
 
   const isAuthed     = !!user;
   const hasCompany   = !!profile?.company_id;
@@ -46,9 +47,9 @@ export default function TopBar() {
     <header
       className="fixed top-0 left-0 right-0 z-50 h-14 flex items-center px-5 gap-4"
       style={{
-        background: location.pathname === '/universal' ? '#000000' : 'transparent',
-        backdropFilter: 'blur(20px)',
-        WebkitBackdropFilter: 'blur(20px)',
+        background: 'transparent',
+        backdropFilter: isUniversal ? undefined : 'blur(20px)',
+        WebkitBackdropFilter: isUniversal ? undefined : 'blur(20px)',
       }}
     >
       {/* ── Brand ── */}

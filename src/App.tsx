@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { Agentation } from 'agentation';
 import { AuthProvider, useAuth } from './lib/auth';
 import AuthGuard from './components/AuthGuard';
 import TopBar from './components/TopBar';
@@ -128,6 +129,7 @@ function AppRoutes() {
 
   const isTwinGraph = location.pathname === '/twin';
   const is3DUniverse = location.pathname === '/3d';
+  const isUniversal = location.pathname === '/universal';
   // Bypass users (VC / Incubator) are authed but have no company — still let them see /3d
   const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
   // Universe3D stays mounted for fully-authed users so camera/galaxy state persists across navigation
@@ -153,7 +155,7 @@ function AppRoutes() {
 
       {/* Normal app shell — removed from layout entirely when on /3d */}
       <div style={{ display: (isFullyAuthed && is3DUniverse) ? 'none' : 'block' }}>
-        <div className="min-h-screen cosmos-bg">
+        <div className={isUniversal ? 'min-h-screen bg-black' : 'min-h-screen cosmos-bg'}>
           <TopBar />
           {isTwinGraph ? (
             <Routes>
@@ -167,7 +169,7 @@ function AppRoutes() {
               />
             </Routes>
           ) : (
-            <main className="pt-14  pb-8 overflow-y-auto">
+            <main className={isUniversal ? 'overflow-hidden' : 'pt-14  pb-8 overflow-y-auto'}>
               <Routes>
                 {/* Authenticated app routes */}
                 <Route path="/overview" element={
@@ -269,6 +271,7 @@ function App() {
       <AuthProvider>
         <AppRoutes />
       </AuthProvider>
+      {import.meta.env.DEV && <Agentation />}
     </BrowserRouter>
   );
 }
