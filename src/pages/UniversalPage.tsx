@@ -243,7 +243,7 @@ export default function UniversalPage() {
   }, []);
 
   return (
-    <div className="w-full h-[calc(100vh-56px)] -mb-8 bg-black overflow-hidden relative z-50">
+    <div className="fixed inset-0 bg-black overflow-hidden z-40">
       {/* ── 3D Polytope Canvas ── */}
       <div
         className="absolute inset-0"
@@ -306,6 +306,9 @@ export default function UniversalPage() {
           <ProductWorkspace
             company={company}
             companyName={companyName}
+            departments={store.departments.filter(
+              d => d.domain !== 'inactive' && !d.isDraft,
+            )}
             onBackToCompany={handleBackToCompany}
             exiting={workspaceAnim === 'exit'}
           />

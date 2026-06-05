@@ -171,11 +171,11 @@
 
   /* Industry OS workspace — glassmorphic shell */
   .ws-shell {
-    background:
-      radial-gradient(ellipse 120% 80% at 50% -30%, rgba(193, 174, 255, 0.12) 0%, transparent 50%),
-      radial-gradient(ellipse 70% 50% at 0% 80%, rgba(30, 58, 138, 0.2) 0%, transparent 45%),
-      radial-gradient(ellipse 50% 40% at 100% 20%, rgba(249, 198, 255, 0.06) 0%, transparent 40%),
-      #0c0c0e;
+    background-color: #0a1428;
+    background-image: url('/workspace_bg.png');
+    background-size: cover;
+    background-position: center center;
+    background-repeat: no-repeat;
   }
 
   .ws-glass {
@@ -185,15 +185,28 @@
     -webkit-backdrop-filter: blur(20px) saturate(1.4);
   }
 
-  .ws-glass-strong {
-    background: rgba(22, 22, 24, 0.72);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(24px) saturate(1.5);
-    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  /* Shared panel glass — left nav, active canvas, etc. */
+  .ws-panel-glass {
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(20px) saturate(1.35);
+    -webkit-backdrop-filter: blur(20px) saturate(1.35);
     box-shadow:
-      0 4px 24px rgba(0, 0, 0, 0.25),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+      0 8px 32px rgba(0, 0, 0, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07);
   }
+
+  .ws-glass-strong {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-right-color: rgba(148, 163, 255, 0.22);
+    backdrop-filter: blur(20px) saturate(1.35);
+    -webkit-backdrop-filter: blur(20px) saturate(1.35);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      inset -1px 0 0 rgba(129, 140, 248, 0.12);
+  }
+  
 
   .ws-glass-panel {
     background: linear-gradient(
@@ -282,5 +295,757 @@
     box-shadow:
       0 8px 32px rgba(0, 0, 0, 0.35),
       inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  /* ── BDT Product Workspace (screenshot layout) ── */
+  .ws-layout {
+    max-width: 1920px;
+    margin: 0 auto;
+    width: 100%;
+  }
+
+  .ws-planet-zone {
+    height: min(38vh, 340px);
+    min-height: 260px;
+  }
+
+  .ws-planet-svg {
+    filter: drop-shadow(0 0 48px rgba(129, 140, 248, 0.15));
+  }
+
+  .ws-canvas-wrap {
+    perspective: 1400px;
+    perspective-origin: 50% 20%;
+  }
+
+  .ws-canvas-trapezium {
+    width: 100%;
+    transform: rotateX(2.5deg);
+    transform-origin: 50% 0%;
+  }
+
+  .ws-canvas-frame {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    overflow: visible;
+    filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.35));
+  }
+
+  .ws-canvas-frame-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  .ws-canvas-frame-fill {
+    fill: rgba(0, 0, 0, 0.15);
+  }
+
+  .ws-canvas-frame-stroke {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.1);
+    stroke-width: 1px;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+    shape-rendering: geometricPrecision;
+  }
+
+  .ws-canvas-frame-inner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    background: transparent;
+    backdrop-filter: blur(20px) saturate(1.35);
+    -webkit-backdrop-filter: blur(20px) saturate(1.35);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      inset -1px 0 0 rgba(129, 140, 248, 0.12);
+  }
+
+  .ws-canvas-tab-slot {
+    position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding-left: 4px;
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  .ws-canvas-tab-label {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .ws-canvas-frame-body {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+    background: transparent;
+  }
+
+  /* Inset header content so it sits between the two raised top shoulders */
+  .ws-canvas-inset {
+    margin-left: 4.5%;
+    margin-right: 4.5%;
+  }
+
+  /* Stage stays inside the shape near the top (which is narrowest); the
+     splayed lower body provides decorative margin around the cards. */
+  .ws-canvas-stage-pad {
+    padding-left: 13%;
+    padding-right: 13%;
+  }
+
+  .ws-canvas-toolbar-divider {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.1) 20%,
+      rgba(255, 255, 255, 0.1) 80%,
+      transparent 100%
+    );
+  }
+
+  .ws-canvas-stage {
+    background:
+      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+      radial-gradient(ellipse 80% 60% at 50% 40%, rgba(56, 189, 248, 0.05) 0%, transparent 55%);
+    background-size: 28px 28px, 28px 28px, 100% 100%;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 12px;
+  }
+
+  .ws-glass-block {
+    --extrude: 5px;
+    --radius: 14px;
+    position: absolute;
+    z-index: 1;
+  }
+
+  .ws-glass-block--hero {
+    z-index: 3;
+  }
+
+  /* darker base slab — visible bottom/right edge for 3D depth */
+  .ws-glass-block__extrude {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--radius);
+    transform: translate(var(--extrude), var(--extrude));
+    background: linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--card-accent) 22%, transparent) 0%,
+      transparent 75%
+    );
+    border: 1px solid color-mix(in srgb, var(--card-accent) 22%, rgba(255, 255, 255, 0.06));
+    box-shadow:
+      0 10px 28px rgba(0, 0, 0, 0.55),
+      0 0 20px color-mix(in srgb, var(--card-accent) 15%, transparent);
+    z-index: 0;
+  }
+
+  /* top glass face */
+  .ws-glass-block__face {
+    position: absolute;
+    inset: 0;
+    padding: 11px 12px;
+    border-radius: var(--radius);
+    background:
+      linear-gradient(
+        152deg,
+        color-mix(in srgb, var(--card-accent) 26%, transparent) 0%,
+        color-mix(in srgb, var(--card-accent) 8%, transparent) 42%,
+        transparent 100%
+      ),
+      rgba(8, 12, 24, 0.32);
+    backdrop-filter: blur(24px) saturate(1.5);
+    -webkit-backdrop-filter: blur(24px) saturate(1.5);
+    border: 1px solid color-mix(in srgb, var(--card-accent) 38%, rgba(255, 255, 255, 0.1));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      inset 1px 0 0 color-mix(in srgb, var(--card-accent) 45%, rgba(255, 255, 255, 0.06)),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+      0 0 0 1px color-mix(in srgb, var(--card-accent) 20%, transparent),
+      0 0 36px color-mix(in srgb, var(--card-accent) 24%, transparent),
+      0 14px 32px rgba(0, 0, 0, 0.42);
+    z-index: 1;
+    overflow: hidden;
+  }
+
+  /* bright accent rim along top edge */
+  .ws-glass-block__face::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 6%;
+    right: 6%;
+    height: 1px;
+    border-radius: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--card-accent) 35%,
+      color-mix(in srgb, var(--card-accent) 70%, white) 50%,
+      var(--card-accent) 65%,
+      transparent 100%
+    );
+    opacity: 0.85;
+    filter: blur(0.4px);
+    pointer-events: none;
+    z-index: 2;
+  }
+
+  /* top-left sheen + left accent glow */
+  .ws-glass-block__face::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      linear-gradient(125deg, rgba(255, 255, 255, 0.09) 0%, transparent 38%),
+      linear-gradient(90deg, color-mix(in srgb, var(--card-accent) 12%, transparent) 0%, transparent 18%);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .ws-glass-block--hero .ws-glass-block__face {
+    background:
+      linear-gradient(
+        152deg,
+        color-mix(in srgb, var(--card-accent) 38%, transparent) 0%,
+        color-mix(in srgb, var(--card-accent) 12%, transparent) 38%,
+        transparent 100%
+      ),
+      rgba(8, 12, 24, 0.36);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      inset 1px 0 0 color-mix(in srgb, var(--card-accent) 55%, rgba(255, 255, 255, 0.08)),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+      0 0 0 1px color-mix(in srgb, var(--card-accent) 28%, transparent),
+      0 0 48px color-mix(in srgb, var(--card-accent) 32%, transparent),
+      0 16px 40px rgba(0, 0, 0, 0.48);
+  }
+
+  .ws-glass-block--hero .ws-glass-block__extrude {
+    background: linear-gradient(
+      160deg,
+      color-mix(in srgb, var(--card-accent) 28%, transparent) 0%,
+      transparent 75%
+    );
+    box-shadow:
+      0 12px 32px rgba(0, 0, 0, 0.6),
+      0 0 28px color-mix(in srgb, var(--card-accent) 22%, transparent);
+  }
+
+  /* keep content above pseudo-layers */
+  .ws-glass-block__face > * {
+    position: relative;
+    z-index: 3;
+  }
+
+  .ws-card-eyebrow {
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+
+  .ws-card-close {
+    color: rgba(255, 255, 255, 0.28);
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+
+  .ws-card-close:hover {
+    color: rgba(255, 255, 255, 0.7);
+  }
+
+  .ws-hero-tag {
+    font-size: 10px;
+    font-weight: 500;
+    color: rgba(224, 235, 255, 0.85);
+    padding: 3px 9px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(147, 197, 253, 0.25);
+  }
+
+  .ws-conn-node {
+    position: absolute;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    background: #bfdbfe;
+    box-shadow:
+      0 0 0 2px rgba(8, 12, 26, 0.9),
+      0 0 8px rgba(147, 197, 253, 0.9);
+    z-index: 3;
+  }
+
+  .ws-left-nav {
+    width: 228px;
+    padding: 20px 14px 16px;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-right-color: rgba(148, 163, 255, 0.22);
+    background: rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(20px) saturate(1.35);
+    -webkit-backdrop-filter: blur(20px) saturate(1.35);
+    box-shadow:
+      0 8px 32px rgba(0, 0, 0, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.07),
+      inset -1px 0 0 rgba(129, 140, 248, 0.12);
+  }
+
+  .ws-nav-section {
+    padding-bottom: 4px;
+  }
+
+  .ws-nav-section-title {
+    padding: 0 10px 10px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.32);
+  }
+
+  .ws-nav-divider {
+    margin: 12px 8px 14px;
+    border: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+  }
+
+  .ws-nav-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .ws-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border-radius: 14px;
+    font-size: 14px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.72);
+    background: transparent;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition:
+      background 0.2s ease,
+      color 0.2s ease,
+      box-shadow 0.2s ease,
+      border-color 0.2s ease;
+  }
+
+  .ws-nav-item:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .ws-nav-item--active {
+    color: #ffffff;
+    background: linear-gradient(
+      102deg,
+      rgba(120, 108, 255, 0.38) 0%,
+      rgba(88, 80, 200, 0.22) 42%,
+      rgba(25, 32, 72, 0.42) 100%
+    );
+    border-color: rgba(186, 168, 255, 0.52);
+    backdrop-filter: blur(14px) saturate(1.5);
+    -webkit-backdrop-filter: blur(14px) saturate(1.5);
+    box-shadow:
+      0 4px 18px rgba(0, 0, 0, 0.28),
+      0 0 22px rgba(124, 58, 237, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.28),
+      inset 1px 0 0 rgba(196, 181, 253, 0.14);
+  }
+
+  .ws-nav-item--active:hover {
+    color: #ffffff;
+    background: linear-gradient(
+      102deg,
+      rgba(130, 118, 255, 0.44) 0%,
+      rgba(92, 84, 210, 0.26) 42%,
+      rgba(28, 36, 80, 0.46) 100%
+    );
+    border-color: rgba(196, 181, 253, 0.62);
+    box-shadow:
+      0 4px 20px rgba(0, 0, 0, 0.3),
+      0 0 26px rgba(124, 58, 237, 0.28),
+      inset 0 1px 0 rgba(255, 255, 255, 0.32),
+      inset 1px 0 0 rgba(196, 181, 253, 0.18);
+  }
+
+  .ws-nav-item--active svg {
+    filter: drop-shadow(0 0 5px rgba(167, 139, 250, 0.65));
+  }
+
+  .ws-nav-item--active .ws-nav-chevron {
+    color: rgba(186, 210, 255, 0.55);
+  }
+
+  .ws-nav-badge {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #ffffff;
+    background: #7c3aed;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.45);
+  }
+
+  .ws-nav-new-shortcut {
+    margin-top: 4px;
+    color: rgba(255, 255, 255, 0.55);
+  }
+
+  .ws-nav-new-shortcut:hover {
+    color: rgba(255, 255, 255, 0.88);
+  }
+
+  .ws-back-fab {
+    position: absolute;
+    top: calc(3.5rem + 14px);
+    left: 248px;
+    z-index: 80;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.65);
+    background: rgba(12, 14, 28, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: color 0.2s ease, background 0.2s ease;
+  }
+
+  .ws-back-fab:hover:not(:disabled) {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .ws-back-fab:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .ws-signal-card {
+    background: transparent;
+    transition: border-color 0.2s ease;
+    border-bottom: 0.5px solid rgba(255, 255, 255, 0.05);
+  }
+
+  .ws-signal-card:hover {
+    border-color: rgba(193, 174, 255, 0.2);
+  }
+
+  .ws-icon-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    color: rgba(255, 255, 255, 0.45);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    transition: background 0.2s ease;
+  }
+
+  .ws-icon-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .ws-btn-share {
+    background: rgba(139, 92, 246, 0.25);
+    border: 1px solid rgba(139, 92, 246, 0.45);
+    color: #f0e8ff;
+  }
+
+  .ws-btn-share:hover {
+    background: rgba(139, 92, 246, 0.35);
+  }
+
+  .ws-mini-btn {
+    width: 20px;
+    height: 18px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.5);
+  }
+
+  .ws-toolbar-ai {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.45), rgba(193, 174, 255, 0.25));
+    border: 1px solid rgba(193, 174, 255, 0.4);
+    color: #fff;
+    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2);
+  }
+
+  .ws-toolbar-btn:hover {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  /* Focus Today panel */
+  .ws-focus-panel {
+    padding: 16px 16px 14px;
+    border-radius: 16px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(18px) saturate(1.35);
+    -webkit-backdrop-filter: blur(18px) saturate(1.35);
+    box-shadow:
+      0 8px 28px rgba(0, 0, 0, 0.32),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .ws-focus-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .ws-focus-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #ffffff;
+  }
+
+  .ws-focus-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: -2px;
+    padding: 2px;
+    color: rgba(255, 255, 255, 0.38);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+
+  .ws-focus-close:hover {
+    color: rgba(255, 255, 255, 0.75);
+  }
+
+  .ws-focus-status {
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(186, 210, 255, 0.55);
+  }
+
+  .ws-focus-progress-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .ws-focus-progress-track {
+    flex: 1;
+    height: 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.08);
+    overflow: hidden;
+  }
+
+  .ws-focus-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #4f5cff 0%, #7c5cff 45%, #a855f7 100%);
+    box-shadow:
+      0 0 14px rgba(168, 85, 247, 0.55),
+      0 0 6px rgba(99, 102, 241, 0.4);
+    transition: width 0.4s cubic-bezier(0.22, 0.85, 0.28, 1);
+  }
+
+  .ws-focus-pct {
+    flex-shrink: 0;
+    min-width: 2.25rem;
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.45);
+    text-align: right;
+  }
+
+  .ws-focus-list {
+    margin: 14px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .ws-focus-task {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .ws-focus-check {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 999px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .ws-focus-check--done {
+    background: linear-gradient(135deg, #5b6cff 0%, #8b5cf6 55%, #a855f7 100%);
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.45);
+  }
+
+  .ws-focus-check--open {
+    border: 1.5px solid rgba(255, 255, 255, 0.38);
+    background: transparent;
+  }
+
+  .ws-focus-task-label {
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.35;
+    color: rgba(255, 255, 255, 0.82);
+  }
+
+  .ws-focus-task-label--done {
+    color: rgba(230, 236, 255, 0.72);
+  }
+
+  .ws-focus-more {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 12px;
+    padding: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.38);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: color 0.2s ease;
+  }
+
+  .ws-focus-more:hover {
+    color: rgba(255, 255, 255, 0.62);
+  }
+
+  /* Canvas minimap (right panel, below Focus Today) */
+  .ws-minimap-wrap {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    width: 260px;
+    margin-left: 0px;
+    flex-shrink: 0;
+  }
+
+  .ws-minimap-panel {
+    flex: 1;
+    min-width: 0;
+    padding: 8px;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(18px) saturate(1.35);
+    -webkit-backdrop-filter: blur(18px) saturate(1.35);
+    box-shadow:
+      0 8px 28px rgba(0, 0, 0, 0.32),
+      inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  }
+
+  .ws-minimap-view {
+    aspect-ratio: 4 / 3;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+  }
+
+  .ws-minimap-viewport {
+    position: absolute;
+    left: 22%;
+    top: 18%;
+    width: 56%;
+    height: 52%;
+    border: 1.5px solid rgba(193, 174, 255, 0.75);
+    border-radius: 2px;
+    box-shadow: 0 0 12px rgba(139, 92, 246, 0.25);
+    pointer-events: none;
+  }
+
+  .ws-minimap-controls {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-top: 4px;
+  }
+
+  .ws-minimap-control-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.55);
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+
+  .ws-minimap-control-btn:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.85);
+  }
+
+  @keyframes energyOrbRingSpin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .energy-orb-ring-spin {
+    transform-origin: center;
+    animation: energyOrbRingSpin 14s linear infinite;
   }
 }

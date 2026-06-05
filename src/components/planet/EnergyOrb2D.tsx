@@ -3,7 +3,6 @@
 export interface EnergyOrb2DProps {
   color: string;
   radius: number;
-  /** 0–1 pulse intensity */
   intensity?: number;
   selected?: boolean;
   hovered?: boolean;
@@ -96,7 +95,6 @@ export interface RootLabelLayoutInput {
   relevance?: number;
 }
 
-/** Outward label offsets that clear the hub, orb halos, and neighboring roots */
 export function computeRootLabelLayouts(
   nodes: RootLabelLayoutInput[],
   orbRFor: (relevance?: number) => number,
@@ -195,6 +193,7 @@ export interface EnergyOrbLabel2DProps {
   offsetX?: number;
   offsetY?: number;
   className?: string;
+  compact?: boolean;
 }
 
 export function EnergyOrbLabel2D({
@@ -206,18 +205,37 @@ export function EnergyOrbLabel2D({
   offsetX,
   offsetY,
   className,
+  compact = false,
 }: EnergyOrbLabel2DProps) {
   const fallback = orbLabelOffsets(angle, orbR);
   const x = offsetX ?? fallback.x;
   const y = offsetY ?? fallback.y;
   const { displayTitle, pillW, pillH } = measureOrbLabelPill(title, sub);
 
+  if (compact) {
+    return (
+      <g transform={`translate(${x}, ${y})`} className={className} style={{ pointerEvents: 'none' }}>
+        <text
+          textAnchor="middle"
+          y={-4}
+          fill="#f8fafc"
+          fontSize={9}
+          fontWeight={700}
+          letterSpacing="0.06em"
+        >
+          {displayTitle.toUpperCase()}
+        </text>
+        {sub && (
+          <text textAnchor="middle" y={8} fill="rgba(255,255,255,0.55)" fontSize={8} fontWeight={600}>
+            {sub}
+          </text>
+        )}
+      </g>
+    );
+  }
+
   return (
-    <g
-      transform={`translate(${x}, ${y})`}
-      className={className}
-      style={{ pointerEvents: 'none' }}
-    >
+    <g transform={`translate(${x}, ${y})`} className={className} style={{ pointerEvents: 'none' }}>
       <rect
         x={-pillW / 2}
         y={-pillH / 2}
