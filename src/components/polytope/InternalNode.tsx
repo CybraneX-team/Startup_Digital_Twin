@@ -4,6 +4,7 @@ import { Html } from '@react-three/drei';
 import * as THREE from 'three';
 import type { UInternalNode } from '../../lib/universalPolytopeData';
 import { PlasmaSphere } from '../PolytopeShared';
+import { useDragWorkspaceStore } from '../../lib/useDragWorkspaceStore';
 
 interface InternalNodeProps {
   node: UInternalNode;
@@ -161,8 +162,41 @@ export function InternalNode({
     }
   });
 
+  const startDrag = useDragWorkspaceStore(s => s.startDrag);
+  const dragTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const startPosClient = useRef<{ x: number; y: number } | null>(null);
+
+  const handlePointerDown = (e: any) => {
+    e.stopPropagation();
+    if (isDraft) return;
+    startPosClient.current = { x: e.clientX, y: e.clientY };
+    dragTimer.current = setTimeout(() => {
+      startDrag(node, color, e.clientX, e.clientY);
+      dragTimer.current = null;
+    }, 800);
+  };
+
+  const handlePointerMove = (e: any) => {
+    if (dragTimer.current && startPosClient.current) {
+      const dx = e.clientX - startPosClient.current.x;
+      const dy = e.clientY - startPosClient.current.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 10) {
+        clearTimeout(dragTimer.current);
+        dragTimer.current = null;
+      }
+    }
+  };
+
+  const cancelDrag = () => {
+    if (dragTimer.current) {
+      clearTimeout(dragTimer.current);
+      dragTimer.current = null;
+    }
+  };
+
   const handleClick = (e: { stopPropagation: () => void }) => {
     e.stopPropagation();
+    cancelDrag();
     if (isDraft) return;
     if (selectedPath[selectedPath.length - 1] === node.id) {
       onSelectPath(pathContext, parentPos);
@@ -176,8 +210,14 @@ export function InternalNode({
       <group
         ref={groupRef}
         onClick={handleClick}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={cancelDrag}
+        onPointerOut={(e) => {
+          cancelDrag();
+          if (!isDraft) document.body.style.cursor = 'auto';
+        }}
         onPointerOver={() => { if (!isDraft) document.body.style.cursor = 'pointer'; }}
-        onPointerOut={() => { document.body.style.cursor = 'auto'; }}
       >
         <PlasmaSphere
           color={color}
@@ -194,7 +234,7 @@ export function InternalNode({
           speed={isMeActiveCenter ? 1.5 : 0.2}
         />
         {isVisible && !isHiddenParent && (
-          <Html position={[0, -radius * 2.5, 0]} center zIndexRange={[100, 0]}>
+          <Html position={[0, -radius * 2.5, 0]} center zIndexRange={[-10, -100]} prepend>
             <div style={{
               color: 'white',
               background: 'rgba(0,0,0,0.6)',

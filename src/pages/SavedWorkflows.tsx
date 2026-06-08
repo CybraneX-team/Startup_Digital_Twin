@@ -12,6 +12,9 @@ import {
   type SavedWorkflowItem,
   type SavedWorkflowGroup,
   type SavedWorkflowCompanyGroup,
+  COMPANY_TAG_LABELS,
+  COMPANY_TAG_COLORS,
+  COMPANY_TAG_ICONS,
 } from '../lib/useSavedWorkflows';
 import type { UserPlanetRole } from '../data/companyPlanetRoots';
 
@@ -220,6 +223,9 @@ function SavedItemCard({
     item.actionLabel,
   ].filter(Boolean);
 
+  const isPlanetLevel = item.level === 'planet';
+  const tagColor = isPlanetLevel && item.planetTag ? COMPANY_TAG_COLORS[item.planetTag] : item.rootColor || ROLE_COLORS[item.role];
+
   return (
     <div
       className="relative rounded-2xl transition-all duration-300 overflow-hidden"
@@ -227,10 +233,10 @@ function SavedItemCard({
         background: hovered
           ? `linear-gradient(135deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.025) 100%)`
           : 'rgba(255,255,255,0.025)',
-        border: `1px solid ${hovered ? `${item.rootColor}35` : 'rgba(255,255,255,0.07)'}`,
+        border: `1px solid ${hovered ? `${tagColor}35` : 'rgba(255,255,255,0.07)'}`,
         padding: '14px 16px 14px 20px',
         boxShadow: hovered
-          ? `0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px ${item.rootColor}15`
+          ? `0 8px 32px rgba(0,0,0,0.35), 0 0 0 1px ${tagColor}15`
           : '0 2px 8px rgba(0,0,0,0.2)',
         backdropFilter: 'blur(12px)',
       }}
@@ -241,22 +247,39 @@ function SavedItemCard({
       <div
         className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl"
         style={{
-          background: `linear-gradient(180deg, ${item.rootColor}cc 0%, ${item.rootColor}44 100%)`,
-          boxShadow: `2px 0 12px ${item.rootColor}50`,
+          background: `linear-gradient(180deg, ${tagColor}cc 0%, ${tagColor}44 100%)`,
+          boxShadow: `2px 0 12px ${tagColor}50`,
         }}
       />
       {/* Subtle top highlight */}
       <div
         className="absolute top-0 left-3 right-3 h-px rounded-full"
-        style={{ background: `linear-gradient(90deg, transparent, ${item.rootColor}25, transparent)` }}
+        style={{ background: `linear-gradient(90deg, transparent, ${tagColor}25, transparent)` }}
       />
 
       <div className="flex items-start justify-between gap-3">
         {/* Left: Breadcrumb + meta */}
         <div className="flex-1 min-w-0">
-          {/* Breadcrumb */}
+          {/* Breadcrumb or Tag Badge */}
           <div className="flex items-center gap-1 flex-wrap mb-1.5">
-            {breadcrumb.map((crumb, i) => (
+            {isPlanetLevel && item.planetTag ? (() => {
+              const Icon = COMPANY_TAG_ICONS[item.planetTag];
+              return (
+                <span 
+                  className="flex items-center gap-1.5 px-2.5 py-1 rounded-full border shadow-lg"
+                  style={{
+                    background: `${tagColor}15`,
+                    borderColor: `${tagColor}40`,
+                    color: tagColor,
+                  }}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                  <span className="text-[12px] font-bold tracking-wide uppercase">
+                    {COMPANY_TAG_LABELS[item.planetTag]}
+                  </span>
+                </span>
+              );
+            })() : breadcrumb.map((crumb, i) => (
               <span key={i} className="flex items-center gap-1">
                 {i > 0 && <ChevronRight className="w-2.5 h-2.5 flex-shrink-0" style={{ color: 'rgba(255,255,255,0.18)' }} />}
                 <span
@@ -294,7 +317,7 @@ function SavedItemCard({
                 boxShadow: `0 0 8px ${ROLE_COLORS[item.role]}15`,
               }}
             >
-              {item.level}
+              {isPlanetLevel ? 'Planet Tag' : item.level}
             </span>
           </div>
 
@@ -537,7 +560,7 @@ export default function SavedWorkflows() {
               ...c,
               items: c.items.filter(item =>
                 item.companyName.toLowerCase().includes(q) ||
-                item.rootLabel.toLowerCase().includes(q) ||
+                (item.rootLabel ?? '').toLowerCase().includes(q) ||
                 (item.branchLabel ?? '').toLowerCase().includes(q) ||
                 (item.actionLabel ?? '').toLowerCase().includes(q) ||
                 (item.note ?? '').toLowerCase().includes(q)

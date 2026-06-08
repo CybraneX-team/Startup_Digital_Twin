@@ -19,6 +19,7 @@ import {
 } from './internalNodeLayout';
 import type { CoreWorkspacePhase } from '../../lib/coreWorkspaceTransition';
 import { CORE_DIVE_DURATION_S, CORE_SURFACE_DURATION_S } from '../../lib/coreWorkspaceTransition';
+import { useDragWorkspaceStore } from '../../lib/useDragWorkspaceStore';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -133,6 +134,7 @@ export function Scene({
   onCoreDiveComplete,
   onCoreSurfaceComplete,
 }: SceneProps) {
+  const isDragging = useDragWorkspaceStore(s => s.isDragging);
   const diveBlendRef = useRef({ value: 0 });
   const savedOverviewRef = useRef<{ camPos: THREE.Vector3; orbitTarget: THREE.Vector3 } | null>(null);
   const coreAnimTokenRef = useRef(0);
@@ -801,7 +803,7 @@ export function Scene({
         minDistance={5}
         maxDistance={40}
         enablePan={false}
-        enabled={coreWorkspacePhase === 'idle'}
+        enabled={coreWorkspacePhase === 'idle' && !isDragging}
       />
     </>
   );

@@ -1,4 +1,5 @@
 import type { PlanetCoreDetails } from '../../data/companyPlanetRoots';
+import { CompanyTagDropdown } from './CompanyTagDropdown';
 
 export interface PlanetCoreContextCardProps {
   details: PlanetCoreDetails;
@@ -10,9 +11,14 @@ export function PlanetCoreContextCard({
   details,
   industryColor = '#C1AEFF',
 }: PlanetCoreContextCardProps) {
+
+  // For the active card styling, we can check if it's tagged right here or just rely on the inner component.
+  // We can leave the outer card style without the tag color, or we can fetch it again here to keep the glowing border.
+  // To keep it simple and clean, let's just let the inner dropdown handle its colors, while the card uses industryColor.
+  
   return (
     <div
-      className="rounded-2xl overflow-hidden shrink-0"
+      className="rounded-2xl shrink-0 relative"
       style={{
         width: '196px',
         background: 'rgba(0, 0, 0, 0.78)',
@@ -20,17 +26,18 @@ export function PlanetCoreContextCard({
         WebkitBackdropFilter: 'blur(14px)',
         border: `1px solid ${industryColor}33`,
         boxShadow: `0 12px 40px rgba(0,0,0,0.55), inset 0 1px 0 ${industryColor}18`,
+        transition: 'all 0.3s ease',
       }}
     >
       <div
-        className="h-1 w-full"
+        className="h-1 w-full rounded-t-2xl transition-all duration-500"
         style={{
           background: `linear-gradient(90deg, transparent, ${industryColor}, transparent)`,
         }}
       />
       <div className="px-3.5 py-3.5">
         <span
-          className="inline-block text-[9px] font-bold tracking-[0.14em] uppercase px-2.5 py-1 rounded-full"
+          className="inline-block text-[9px] font-bold tracking-[0.14em] uppercase px-2.5 py-1 rounded-full transition-all"
           style={{
             color: industryColor,
             border: `1px solid ${industryColor}55`,
@@ -55,6 +62,16 @@ export function PlanetCoreContextCard({
               </p>
             </div>
           ))}
+        </div>
+
+        {/* Tagging System UI */}
+        <div className="mt-4 pt-3 border-t border-white/[0.06] relative">
+          <CompanyTagDropdown 
+            companyId={details.companyId}
+            companyName={details.companyName}
+            role={details.role}
+            industryColor={industryColor}
+          />
         </div>
 
         <p className="mt-3 text-[8px] text-zinc-500 leading-relaxed tracking-wide">

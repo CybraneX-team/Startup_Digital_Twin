@@ -564,6 +564,7 @@ export default function CompanyPlanet2DView({
       {!isTransitioning && (
         <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 20 }}>
           {layout.map(node => {
+            if (depth === 0) return null; // Do not show bookmarks on root nodes
             // Convert SVG coords (0-800) to % of container
             const lx = (node.localX ?? node.x - CX) + CX;
             const ly = (node.localY ?? node.y - CY) + CY;

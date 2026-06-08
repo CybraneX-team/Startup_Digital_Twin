@@ -8,6 +8,7 @@ import { U_DOMAIN_COLOR } from '../../lib/universalPolytopeData';
 import { PlasmaSphere, GlowRing } from '../PolytopeShared';
 import { InternalNode } from '../polytope/InternalNode';
 import { computeInternalNodePosition } from '../polytope/internalNodeLayout';
+import { useDragWorkspaceStore } from '../../lib/useDragWorkspaceStore';
 
 export interface RootInternalNodeSceneProps {
   root: UExternalNode;
@@ -31,6 +32,7 @@ export function RootInternalNodeScene({
   rootSwitchKey = 0,
 }: RootInternalNodeSceneProps) {
   const color = U_DOMAIN_COLOR[root.domain] ?? '#8b5cf6';
+  const isDragging = useDragWorkspaceStore(s => s.isDragging);
   const { camera } = useThree();
   const orbitRef = useRef<any>(null);
   const rootVisualRef = useRef<THREE.Group>(null);
@@ -126,7 +128,11 @@ export function RootInternalNodeScene({
     prevBackStepRef.current = requestBackStep;
 
     if (selectedInternalPath.length > 0) {
-      onPathChange(selectedInternalPath.slice(0, -1));
+      const nextPath = selectedInternalPath.slice(0, -1);
+      onPathChange(nextPath);
+      if (nextPath.length === 0) {
+        flyToRootOverview();
+      }
     } else {
       onPathChange([]);
       flyToRootOverview();
@@ -170,7 +176,7 @@ export function RootInternalNodeScene({
             speed={1.2}
           />
           {!isDeepDrillDown && (
-            <Html position={[0, -1.4, 0]} center zIndexRange={[100, 0]}>
+            <Html position={[0, -1.4, 0]} center zIndexRange={[-10, -100]} prepend>
               <div style={{
                 color: 'white',
                 background: 'rgba(0,0,0,0.65)',
@@ -234,6 +240,7 @@ export function RootInternalNodeScene({
         minDistance={8}
         maxDistance={55}
         target={ROOT_POS}
+        enabled={!isDragging}
       />
     </>
   );

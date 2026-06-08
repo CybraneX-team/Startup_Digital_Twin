@@ -131,7 +131,15 @@ export class NavigationManager {
           if (this._hoveredIndustryId !== id) {
             this._hoveredIndustryId = id;
             this.canvas.style.cursor = 'pointer';
-            if (this.onHover) this.onHover({ type: 'industry', industry });
+            if (this.onHover) {
+              const wp = new THREE.Vector3();
+              hits[0].object.getWorldPosition(wp);
+              wp.project(this.camera);
+              const rect = this.container.getBoundingClientRect();
+              const screenX = (wp.x * 0.5 + 0.5) * rect.width + rect.left;
+              const screenY = -(wp.y * 0.5 - 0.5) * rect.height + rect.top;
+              this.onHover({ type: 'industry', industry, screenX, screenY });
+            }
           }
           return;
         }
@@ -171,7 +179,15 @@ export class NavigationManager {
         this.hoveredObject = obj;
         this._doHover(obj);
         this.canvas.style.cursor = 'pointer';
-        if (this.onHover) this.onHover(obj.userData);
+        if (this.onHover) {
+          const wp = new THREE.Vector3();
+          obj.getWorldPosition(wp);
+          wp.project(this.camera);
+          const rect = this.container.getBoundingClientRect();
+          const screenX = (wp.x * 0.5 + 0.5) * rect.width + rect.left;
+          const screenY = -(wp.y * 0.5 - 0.5) * rect.height + rect.top;
+          this.onHover({ ...obj.userData, screenX, screenY });
+        }
       }
     } else {
       if (this.hoveredObject) {

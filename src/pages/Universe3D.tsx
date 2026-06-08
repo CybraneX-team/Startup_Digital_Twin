@@ -28,7 +28,8 @@ import { usePolytopeStore } from '../lib/usePolytopeStore';
 import { SearchTrie} from '../lib/SearchTrie';
 import type { UExternalNode, UInternalNode } from '../lib/usePolytopeStore';
 import { ActionNodeWorkspace } from '../components/workspace/ActionNodeWorkspace';
-
+import { CompanyTagDropdown } from '../components/planet/CompanyTagDropdown';
+import { DragWorkspaceOverlay } from '../components/workspace/DragWorkspaceOverlay';
 // ── Side Panel ───────────────────────────────────────────────────────────────
 
 interface SidePanelProps {
@@ -57,7 +58,7 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany, s
   const listKey = `${currentLevel}-${navPath.map(e => e.id).join('-')}`;
 
   let sectionLabel = 'GALAXIES';
-  let items: { id: string; name: string; color?: string; meta?: string; onClick?: () => void }[] = [];
+  let items: { id: string; name: string; color?: string; meta?: string; type?: string; onClick?: () => void }[] = [];
   let onItemClick = (_id: string) => { };
 
   const isSearchActive = searchQuery.trim().length > 0;
@@ -96,6 +97,7 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany, s
       name: r.name,
       color: r.color,
       meta: r.meta,
+      type: r.type,
       onClick: () => {
         if (r.type === 'industry') controllerRef.current?.routeTo('industry', r.industryId!);
         else if (r.type === 'subdomain') controllerRef.current?.routeTo('subdomain', r.industryId!, r.subdomainId!);
@@ -128,6 +130,7 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany, s
       name: co.name,
       color: industry.color,
       meta: co.employees ? `${co.employees.toLocaleString()} emp` : co.stage ?? '',
+      type: 'company'
     }));
     onItemClick = (id) => controllerRef.current?.zoomToCompany(industry.id, subdomain.id, id);
   }
@@ -146,15 +149,39 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany, s
       }}
     >
       {/* Section label + context — animates on level change */}
-      <div key={listKey + '-header'} className="px-3 pt-3 pb-1 shrink-0 panel-slide-in">
-        <span className="text-[10px] font-semibold tracking-widest" style={{ color: '#5E5E5E' }}>
-          {sectionLabel}
-        </span>
-        {!isGalaxy && industry && (
-          <p className="text-[11px] font-semibold text-white mt-0.5 truncate">
-            {isSubdomainOrDeeper && subdomain ? subdomain.name : industry.name}
-          </p>
-        )}
+      <div key={listKey + '-header'} className="px-4 pt-4 pb-3 shrink-0 panel-slide-in relative overflow-hidden border-b border-white/[0.04]">
+        {/* Subtle accent glow behind the text */}
+        <div 
+          className="absolute top-0 left-0 w-full h-full opacity-20 pointer-events-none"
+          style={{ 
+            background: `linear-gradient(135deg, ${industry?.color ?? '#C1AEFF'}40 0%, transparent 100%)` 
+          }} 
+        />
+        
+        <div className="relative flex flex-col gap-1 z-10">
+          <span 
+            className="text-[9px] font-bold uppercase tracking-[0.2em] inline-flex items-center" 
+            style={{ 
+              color: industry?.color ?? '#C1AEFF', 
+              textShadow: `0 0 10px ${industry?.color ?? '#C1AEFF'}40`,
+              opacity: 0.8 
+            }}
+          >
+            {sectionLabel}
+          </span>
+          {!isGalaxy && industry && (
+            <p className="text-[13px] font-medium text-white truncate drop-shadow-md flex items-center gap-2 mt-0.5">
+              <span 
+                className="w-1.5 h-1.5 rounded-full" 
+                style={{ 
+                  background: industry?.color ?? '#C1AEFF', 
+                  boxShadow: `0 0 8px ${industry?.color ?? '#C1AEFF'}` 
+                }} 
+              />
+              {isSubdomainOrDeeper && subdomain ? subdomain.name : industry.name}
+            </p>
+          )}
+        </div>
       </div>
 
       {/* Animated list — remounts on every level change */}
@@ -170,26 +197,41 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany, s
               if (item.onClick) item.onClick();
               else onItemClick(item.id);
             }}
-            className="panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group"
+            className="panel-item-in w-full flex flex-col items-start px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group"
             style={{ animationDelay: `${i * 28}ms` }}
           >
-            <span
-              className="w-2 h-2 rounded-full shrink-0 transition-transform group-hover:scale-125"
-              style={{
-                background: item.color ?? '#7c3aed',
-                boxShadow: `0 0 8px ${item.color ?? '#7c3aed'}70`,
-              }}
-            />
-            <span className="flex-1 min-w-0">
-              <span className="block text-[12px] text-gray-300 group-hover:text-white transition-colors leading-tight truncate">
-                {item.name}
-              </span>
-              {item.meta && (
-                <span className="block text-[10px] leading-tight mt-0.5" style={{ color: '#4b5563' }}>
-                  {item.meta}
+            <div className="flex items-center gap-2.5 w-full">
+              <span
+                className="w-2 h-2 rounded-full shrink-0 transition-transform group-hover:scale-125"
+                style={{
+                  background: item.color ?? '#7c3aed',
+                  boxShadow: `0 0 8px ${item.color ?? '#7c3aed'}70`,
+                }}
+              />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[12px] text-gray-300 group-hover:text-white transition-colors leading-tight truncate">
+                  {item.name}
                 </span>
-              )}
-            </span>
+                {item.meta && (
+                  <span className="block text-[10px] leading-tight mt-0.5" style={{ color: '#4b5563' }}>
+                    {item.meta}
+                  </span>
+                )}
+              </span>
+            </div>
+            
+            {item.type === 'company' && (
+              <div 
+                className="w-full mt-2 overflow-hidden max-h-0 opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-300"
+                onClick={e => e.stopPropagation()}
+              >
+                <CompanyTagDropdown 
+                  companyId={item.id} 
+                  companyName={item.name} 
+                  industryColor={item.color} 
+                />
+              </div>
+            )}
           </button>
         ))}
       </div>
@@ -662,8 +704,40 @@ export default function Universe3DPage() {
     setCreateModal(null);
   }, []);
 
+  const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const tagDropdownHoveredRef = useRef(false);
+
   const handleHover = useCallback((target: HoverTarget | null) => {
-    setHoverTarget(target);
+    if (target) {
+      if (hoverTimeoutRef.current) {
+        clearTimeout(hoverTimeoutRef.current);
+        hoverTimeoutRef.current = null;
+      }
+      setHoverTarget(target);
+    } else {
+      hoverTimeoutRef.current = setTimeout(() => {
+        if (!tagDropdownHoveredRef.current) {
+          setHoverTarget(null);
+        }
+        hoverTimeoutRef.current = null;
+      }, 400);
+    }
+  }, []);
+
+  const handleDropdownMouseEnter = useCallback(() => {
+    tagDropdownHoveredRef.current = true;
+    if (hoverTimeoutRef.current) {
+      clearTimeout(hoverTimeoutRef.current);
+      hoverTimeoutRef.current = null;
+    }
+  }, []);
+
+  const handleDropdownMouseLeave = useCallback(() => {
+    tagDropdownHoveredRef.current = false;
+    hoverTimeoutRef.current = setTimeout(() => {
+      setHoverTarget(null);
+      hoverTimeoutRef.current = null;
+    }, 400);
   }, []);
 
   /** The 3D sun button fires this callback via UniverseController */
@@ -1103,13 +1177,13 @@ export default function Universe3DPage() {
       })()}
 
       {/* Hover detail panel — right side */}
-      {hoverTarget && hoverTarget.type && (
+      {hoverTarget && hoverTarget.type && hoverTarget.type !== 'company' && (
         <div
           className="absolute top-[4.5rem] right-6 w-60 p-4 z-20 rounded-xl border border-slate-700/40 backdrop-blur-xl"
           style={{ background: 'rgba(0, 0, 0, 0.75)' }}
         >
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 mb-2 inline-block">
-            {hoverTarget.type === 'company_planet_root' ? 'root node' : hoverTarget.type}
+            {hoverTarget.type}
           </span>
           <h3 className="text-sm font-semibold text-white mt-1">
             {hoverTarget.nodeLabel
@@ -1138,6 +1212,32 @@ export default function Universe3DPage() {
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* Floating Tag Dropdown for Companies in 3D Canvas */}
+      {hoverTarget && hoverTarget.type === 'company' && hoverTarget.screenX != null && hoverTarget.screenY != null && (
+        <div
+          className="absolute z-30 w-48"
+          style={{
+            left: hoverTarget.screenX,
+            top: hoverTarget.screenY + 30, // Positioned slightly below the planet
+            transform: 'translateX(-50%)',
+            pointerEvents: 'auto'
+          }}
+          onMouseEnter={handleDropdownMouseEnter}
+          onMouseLeave={handleDropdownMouseLeave}
+        >
+          <div className="bg-black/80 backdrop-blur-md p-1.5 rounded-xl border border-white/10 shadow-2xl">
+            <h3 className="text-xs font-bold text-white mb-1.5 px-1 truncate text-center">
+              {hoverTarget.company?.name}
+            </h3>
+            <CompanyTagDropdown 
+              companyId={hoverTarget.company?.id}
+              companyName={hoverTarget.company?.name}
+              industryColor={hoverTarget.industry?.color}
+            />
+          </div>
         </div>
       )}
 
@@ -1181,6 +1281,13 @@ export default function Universe3DPage() {
           onClose={handleCloseActionWorkspace}
         />
       )}
+
+      {/* ── Drag to Workspace Overlay ── */}
+      <DragWorkspaceOverlay
+        planetContext={planetContext}
+        activeRootDept={activeRootDept}
+        internalPath={rootPolytopeInternalPath}
+      />
     </div>
   );
 }

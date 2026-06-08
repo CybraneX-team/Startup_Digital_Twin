@@ -235,6 +235,10 @@ export function getRoleLabel(role: UserPlanetRole): string {
 
 /** Role-specific copy for the center energy orb on the 2D planet map */
 export interface PlanetCoreDetails {
+  companyId: string;
+  companyName: string;
+  role: UserPlanetRole;
+  roleLabel: string;
   roleTag: string;
   headline: string;
   subline: string;
@@ -252,8 +256,16 @@ export function getPlanetCoreDetails(ctx: CompanyPlanetContext): PlanetCoreDetai
       : 0;
   const branchTotal = ctx.roots.reduce((s, r) => s + r.branches.length, 0);
 
+  const base = {
+    companyId: ctx.companyId,
+    companyName: ctx.companyName,
+    role: ctx.role,
+    roleLabel: ctx.roleLabel,
+  };
+
   if (ctx.role === 'investor') {
     return {
+      ...base,
       roleTag: 'Investor lens',
       headline: ctx.companyName,
       subline: ctx.roleLabel,
@@ -268,6 +280,7 @@ export function getPlanetCoreDetails(ctx: CompanyPlanetContext): PlanetCoreDetai
 
   if (ctx.role === 'founder') {
     return {
+      ...base,
       roleTag: 'Founder lens',
       headline: ctx.companyName,
       subline: ctx.roleLabel,
@@ -281,6 +294,7 @@ export function getPlanetCoreDetails(ctx: CompanyPlanetContext): PlanetCoreDetai
   }
 
   return {
+    ...base,
     roleTag: 'Career lens',
     headline: ctx.companyName,
     subline: ctx.roleLabel,
