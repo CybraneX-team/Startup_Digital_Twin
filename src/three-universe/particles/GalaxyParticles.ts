@@ -65,6 +65,7 @@ export class GalaxyParticles {
     this._insideBH  = false;
     this._insideEH  = false;
     this._bhEnabled = true;  // disabled during subdomain/solar-system view
+    this._insideIndustryView = false;
   }
 
   _detectPerf() {
@@ -839,8 +840,64 @@ export class GalaxyParticles {
     }
   }
 
+  /** Snap galaxy visuals to industry/subdomain level without animation (session restore). */
+  applyInsideIndustryState(inside) {
+    this._insideIndustryView = inside;
+    if (this.material?.uniforms?.uSize) {
+      gsap.killTweensOf(this.material.uniforms.uSize);
+      this.material.uniforms.uSize.value = inside ? 1 : 3.5;
+    }
+    if (this.backgroundStars) {
+      const m = this.backgroundStars.material;
+      gsap.killTweensOf(m);
+      this.backgroundStars.visible = true;
+      m.size = inside ? 3.5 : 1.5;
+      m.opacity = inside ? 0.55 : 0.40;
+      m.needsUpdate = true;
+    }
+    if (this.universeSphere) {
+      const m = this.universeSphere.material;
+      gsap.killTweensOf(m);
+      this.universeSphere.visible = true;
+      m.opacity = inside ? 0.15 : 0.9;
+      m.needsUpdate = true;
+    }
+  }
+
+  applySubdomainLevelState(inside) {
+    if (this.material?.uniforms?.uSize) {
+      gsap.killTweensOf(this.material.uniforms.uSize);
+      this.material.uniforms.uSize.value = inside ? 0 : 3.5;
+    }
+    if (this.backgroundStars) {
+      const m = this.backgroundStars.material;
+      gsap.killTweensOf(m);
+      if (inside) {
+        this.backgroundStars.visible = false;
+        m.opacity = 0;
+      } else {
+        this.backgroundStars.visible = true;
+        m.opacity = 0.40;
+      }
+      m.needsUpdate = true;
+    }
+    if (this.universeSphere) {
+      const m = this.universeSphere.material;
+      gsap.killTweensOf(m);
+      if (inside) {
+        this.universeSphere.visible = false;
+        m.opacity = 0;
+      } else {
+        this.universeSphere.visible = true;
+        m.opacity = 0.9;
+      }
+      m.needsUpdate = true;
+    }
+  }
+
   /** Shrink particles when inside an industry — restore at galaxy level */
   setInsideIndustry(inside) {
+    this._insideIndustryView = inside;
     const dur = 2.8;
     const ease = 'power3.inOut';
 
@@ -864,6 +921,93 @@ export class GalaxyParticles {
       this.universeSphere.visible = true;
       gsap.killTweensOf(m);
       gsap.to(m, { opacity: inside ? 0.15 : 0.9, duration: dur, ease,
+        onUpdate: () => { m.needsUpdate = true; },
+      });
+    }
+  }
+
+  /** Industry workspace backdrop hide progress (0 = visible, 1 = hidden) — synced to camera compose zoom. */
+  setIndustryWorkspaceBackdropProgress(t) {
+    const spiralRest = this._insideIndustryView ? 1 : 3.5;
+    const sphereRest = this._insideIndustryView ? 0.15 : 0.9;
+    const bhScale = THREE.MathUtils.lerp(1, 0.001, t);
+    const spiralSize = THREE.MathUtils.lerp(spiralRest, 0, t);
+    const sphereOpacity = THREE.MathUtils.lerp(sphereRest, 0, t);
+
+    if (this._bhGroup) {
+      gsap.killTweensOf(this._bhGroup.scale);
+      this._bhGroup.visible = bhScale > 0.002;
+      this._bhGroup.scale.set(bhScale, bhScale, bhScale);
+    }
+    if (this.material) {
+      gsap.killTweensOf(this.material.uniforms.uSize);
+      this.material.uniforms.uSize.value = spiralSize;
+    }
+    if (this.universeSphere?.material) {
+      const m = this.universeSphere.material;
+      gsap.killTweensOf(m);
+      m.opacity = sphereOpacity;
+      m.needsUpdate = true;
+      this.universeSphere.visible = sphereOpacity > 0.01;
+    }
+
+    if (t >= 0.99) {
+      this._bhEnabled = false;
+    } else if (t <= 0.01) {
+      this.setBHEnabled(true);
+    }
+  }
+
+  /** Hide central black hole + galaxy spiral during industry-level twin workspace. */
+  setIndustryWorkspaceBackdrop(focused, duration = 0.88) {
+    const ease = 'power2.inOut';
+
+    if (focused) {
+      this.setBHEnabled(false);
+      if (this._bhGroup) {
+        gsap.killTweensOf(this._bhGroup.scale);
+        gsap.to(this._bhGroup.scale, { x: 0.001, y: 0.001, z: 0.001, duration, ease });
+      }
+      if (this.material) {
+        gsap.killTweensOf(this.material.uniforms.uSize);
+        gsap.to(this.material.uniforms.uSize, { value: 0, duration, ease });
+      }
+      if (this.universeSphere?.material) {
+        const m = this.universeSphere.material;
+        gsap.killTweensOf(m);
+        gsap.to(m, {
+          opacity: 0,
+          duration,
+          ease,
+          onUpdate: () => { m.needsUpdate = true; },
+          onComplete: () => { if (this.universeSphere) this.universeSphere.visible = false; },
+        });
+      }
+      return;
+    }
+
+    this.setBHEnabled(true);
+    if (this._bhGroup) {
+      gsap.killTweensOf(this._bhGroup.scale);
+      this._bhGroup.visible = true;
+      gsap.to(this._bhGroup.scale, { x: 1, y: 1, z: 1, duration, ease });
+    }
+    if (this.material) {
+      gsap.killTweensOf(this.material.uniforms.uSize);
+      gsap.to(this.material.uniforms.uSize, {
+        value: this._insideIndustryView ? 1 : 3.5,
+        duration,
+        ease,
+      });
+    }
+    if (this.universeSphere?.material) {
+      const m = this.universeSphere.material;
+      this.universeSphere.visible = true;
+      gsap.killTweensOf(m);
+      gsap.to(m, {
+        opacity: this._insideIndustryView ? 0.15 : 0.9,
+        duration,
+        ease,
         onUpdate: () => { m.needsUpdate = true; },
       });
     }

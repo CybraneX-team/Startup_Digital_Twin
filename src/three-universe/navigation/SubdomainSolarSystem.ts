@@ -221,6 +221,14 @@ export class SubdomainSolarSystem {
     gsap.to(this._starMat, { opacity: 0.85, duration: 1.8, ease: 'power2.out' });
   }
 
+  /** Skip star-field fade-in after session restore. */
+  revealInstantly() {
+    if (this._starMat) {
+      gsap.killTweensOf(this._starMat);
+      this._starMat.opacity = 0.85;
+    }
+  }
+
   // ── UPDATE (called every frame) ──────────────────────────────────────────
   update(elapsed) {
     if (!this.group) return;

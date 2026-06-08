@@ -513,6 +513,96 @@ export class SystemParticles {
     this.systems.forEach(sys => { sys.group.visible = v; });
   }
 
+  /** Industry workspace hide progress (0 = visible, 1 = hidden) — synced to camera compose zoom. */
+  setIndustryWorkspaceFocusProgress(activeIndustryId, t) {
+    if (!activeIndustryId) return;
+    const hideScale = THREE.MathUtils.lerp(0.08, 0.001, t);
+    const glowOpacity = THREE.MathUtils.lerp(0.1, 0, t);
+
+    this.systems.forEach((sys, id) => {
+      if (id === activeIndustryId) return;
+
+      gsap.killTweensOf(sys.group.scale);
+      if (sys.glowMat) gsap.killTweensOf(sys.glowMat);
+
+      const fullyHidden = t >= 0.999;
+      sys.group.visible = !fullyHidden;
+      sys.group.scale.set(hideScale, hideScale, hideScale);
+      if (sys.glowMat) sys.glowMat.opacity = glowOpacity;
+    });
+  }
+
+  /** Industry workspace — hide other galaxies only; active core + planets stay put. */
+  setIndustryWorkspaceFocus(activeIndustryId, focused, duration = 0.88) {
+    const ease = 'power3.inOut';
+    this.systems.forEach((sys, id) => {
+      if (id === activeIndustryId) return;
+
+      gsap.killTweensOf(sys.group.scale);
+      if (sys.glowMat) gsap.killTweensOf(sys.glowMat);
+
+      if (focused) {
+        sys.group.visible = true;
+        gsap.to(sys.group.scale, {
+          x: 0.001,
+          y: 0.001,
+          z: 0.001,
+          duration,
+          ease,
+          onComplete: () => {
+            sys.group.visible = false;
+          },
+        });
+        if (sys.glowMat) {
+          gsap.to(sys.glowMat, { opacity: 0, duration, ease });
+        }
+        return;
+      }
+
+      sys.group.visible = true;
+      gsap.to(sys.group.scale, { x: 0.08, y: 0.08, z: 0.08, duration, ease });
+      if (sys.glowMat) {
+        gsap.to(sys.glowMat, { opacity: 0.1, duration, ease });
+      }
+    });
+  }
+
+  /** Hide orbiting industry galaxies while twin workspace is open (BH-only view). */
+  setWorkspaceFocus(keepIndustryId, focused, duration = 0.88) {
+    const ease = 'power3.inOut';
+    this.systems.forEach((sys, id) => {
+      const hide = focused && (keepIndustryId == null || id !== keepIndustryId);
+      gsap.killTweensOf(sys.group.scale);
+      if (sys.glowMat) gsap.killTweensOf(sys.glowMat);
+
+      if (hide) {
+        sys.group.visible = true;
+        gsap.to(sys.group.scale, {
+          x: 0.001,
+          y: 0.001,
+          z: 0.001,
+          duration,
+          ease,
+          onComplete: () => {
+            sys.group.visible = false;
+          },
+        });
+        if (sys.glowMat) {
+          gsap.to(sys.glowMat, { opacity: 0, duration, ease });
+        }
+        return;
+      }
+
+      if (!focused) {
+        sys.group.visible = true;
+        gsap.to(sys.group.scale, { x: 1, y: 1, z: 1, duration, ease });
+        if (sys.glowMat) {
+          gsap.to(sys.glowMat, { opacity: 0.1, duration, ease });
+        }
+      }
+    });
+  }
+
   dispose() {
     this.systems.forEach(sys => {
       sys.group.traverse(c => { if (c.geometry) c.geometry.dispose(); if (c.material) c.material.dispose?.(); });

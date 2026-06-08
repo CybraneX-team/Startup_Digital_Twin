@@ -158,7 +158,7 @@ export default function Twin() {
       )}
 
       {/* Legend — floating bottom center */}
-      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 text-xs px-4 py-2 rounded-full backdrop-blur-md z-10"
+      {/* <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 text-xs px-4 py-2 rounded-full backdrop-blur-md z-10"
         style={{ background: 'rgba(22,22,24,0.85)', color: '#5E5E5E' }}
       >
         {[
@@ -174,7 +174,7 @@ export default function Twin() {
             {l.label}
           </div>
         ))}
-      </div>
+      </div> */}
     </div>
   );
 }

@@ -5,6 +5,7 @@
  */
 
 import * as THREE from 'three';
+import gsap from 'gsap';
 import { CSS2DRenderer, CSS2DObject } from 'three/addons/renderers/CSS2DRenderer.js';
 
 const _wp = new THREE.Vector3();
@@ -18,6 +19,7 @@ export class Labels {
     this.labels = new Map();
     this.onLabelClick = null;
     this._resizeObserver = null;
+    this._subdomainWorkspaceComposeT = 0;
 
     this._initRenderer();
   }
@@ -234,6 +236,14 @@ export class Labels {
     }
   }
 
+  showSpecific(id) {
+    const label = this.labels.get(id);
+    if (label) {
+      label.element.style.display = '';
+      gsap.to(label.element, { opacity: 1, duration: 0.5, ease: 'power2.out' });
+    }
+  }
+
   removeSpecific(id) {
     const label = this.labels.get(id);
     if (label) {
@@ -259,6 +269,71 @@ export class Labels {
     this._activeIndustryId = industryId || null;
   }
 
+  /** Industry workspace hide progress (0 = visible, 1 = hidden) — synced to camera compose zoom. */
+  /** Subdomain workspace — fade company labels during compose zoom. */
+  setSubdomainWorkspaceLabelsProgress(t) {
+    this._subdomainWorkspaceComposeT = t;
+    this.labels.forEach((label, id) => {
+      if (!id.startsWith('company-')) return;
+
+      gsap.killTweensOf(label.element);
+      const opacity = 1 - t;
+      label.element.style.opacity = String(opacity);
+      label.element.style.display = t >= 0.99 ? 'none' : '';
+    });
+  }
+
+  setIndustryWorkspaceFocusProgress(activeIndustryId, t) {
+    if (!activeIndustryId) return;
+    this.labels.forEach((label, id) => {
+      if (!id.startsWith('industry-')) return;
+      const indId = id.replace('industry-', '');
+      if (indId === activeIndustryId) return;
+
+      gsap.killTweensOf(label.element);
+      const opacity = 1 - t;
+      label.element.style.opacity = String(opacity);
+      label.element.style.display = t >= 0.99 ? 'none' : '';
+    });
+  }
+
+  setWorkspaceFocus(keepIndustryId, focused, duration = 0.72) {
+    this.labels.forEach((label, id) => {
+      if (!id.startsWith('industry-')) return;
+      const indId = id.replace('industry-', '');
+      const hide = focused && (keepIndustryId == null || indId !== keepIndustryId);
+      gsap.killTweensOf(label.element);
+
+      if (hide) {
+        gsap.to(label.element, {
+          opacity: 0,
+          duration,
+          ease: 'power2.inOut',
+          onComplete: () => {
+            label.element.style.display = 'none';
+          },
+        });
+        return;
+      }
+
+      if (!focused) {
+        label.element.style.display = '';
+        gsap.to(label.element, { opacity: 1, duration, ease: 'power2.inOut' });
+      }
+    });
+  }
+
+  setInteractionEnabled(enabled) {
+    // Full-screen CSS2D layer must stay none — only individual labels capture clicks.
+    if (this.labelRenderer?.domElement) {
+      this.labelRenderer.domElement.style.pointerEvents = 'none';
+    }
+    const pe = enabled ? 'auto' : 'none';
+    this.labels.forEach((label) => {
+      if (label.element) label.element.style.pointerEvents = pe;
+    });
+  }
+
   render() {
     const camPos = this.camera.position;
     this.labels.forEach((label, id) => {
@@ -280,6 +355,7 @@ export class Labels {
           label.element.style.transformOrigin = 'center top';
         }
       } else if (id.startsWith('company-') && label.element.style.display !== 'none') {
+        if (this._subdomainWorkspaceComposeT > 0.001) return;
         label.object.getWorldPosition(_wp);
         const dist = camPos.distanceTo(_wp);
         

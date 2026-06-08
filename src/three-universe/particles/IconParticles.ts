@@ -6,6 +6,7 @@
  */
 
 import * as THREE from 'three';
+import gsap from 'gsap';
 
 import techImg        from '../assets/icons/tech.png';
 import financeImg     from '../assets/icons/finance.png';
@@ -183,6 +184,44 @@ export class IconParticles {
 
   showAll() {
     this.icons.forEach(({ group }) => { group.visible = true; });
+  }
+
+  /** Workspace hide progress (0 = visible, 1 = hidden) — synced to camera compose zoom. */
+  setWorkspaceFocusProgress(keepIndustryId, t) {
+    this.icons.forEach(({ group, mat }, id) => {
+      const hide = keepIndustryId == null || id !== keepIndustryId;
+      if (!hide) return;
+
+      gsap.killTweensOf(mat);
+      const opacity = THREE.MathUtils.lerp(1, 0, t);
+      mat.opacity = opacity;
+      group.visible = opacity > 0.01;
+    });
+  }
+
+  setWorkspaceFocus(keepIndustryId, focused, duration = 0.88) {
+    const ease = 'power2.inOut';
+    this.icons.forEach(({ group, mat }, id) => {
+      const hide = focused && (keepIndustryId == null || id !== keepIndustryId);
+      gsap.killTweensOf(mat);
+
+      if (hide) {
+        gsap.to(mat, {
+          opacity: 0,
+          duration,
+          ease,
+          onComplete: () => {
+            group.visible = false;
+          },
+        });
+        return;
+      }
+
+      if (!focused) {
+        group.visible = true;
+        gsap.to(mat, { opacity: 1, duration, ease });
+      }
+    });
   }
 
   dispose() {

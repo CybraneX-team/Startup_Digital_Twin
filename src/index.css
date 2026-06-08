@@ -132,6 +132,331 @@
     pointer-events: none;
   }
 
+  @keyframes open-workspace-chevron-rise {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    35% {
+      opacity: 0.9;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(-16px);
+    }
+  }
+
+  .open-workspace-cue {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 4px 12px 0;
+  }
+
+  .open-workspace-cue__chevron {
+    animation: open-workspace-chevron-rise 1.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    will-change: transform, opacity;
+  }
+
+  .open-workspace-cue__chevron--second {
+    animation-delay: 0.4s;
+  }
+
+  .open-workspace-cue:hover .open-workspace-cue__chevron {
+    animation-duration: 1.35s;
+  }
+
+  /* ── 3D Twin → workspace transition ── */
+  .twin-universe-viewport {
+    position: absolute;
+    inset: 0;
+  }
+
+  /* Catches pointer events over the universe while workspace is open (grid gaps pass through shell). */
+  .twin-universe-interaction-blocker {
+    position: absolute;
+    inset: 0;
+    z-index: 23;
+    pointer-events: auto;
+    background: transparent;
+  }
+
+  .universe-galaxy-sidebar-host {
+    z-index: 22;
+    transition:
+      opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+      transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .universe-galaxy-sidebar-host--float {
+    position: absolute;
+    bottom: 1.5rem;
+    left: 1rem;
+  }
+
+  .universe-galaxy-sidebar-host--exit {
+    opacity: 0;
+    transform: translateX(-28px) scale(0.94);
+    pointer-events: none;
+  }
+
+  .twin-workspace-shell {
+    position: absolute;
+    inset: 0;
+    z-index: 24;
+    padding: 3.5rem 0.75rem 0.5rem;
+    display: grid;
+    grid-template-columns: 228px minmax(0, 1fr) 268px;
+    grid-template-rows: minmax(140px, 34vh) minmax(0, 1fr);
+    gap: 12px;
+    pointer-events: none;
+    background: transparent;
+  }
+
+  .twin-workspace-panel {
+    pointer-events: auto;
+    min-height: 0;
+    opacity: 0;
+  }
+
+  .twin-workspace-panel--left {
+    grid-column: 1;
+    grid-row: 1 / -1;
+    transform: translateX(-110%);
+  }
+
+  .twin-workspace-panel--right {
+    grid-column: 3;
+    grid-row: 1 / -1;
+    transform: translateX(110%);
+  }
+
+  .twin-workspace-panel--canvas {
+    grid-column: 2;
+    grid-row: 2;
+    transform: translateY(110%);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .twin-workspace-panel--in {
+    animation: twin-panel-snap-in 0.68s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .twin-workspace-panel--left.twin-workspace-panel--in {
+    animation-name: twin-panel-from-left;
+  }
+
+  .twin-workspace-panel--right.twin-workspace-panel--in {
+    animation-name: twin-panel-from-right;
+    animation-delay: 0.06s;
+  }
+
+  .twin-workspace-panel--canvas.twin-workspace-panel--in {
+    animation-name: twin-panel-from-bottom;
+    animation-delay: 0.1s;
+  }
+
+  .twin-workspace-panel--out {
+    animation: twin-panel-snap-out 0.62s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  .twin-workspace-panel--left.twin-workspace-panel--out {
+    animation-name: twin-panel-to-left;
+  }
+
+  .twin-workspace-panel--right.twin-workspace-panel--out {
+    animation-name: twin-panel-to-right;
+    animation-delay: 0.04s;
+  }
+
+  .twin-workspace-panel--canvas.twin-workspace-panel--out {
+    animation-name: twin-panel-to-bottom;
+    animation-delay: 0.08s;
+  }
+
+  .twin-workspace-close {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: center;
+    align-self: end;
+    margin-bottom: 0.35rem;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.25rem 0.85rem 0.15rem;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    pointer-events: auto;
+    opacity: 0;
+    animation: twin-workspace-close-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.42s forwards;
+  }
+
+  .twin-workspace-shell--closing .twin-workspace-close {
+    animation: twin-workspace-close-out 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    pointer-events: none;
+  }
+
+  .twin-workspace-close:disabled {
+    cursor: default;
+  }
+
+  .twin-workspace-close__label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.45);
+    transition: color 0.2s ease;
+  }
+
+  .twin-workspace-close:hover .twin-workspace-close__label {
+    color: rgba(255, 255, 255, 0.92);
+  }
+
+  .twin-workspace-close__chevrons {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 2rem;
+    height: 1.65rem;
+  }
+
+  .twin-workspace-close__chevron {
+    position: absolute;
+    top: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    color: rgba(255, 255, 255, 0.55);
+    animation: twin-workspace-close-chevron 1.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+    will-change: transform, opacity;
+  }
+
+  .twin-workspace-close__chevron--second {
+    animation-delay: 0.4s;
+  }
+
+  .twin-workspace-close:hover .twin-workspace-close__chevron {
+    color: #c1aeff;
+    animation-duration: 1.35s;
+  }
+
+  @keyframes twin-workspace-close-chevron {
+    0% {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    35% {
+      opacity: 0.9;
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(16px);
+    }
+  }
+
+  @keyframes twin-workspace-close-in {
+    from {
+      opacity: 0;
+      transform: translateY(-8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes twin-workspace-close-out {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+  }
+
+  @keyframes twin-panel-to-left {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(-110%);
+    }
+  }
+
+  @keyframes twin-panel-to-right {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateX(110%);
+    }
+  }
+
+  @keyframes twin-panel-to-bottom {
+    from {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(110%);
+    }
+  }
+
+  @keyframes twin-panel-snap-out {
+    from {
+      opacity: 1;
+    }
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes twin-panel-from-left {
+    from {
+      opacity: 0;
+      transform: translateX(-110%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes twin-panel-from-right {
+    from {
+      opacity: 0;
+      transform: translateX(110%);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes twin-panel-from-bottom {
+    from {
+      opacity: 0;
+      transform: translateY(110%);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   .workspace-bg-grid {
     background-image:
       linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
@@ -602,11 +927,11 @@
     width: 228px;
     padding: 20px 14px 16px;
     border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-right-color: rgba(148, 163, 255, 0.22);
-    background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(20px) saturate(1.35);
-    -webkit-backdrop-filter: blur(20px) saturate(1.35);
+    /* border: 1px solid rgba(255, 255, 255, 0.1);
+    border-right-color: rgba(148, 163, 255, 0.22); */
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px) saturate(1.35);
+    -webkit-backdrop-filter: blur(10px) saturate(1.35);
     box-shadow:
       0 8px 32px rgba(0, 0, 0, 0.35),
       inset 0 1px 0 rgba(255, 255, 255, 0.07),

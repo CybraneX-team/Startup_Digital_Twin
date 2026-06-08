@@ -18,6 +18,7 @@ import { NavigationManager } from './navigation/NavigationManager';
 import { Labels } from './ui/Labels';
 import { IconParticles } from './particles/IconParticles';
 import { SubdomainSolarSystem } from './navigation/SubdomainSolarSystem';
+import { loadUniverseNavState } from '../lib/universeNavPersistence';
 import type { UniverseData, UniverseIndustry } from '../data/universeGraph';
 
 import './styles/universe.css';
@@ -74,6 +75,10 @@ export class UniverseController {
   private subdomainSolarSystem: SubdomainSolarSystem;
   private _data: UniverseData | null = null;
   private _disposed = false;
+  private _workspaceFocused = false;
+  private _workspaceFocusIndustryId: string | null = null;
+  private _workspaceFocusSubdomainId: string | null = null;
+  private _workspaceMode: 'galaxy' | 'industry' | 'subdomain' | null = null;
 
   constructor(
     container: HTMLElement,
@@ -102,10 +107,41 @@ export class UniverseController {
 
       // 2. Camera Controller
       this.cameraCtrl = new CameraController(this.engine.camera, this.engine.canvas);
+      this.cameraCtrl.onWorkspaceComposeUpdate = (t, mode) => {
+        if (mode === 'industry') {
+          const industryId = this._workspaceFocusIndustryId;
+          if (!industryId) return;
+          this.applyIndustryWorkspaceProgress(industryId, t);
+          return;
+        }
+        if (mode === 'subdomain') {
+          this.applySubdomainWorkspaceProgress(t);
+        }
+      };
+      this.cameraCtrl.onWorkspaceComposeComplete = (active, mode) => {
+        if (mode === 'industry') {
+          const industryId = this._workspaceFocusIndustryId;
+          if (!industryId) return;
+          this.applyIndustryWorkspaceProgress(industryId, active ? 1 : 0);
+          if (!active) {
+            this._workspaceFocusIndustryId = null;
+            this.labels?.setActiveIndustry(null);
+          }
+          return;
+        }
+        if (mode === 'subdomain') {
+          this.applySubdomainWorkspaceProgress(active ? 1 : 0);
+          if (!active) {
+            this._workspaceFocusIndustryId = null;
+            this._workspaceFocusSubdomainId = null;
+          }
+        }
+      };
 
       // Set camera to gallery-view position immediately if intro already played,
-      // so the renderer never shows the default Engine position (0, 5000, 32000) — prevents snap glitch.
-      if (sessionStorage.getItem('universe3d_intro_done')) {
+      // unless we're restoring industry/subdomain depth (handled after init).
+      const persistedNav = loadUniverseNavState();
+      if (sessionStorage.getItem('universe3d_intro_done') && !persistedNav) {
         this.engine.camera.position.set(
           Math.cos(Math.PI * 0.3 + Math.PI * 1.4) * 28000,
           6000,
@@ -201,6 +237,12 @@ export class UniverseController {
       this.subdomainSolarSystem = new SubdomainSolarSystem(this.engine.scene);
       this.navigation.setSubdomainSolarSystem(this.subdomainSolarSystem);
       this.navigation.setMyCompanyNodeId(data.myCompanyNodeId ?? null);
+      this.navigation.isTwinWorkspaceActive = () => this._workspaceFocused;
+      this.navigation.onGalaxyNavigationComplete = () => {
+        if (this._workspaceFocused && this._workspaceMode === 'galaxy') {
+          this.applyTwinWorkspaceFocus();
+        }
+      };
 
       // 9. Wire navigation callbacks → React
       this._setupNavigationCallbacks(industries);
@@ -208,27 +250,36 @@ export class UniverseController {
       // 10. Start render loop
       this.engine.start((delta, elapsed) => this._update(delta, elapsed, industries));
 
-      // 11. Play intro orbit (only once per session)
+      // 11. Play intro orbit (only once per session) or restore saved nav level
       setTimeout(() => {
         if (this._disposed) return;
         const alreadyPlayed = sessionStorage.getItem('universe3d_intro_done');
+        const persisted = loadUniverseNavState();
+
         if (alreadyPlayed) {
-          // Skip animation — set camera to final position directly
-          const ctrl = this.cameraCtrl;
-          const cam = this.engine.camera;
-          cam.position.set(
-            Math.cos(Math.PI * 0.3 + Math.PI * 1.4) * 28000,
-            6000,
-            Math.sin(Math.PI * 0.3 + Math.PI * 1.4) * 28000,
-          );
-          cam.lookAt(0, 0, 0);
-          ctrl.controls.target.set(0, 0, 0);
-          ctrl.controls.enabled = true;
-          ctrl.controls.update();
-          ctrl.isTransitioning = false;
-          ctrl.currentLevel = ZOOM_LEVELS.GALAXY;
-          ctrl.autoRotateEnabled = true;
-          ctrl.controls.autoRotate = true;
+          const restored = persisted && this.navigation.restorePersistedView(persisted, industries);
+          if (!restored) {
+            const ctrl = this.cameraCtrl;
+            const cam = this.engine.camera;
+            cam.position.set(
+              Math.cos(Math.PI * 0.3 + Math.PI * 1.4) * 28000,
+              6000,
+              Math.sin(Math.PI * 0.3 + Math.PI * 1.4) * 28000,
+            );
+            cam.lookAt(0, 0, 0);
+            ctrl.controls.target.set(0, 0, 0);
+            ctrl.controls.enabled = true;
+            ctrl.controls.update();
+            ctrl.isTransitioning = false;
+            ctrl.currentLevel = ZOOM_LEVELS.GALAXY;
+            ctrl.autoRotateEnabled = true;
+            ctrl.controls.autoRotate = true;
+          } else {
+            this.cameraCtrl.controls.enabled = true;
+            this.cameraCtrl.isTransitioning = false;
+            this.cameraCtrl.autoRotateEnabled = false;
+            this.cameraCtrl.controls.autoRotate = false;
+          }
         } else {
           this._playIntroOrbit();
           sessionStorage.setItem('universe3d_intro_done', '1');
@@ -518,7 +569,7 @@ export class UniverseController {
     this.galaxyParticles.update(elapsed, 0.0, this.engine.camera.position);
     this.systemParticles.update(elapsed, zoomLevelFactor);
 
-    if (this.cameraCtrl.currentLevel === ZOOM_LEVELS.GALAXY) {
+    if (this.cameraCtrl.currentLevel === ZOOM_LEVELS.GALAXY && !this._workspaceFocused) {
       const camPos = this.engine.camera.position;
       this.systemParticles.systems.forEach(sys => {
         const dist = camPos.distanceTo(sys.group.position);
@@ -546,12 +597,14 @@ export class UniverseController {
 
     if (this.iconParticles) {
       this.iconParticles.update();
-      const activeId = this.navigation.selectedIndustry?.id || null;
-      this.iconParticles.updateForDistance(
-        this.engine.camera.position,
-        this.systemParticles.systems,
-        activeId
-      );
+      if (!this._workspaceFocused) {
+        const activeId = this.navigation.selectedIndustry?.id || null;
+        this.iconParticles.updateForDistance(
+          this.engine.camera.position,
+          this.systemParticles.systems,
+          activeId
+        );
+      }
     }
 
     this.labels.render();
@@ -818,6 +871,151 @@ export class UniverseController {
     this.engine.camera.updateProjectionMatrix();
     this.engine.renderer.setSize(width, height);
     if (this.engine.onResize) this.engine.onResize(width, height);
+    this.cameraCtrl?.updateWorkspaceComposeSize(width, height);
+  }
+
+  /** Shift the 3D scene into the top band for twin workspace overlay (not the DOM canvas). */
+  setWorkspaceCompose(active: boolean, animate = true): void {
+    this._setUniverseInteractive(!active);
+
+    if (this._disposed || !this.engine || !this.cameraCtrl) return;
+    const { width, height } = this.engine._getSize();
+    if (width === 0 || height === 0) return;
+    const mode = active
+      ? (this._workspaceMode ?? 'galaxy')
+      : (this.cameraCtrl._workspaceComposeMode ?? this._workspaceMode ?? 'galaxy');
+
+    if (active && (mode === 'industry' || mode === 'subdomain')) {
+      const anchor = this._getLocalWorkspaceAnchor(mode);
+      if (anchor) this.cameraCtrl.setLocalWorkspaceEndPose(anchor, mode);
+    }
+
+    this.cameraCtrl.setWorkspaceCompose(active, width, height, animate, mode);
+  }
+
+  private _getLocalWorkspaceAnchor(mode: 'industry' | 'subdomain'): THREE.Vector3 | null {
+    if (mode === 'subdomain') return new THREE.Vector3(0, 0, 0);
+
+    const industryId =
+      this._workspaceFocusIndustryId ??
+      this.navigation?.selectedIndustry?.id ??
+      this._findUserIndustryId();
+    if (!industryId) return null;
+
+    const idx = (this._industries ?? []).findIndex((i) => i.id === industryId);
+    if (idx < 0) return this.cameraCtrl.controls.target.clone();
+    return this.galaxyParticles.getIndustryPosition(idx);
+  }
+
+  private _findUserIndustryId(): string | null {
+    const industries = this._industries ?? [];
+    const myCompanyId = this._data?.myCompanyNodeId;
+    if (myCompanyId) {
+      for (const industry of industries) {
+        for (const subdomain of industry.subdomains ?? []) {
+          for (const company of subdomain.companies ?? []) {
+            if (company.id === myCompanyId) return industry.id;
+          }
+        }
+      }
+    }
+    return industries[0]?.id ?? null;
+  }
+
+  /** Begin twin workspace from galaxy level (fly to black hole). */
+  openTwinWorkspaceFromGalaxy(): void {
+    this.enterTwinWorkspaceFocus('galaxy');
+    this.navigation?.goToGalaxy();
+  }
+
+  /** Begin twin workspace from industry level (compose view — no camera fly). */
+  openTwinWorkspaceFromIndustry(): void {
+    this.enterTwinWorkspaceFocus('industry');
+  }
+
+  /** Begin twin workspace from subdomain level (compose view — no camera fly). */
+  openTwinWorkspaceFromSubdomain(): void {
+    this.enterTwinWorkspaceFocus('subdomain');
+  }
+
+  enterTwinWorkspaceFocus(mode: 'galaxy' | 'industry' | 'subdomain'): void {
+    if (this._workspaceFocused || this._disposed) return;
+    this._workspaceFocused = true;
+    this._workspaceMode = mode;
+
+    if (mode === 'subdomain') {
+      this._workspaceFocusIndustryId = this.navigation?.selectedIndustry?.id ?? null;
+      this._workspaceFocusSubdomainId = this.navigation?.selectedSubdomain?.id ?? null;
+    } else {
+      this._workspaceFocusSubdomainId = null;
+      this._workspaceFocusIndustryId =
+        mode === 'industry'
+          ? (this.navigation?.selectedIndustry?.id ?? this._findUserIndustryId())
+          : this._findUserIndustryId();
+    }
+
+    if (mode === 'galaxy') this.applyTwinWorkspaceFocus();
+  }
+
+  applyIndustryWorkspaceProgress(industryId: string, t: number): void {
+    if (!industryId || this._disposed) return;
+    this.systemParticles?.setIndustryWorkspaceFocusProgress(industryId, t);
+    this.iconParticles?.setWorkspaceFocusProgress(industryId, t);
+    this.labels?.setIndustryWorkspaceFocusProgress(industryId, t);
+    this.galaxyParticles?.setIndustryWorkspaceBackdropProgress(t);
+  }
+
+  applySubdomainWorkspaceProgress(t: number): void {
+    if (this._disposed || !this.subdomainSolarSystem?.active) return;
+    this.labels?.setSubdomainWorkspaceLabelsProgress(t);
+  }
+
+  applyTwinWorkspaceFocus(): void {
+    if (!this._workspaceFocused || this._disposed) return;
+
+    if (this._workspaceMode === 'galaxy') {
+      this.systemParticles?.setWorkspaceFocus(null, true);
+      this.iconParticles?.setWorkspaceFocus(null, true);
+      this.labels?.setWorkspaceFocus(null, true);
+    }
+  }
+
+  exitTwinWorkspaceFocus(): void {
+    if (!this._workspaceFocused || this._disposed) return;
+
+    const mode = this._workspaceMode;
+
+    if (mode === 'galaxy') {
+      this.systemParticles?.setWorkspaceFocus(null, false);
+      this.iconParticles?.setWorkspaceFocus(null, false);
+      this.labels?.setWorkspaceFocus(null, false);
+      this._workspaceFocusIndustryId = null;
+      this.labels?.setActiveIndustry(null);
+    }
+    // Industry/subdomain restore is driven by setWorkspaceCompose(false) progress callback.
+
+    this._workspaceFocused = false;
+    this._workspaceMode = null;
+  }
+
+  private _setUniverseInteractive(interactive: boolean): void {
+    this.container.style.pointerEvents = interactive ? 'auto' : 'none';
+    if (this.engine?.canvas) {
+      this.engine.canvas.style.pointerEvents = interactive ? 'auto' : 'none';
+    }
+
+    this.cameraCtrl?.setInteractionLocked(!interactive);
+    this.navigation?.setInteractionEnabled(interactive);
+    this.labels?.setInteractionEnabled(interactive);
+
+    if (!interactive) {
+      this._callbacks?.onHover?.(null);
+    }
+  }
+
+  /** Force-restore pointer + orbit after twin workspace closes. */
+  restoreUniverseInteraction(): void {
+    this._setUniverseInteractive(true);
   }
 
   /**
