@@ -22,6 +22,21 @@ export const ZOOM_LEVELS = {
   DEPARTMENT: 'department',
 };
 
+/** Canonical view direction for industry/subdomain workspace landing (matches snapTo). */
+const LOCAL_WORKSPACE_VIEW_DIR = new THREE.Vector3(0.4, 0.35, 0.85).normalize();
+const INDUSTRY_NAV_DISTANCE = 2500;
+const SUBDOMAIN_NAV_DISTANCE = Math.hypot(200, 750);
+const LOCAL_WORKSPACE_ZOOM_MULT = 3;
+
+function _localWorkspaceEndPose(target, navDistance) {
+  const endTarget = target.clone();
+  const dir = LOCAL_WORKSPACE_VIEW_DIR.clone();
+  const dist = navDistance * LOCAL_WORKSPACE_ZOOM_MULT;
+  const endPos = endTarget.clone().add(dir.multiplyScalar(dist));
+  endPos.y = Math.max(endPos.y, endTarget.y + dist * 0.25);
+  return { endPos, endTarget };
+}
+
 export class CameraController {
   constructor(camera, canvas) {
     this.camera = camera;
@@ -95,12 +110,38 @@ export class CameraController {
     this.controls.addEventListener('end', () => {
       clearTimeout(this._autoRotateTimer);
       this._autoRotateTimer = setTimeout(() => {
-        if (this.currentLevel === ZOOM_LEVELS.GALAXY && !this.isTransitioning) {
+        if (
+          this.currentLevel === ZOOM_LEVELS.GALAXY &&
+          !this.isTransitioning &&
+          !this._interactionLocked
+        ) {
           this.autoRotateEnabled = true;
           this.controls.autoRotate = true;
         }
       }, 6000);
     });
+  }
+
+  /** Block orbit / pointer when twin workspace overlay is active. */
+  _interactionLocked = false;
+
+  setInteractionLocked(locked) {
+    this._interactionLocked = locked;
+    if (locked) {
+      this.controls.enabled = false;
+      this.controls.autoRotate = false;
+      clearTimeout(this._autoRotateTimer);
+      return;
+    }
+
+    this.controls.enabled = true;
+    if (
+      this.currentLevel === ZOOM_LEVELS.GALAXY &&
+      this.autoRotateEnabled &&
+      !this.isTransitioning
+    ) {
+      this.controls.autoRotate = true;
+    }
   }
 
   /**
@@ -179,11 +220,13 @@ export class CameraController {
         this._flyTimeline = null;
 
         // Resume auto-rotate at galaxy level
-        if (level === ZOOM_LEVELS.GALAXY) {
+        if (level === ZOOM_LEVELS.GALAXY && !this._interactionLocked) {
           this._autoRotateTimer = setTimeout(() => {
-            this.autoRotateEnabled = true;
-            this.controls.autoRotate = true;
-            this.controls.autoRotateSpeed = 0.06;
+            if (!this._interactionLocked) {
+              this.autoRotateEnabled = true;
+              this.controls.autoRotate = true;
+              this.controls.autoRotateSpeed = 0.06;
+            }
           }, 1000);
         }
 
@@ -306,7 +349,163 @@ export class CameraController {
     this.controls.minDistance = 3;
   }
 
+  /** Animate universe into top band via camera view offset (canvas stays full-screen). */
+  _workspaceComposeT = 0;
+  _workspaceComposeActive = false;
+  _workspaceComposeTween = null;
+  _workspaceComposeMode = 'galaxy';
+  _savedIndustryCamPos = null;
+  _savedIndustryCamTarget = null;
+  _localWorkspaceEndPos = null;
+  _localWorkspaceEndTarget = null;
+
+  /** Fixed workspace landing pose — same regardless of where the user was orbiting. */
+  setLocalWorkspaceEndPose(target, kind) {
+    const navDistance = kind === 'subdomain' ? SUBDOMAIN_NAV_DISTANCE : INDUSTRY_NAV_DISTANCE;
+    const { endPos, endTarget } = _localWorkspaceEndPose(target, navDistance);
+    this._localWorkspaceEndPos = endPos;
+    this._localWorkspaceEndTarget = endTarget;
+  }
+
+  clearLocalWorkspaceEndPose() {
+    this._localWorkspaceEndPos = null;
+    this._localWorkspaceEndTarget = null;
+  }
+
+  _applyGalaxyWorkspaceViewOffset(width, height, t) {
+    if (t <= 0.001) {
+      this.camera.clearViewOffset();
+      this.camera.updateProjectionMatrix();
+      return;
+    }
+
+    const scale = THREE.MathUtils.lerp(1, 0.48, t);
+    const fullW = width / scale;
+    const fullH = height / scale;
+    const subW = width;
+    const subH = height * THREE.MathUtils.lerp(1, 0.38, t);
+    const offsetX = (fullW - subW) * 0.5;
+    const offsetY = height * THREE.MathUtils.lerp(0, 0.11, t) + (fullH - subH) * 0.5;
+
+    this.camera.setViewOffset(fullW, fullH, offsetX, offsetY, subW, subH);
+    this.camera.updateProjectionMatrix();
+  }
+
+  /** Industry workspace — uniform shrink + shift up, no vertical crop (keeps viewing angle). */
+  _applyIndustryWorkspaceViewOffset(width, height, t) {
+    if (t <= 0.001) {
+      this.camera.clearViewOffset();
+      this.camera.updateProjectionMatrix();
+      return;
+    }
+
+    const scale = THREE.MathUtils.lerp(1, 0.60, t);
+    const fullW = width / scale;
+    const fullH = height / scale;
+    const subW = width;
+    const subH = height;
+    const offsetX = (fullW - subW) * 0.5;
+    const offsetY = (fullH - subH) * 0.58 + height * 0.24 * t;
+
+    this.camera.setViewOffset(fullW, fullH, offsetX, offsetY, subW, subH);
+    this.camera.updateProjectionMatrix();
+  }
+
+  /** Lerp camera to fixed workspace landing pose (not user-relative zoom). */
+  _applyIndustryWorkspaceZoom(t) {
+    if (!this._savedIndustryCamPos || !this._savedIndustryCamTarget) return;
+    if (!this._localWorkspaceEndPos || !this._localWorkspaceEndTarget) return;
+
+    this.camera.position.lerpVectors(this._savedIndustryCamPos, this._localWorkspaceEndPos, t);
+    this.controls.target.lerpVectors(this._savedIndustryCamTarget, this._localWorkspaceEndTarget, t);
+    this.controls.update();
+  }
+
+  _applyWorkspaceFrame(width, height, t, mode) {
+    if (mode === 'industry' || mode === 'subdomain') {
+      this._applyIndustryWorkspaceViewOffset(width, height, t);
+      this._applyIndustryWorkspaceZoom(t);
+    } else {
+      this._applyGalaxyWorkspaceViewOffset(width, height, t);
+    }
+  }
+
+  _isLocalWorkspaceMode(mode) {
+    return mode === 'industry' || mode === 'subdomain';
+  }
+
+  setWorkspaceCompose(active, width, height, animate = true, mode = 'galaxy') {
+    if (this._workspaceComposeTween) {
+      this._workspaceComposeTween.kill();
+      this._workspaceComposeTween = null;
+    }
+
+    this._workspaceComposeMode = mode;
+
+    const targetT = active ? 1 : 0;
+    const startT = this._workspaceComposeT;
+
+    if (active && this._isLocalWorkspaceMode(mode) && startT <= 0.001) {
+      this._savedIndustryCamPos = this.camera.position.clone();
+      this._savedIndustryCamTarget = this.controls.target.clone();
+    }
+
+    if (!animate) {
+      this._workspaceComposeT = targetT;
+      this._workspaceComposeActive = active;
+      this._applyWorkspaceFrame(width, height, targetT, mode);
+      this.onWorkspaceComposeUpdate?.(targetT, mode);
+      this.onWorkspaceComposeComplete?.(active, mode);
+      if (!active && this._isLocalWorkspaceMode(mode)) this._restoreIndustryCamera();
+      return;
+    }
+
+    const state = { t: startT };
+    this._workspaceComposeTween = gsap.to(state, {
+      t: targetT,
+      duration: 0.88,
+      ease: 'power3.inOut',
+      onUpdate: () => {
+        this._workspaceComposeT = state.t;
+        this._applyWorkspaceFrame(width, height, state.t, mode);
+        this.onWorkspaceComposeUpdate?.(state.t, mode);
+      },
+      onComplete: () => {
+        this._workspaceComposeT = targetT;
+        this._workspaceComposeActive = active;
+        this._workspaceComposeTween = null;
+        this.onWorkspaceComposeComplete?.(active, mode);
+        if (!active) {
+          this.camera.clearViewOffset();
+          this.camera.updateProjectionMatrix();
+          if (this._isLocalWorkspaceMode(mode)) this._restoreIndustryCamera();
+        }
+      },
+    });
+  }
+
+  _restoreIndustryCamera() {
+    if (this._savedIndustryCamPos && this._savedIndustryCamTarget) {
+      this.camera.position.copy(this._savedIndustryCamPos);
+      this.controls.target.copy(this._savedIndustryCamTarget);
+      this.controls.update();
+    }
+    this._savedIndustryCamPos = null;
+    this._savedIndustryCamTarget = null;
+    this.clearLocalWorkspaceEndPose();
+  }
+
+  updateWorkspaceComposeSize(width, height) {
+    const t = this._workspaceComposeT;
+    if (t <= 0.001 && !this._workspaceComposeActive) return;
+    this._applyWorkspaceFrame(width, height, t, this._workspaceComposeMode);
+  }
+
   update() {
+    if (this._interactionLocked) {
+      this.controls.enabled = false;
+      this.controls.autoRotate = false;
+    }
     this.controls.update();
   }
 
@@ -314,5 +513,7 @@ export class CameraController {
     this.controls.dispose();
     clearTimeout(this._autoRotateTimer);
     if (this._flyTimeline) this._flyTimeline.kill();
+    if (this._workspaceComposeTween) this._workspaceComposeTween.kill();
+    this.camera.clearViewOffset();
   }
 }

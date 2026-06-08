@@ -10,6 +10,10 @@ import * as THREE from 'three';
 import gsap from 'gsap';
 import { ZOOM_LEVELS } from '../engine/CameraController.js';
 import { SubdomainSolarSystem } from './SubdomainSolarSystem.js';
+import {
+  saveUniverseNavState,
+  clearUniverseNavState,
+} from '../../lib/universeNavPersistence.js';
 
 export class NavigationManager {
   constructor(camera, canvas, cameraController, systems) {
@@ -50,18 +54,53 @@ export class NavigationManager {
 
     this._afterNextNavigate = null;
 
+    this._interactionEnabled = true;
+    /** When true, goToGalaxy must not restore orbiting industry systems. */
+    this.isTwinWorkspaceActive = null;
+    this.onGalaxyNavigationComplete = null;
+
     this._bind();
     this._initEvents();
   }
 
   // Called at the end of every navigation — fires one-shot callback if set
   _onNavigateDone(path, level) {
+    this._persistNavState(path, level);
     if (this.onNavigate) this.onNavigate(path, level);
     if (this._afterNextNavigate) {
       const cb = this._afterNextNavigate;
       this._afterNextNavigate = null;
       cb();
     }
+  }
+
+  _persistNavState(path, level) {
+    if (level === ZOOM_LEVELS.GALAXY) {
+      clearUniverseNavState();
+      return;
+    }
+    if (level === ZOOM_LEVELS.DEPARTMENT) return;
+
+    const industryId = path[0]?.id;
+    if (!industryId) return;
+
+    const cam = this.camera.position;
+    const target = this.cameraCtrl.controls.target;
+    const navLevel =
+      level === ZOOM_LEVELS.INDUSTRY
+        ? 'industry'
+        : level === ZOOM_LEVELS.SUBDOMAIN
+          ? 'subdomain'
+          : 'company';
+
+    saveUniverseNavState({
+      level: navLevel,
+      industryId,
+      subdomainId: path[1]?.id,
+      companyId: path[2]?.id,
+      cameraPosition: [cam.x, cam.y, cam.z],
+      cameraTarget: [target.x, target.y, target.z],
+    });
   }
 
   _bind() {
@@ -84,7 +123,7 @@ export class NavigationManager {
     this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
   }
 
-  _onMove(e) { this._setMouse(e); this._hover(); }
+  _onMove(e) { if (!this._interactionEnabled) return; this._setMouse(e); this._hover(); }
   _onMouseLeave(e) {
     if (this.hoveredObject) {
       this._unhover(this.hoveredObject);
@@ -98,8 +137,9 @@ export class NavigationManager {
       if (this.onHover) this.onHover(null);
     }
   }
-  _onClick(e) { if (!this.cameraCtrl.isTransitioning) { this._setMouse(e); this._click(); } }
-  _onKey(e) { 
+  _onClick(e) { if (!this._interactionEnabled) return; if (!this.cameraCtrl.isTransitioning) { this._setMouse(e); this._click(); } }
+  _onKey(e) {
+    if (!this._interactionEnabled) return;
     if (e.key === 'Escape') { 
       if (this.currentLevel === ZOOM_LEVELS.COMPANY) {
         const sss = this._subdomainSolarSystem;
@@ -449,7 +489,7 @@ export class NavigationManager {
       this.navigationPath = [{ level: ZOOM_LEVELS.INDUSTRY, id: industry.id, name: industry.name, data: industry }];
       // Cap zoom-out: just enough to see all subdomains, can't scroll back to galaxy
       this.cameraCtrl.setZoomCap(5500);
-      if (this.onNavigate) this.onNavigate(this.navigationPath, this.currentLevel);
+      this._onNavigateDone(this.navigationPath, this.currentLevel);
     });
   }
 
@@ -560,7 +600,7 @@ export class NavigationManager {
               this.cameraCtrl.isTransitioning = false;
               this.currentLevel = ZOOM_LEVELS.SUBDOMAIN;
               this.navigationPath = earlyPath;
-              if (this.onNavigate) this.onNavigate(this.navigationPath, this.currentLevel);
+              this._onNavigateDone(this.navigationPath, this.currentLevel);
             },
           });
           gsap.to(this.cameraCtrl.controls.target, { x: 0, y: 0, z: 0, duration: 2.6, ease: 'power3.in' });
@@ -662,8 +702,8 @@ export class NavigationManager {
         { level: ZOOM_LEVELS.COMPANY, id: company.id, name: company.name, data: company },
         { level: ZOOM_LEVELS.DEPARTMENT, id: department.id, name: department.name, data: department },
       ];
-      if (this.onNavigate) this.onNavigate(this.navigationPath, this.currentLevel);
       if (this.onSelect) this.onSelect(department);
+      this._onNavigateDone(this.navigationPath, this.currentLevel);
     });
   }
 
@@ -833,8 +873,28 @@ export class NavigationManager {
     this.galaxyParticles.setInsideIndustry(false);
     // Hide subdomain labels IMMEDIATELY — before any animation starts
     if (this.onNavigateBegin) this.onNavigateBegin([], ZOOM_LEVELS.GALAXY);
+    const workspaceActive = this.isTwinWorkspaceActive?.() ?? false;
     // Morph ALL opened orbit groups back
     this.systemParticles.systems.forEach(sys => {
+      if (workspaceActive) {
+        gsap.killTweensOf(sys.group.scale);
+        gsap.to(sys.group.scale, {
+          x: 0.001,
+          y: 0.001,
+          z: 0.001,
+          duration: 0.9,
+          ease: 'power3.inOut',
+          onComplete: () => {
+            sys.group.visible = false;
+          },
+        });
+        if (sys.glowMat) {
+          gsap.killTweensOf(sys.glowMat);
+          gsap.to(sys.glowMat, { opacity: 0, duration: 0.8, ease: 'power2.inOut' });
+        }
+        return;
+      }
+
       sys.group.visible = true;
       gsap.killTweensOf(sys.group.scale);
       gsap.killTweensOf(sys.group.position);
@@ -896,13 +956,207 @@ export class NavigationManager {
       this.selectedIndustry = null;
       this.selectedSubdomain = null;
       this.selectedCompany = null;
-      if (this.onNavigate) this.onNavigate(this.navigationPath, this.currentLevel);
+      if (this.onGalaxyNavigationComplete) this.onGalaxyNavigationComplete();
+      this._onNavigateDone(this.navigationPath, this.currentLevel);
     });
+  }
+
+  /** Restore industry/subdomain view after page refresh (no fly animations). */
+  restorePersistedView(persisted, industries) {
+    const industry = industries.find((i) => i.id === persisted.industryId);
+    if (!industry) {
+      clearUniverseNavState();
+      return false;
+    }
+
+    const idx = industries.findIndex((i) => i.id === industry.id);
+    if (idx < 0) {
+      clearUniverseNavState();
+      return false;
+    }
+
+    if (persisted.level === 'industry') {
+      this._snapToIndustry(industry, idx, persisted);
+      return true;
+    }
+
+    const subdomain = industry.subdomains?.find((s) => s.id === persisted.subdomainId);
+    if (!subdomain) {
+      clearUniverseNavState();
+      return false;
+    }
+
+    let company = null;
+    if (persisted.level === 'company' && persisted.companyId) {
+      company = subdomain.companies?.find((c) => c.id === persisted.companyId) ?? null;
+      if (company && this._isLoggedInCompany(company)) {
+        company = null;
+      }
+    }
+
+    this._snapToSubdomain(industry, subdomain, idx, persisted, company);
+    return true;
+  }
+
+  _applySavedCamera(persisted, fallbackPos, fallbackTarget) {
+    if (persisted?.cameraPosition && persisted?.cameraTarget) {
+      this.camera.position.fromArray(persisted.cameraPosition);
+      this.cameraCtrl.controls.target.fromArray(persisted.cameraTarget);
+      this.cameraCtrl.controls.update();
+      return;
+    }
+    if (fallbackPos && fallbackTarget) {
+      this.camera.position.copy(fallbackPos);
+      this.cameraCtrl.controls.target.copy(fallbackTarget);
+      this.cameraCtrl.controls.update();
+    }
+  }
+
+  _snapToIndustry(industry, idx, persisted) {
+    this.selectedIndustry = industry;
+    this.selectedSubdomain = null;
+    this.selectedCompany = null;
+    this.currentLevel = ZOOM_LEVELS.INDUSTRY;
+    this.cameraCtrl.currentLevel = ZOOM_LEVELS.INDUSTRY;
+    this.cameraCtrl.isTransitioning = false;
+    this.cameraCtrl.controls.autoRotate = false;
+    this.cameraCtrl.autoRotateEnabled = false;
+
+    this.galaxyParticles.applyInsideIndustryState(true);
+
+    const FAR_RADIUS = 20000;
+    const SIZE_SCALE = 0.08;
+    const activePos = this.galaxyParticles.getIndustryPosition(idx);
+
+    this.systemParticles.systems.forEach((sys, id) => {
+      gsap.killTweensOf(sys.group.position);
+      gsap.killTweensOf(sys.group.scale);
+      gsap.killTweensOf(sys.coreGroup?.scale);
+      sys.group.visible = true;
+
+      if (id !== industry.id) {
+        if (!sys.group.userData._origPos) {
+          sys.group.userData._origPos = sys.group.position.clone();
+        }
+        const orig = sys.group.userData._origPos;
+        const dir = orig.clone().sub(activePos);
+        if (dir.lengthSq() === 0) dir.set(1, 0, 0);
+        dir.normalize().multiplyScalar(FAR_RADIUS);
+        sys.group.position.copy(activePos.clone().add(dir));
+        sys.group.scale.setScalar(SIZE_SCALE);
+        return;
+      }
+
+      sys.group.scale.setScalar(1);
+      sys.coreGroup.scale.setScalar(1);
+      sys.coreGroup.position.set(0, 0, 0);
+      sys.orbitGroup.visible = true;
+      sys.orbitGroup.scale.setScalar(1);
+      sys.subdomainContainers.forEach((sd) => {
+        gsap.killTweensOf(sd.container.scale);
+        sd.container.scale.setScalar(1);
+      });
+      if (sys.dustMat?.uniforms?.uSize) {
+        gsap.killTweensOf(sys.dustMat.uniforms.uSize);
+        sys.dustMat.uniforms.uSize.value = 4.5;
+      }
+    });
+
+    const pos = this.galaxyParticles.getIndustryPosition(idx);
+    if (persisted?.cameraPosition && persisted?.cameraTarget) {
+      this._applySavedCamera(persisted);
+    } else {
+      this.cameraCtrl.snapTo(pos, 2500, ZOOM_LEVELS.INDUSTRY);
+    }
+
+    this.cameraCtrl.setZoomCap(5500);
+    this.navigationPath = [
+      { level: ZOOM_LEVELS.INDUSTRY, id: industry.id, name: industry.name, data: industry },
+    ];
+    this._onNavigateDone(this.navigationPath, this.currentLevel);
+  }
+
+  _snapToSubdomain(industry, subdomain, idx, persisted, company = null) {
+    this.selectedIndustry = industry;
+    this.selectedSubdomain = subdomain;
+    this.selectedCompany = company;
+    this.cameraCtrl.isTransitioning = false;
+    this.cameraCtrl.controls.autoRotate = false;
+    this.cameraCtrl.autoRotateEnabled = false;
+
+    this.galaxyParticles.setBHEnabled(false);
+    this.galaxyParticles.setVisible(false);
+    this.galaxyParticles.applySubdomainLevelState(true);
+
+    this.systemParticles.systems.forEach((sys, id) => {
+      gsap.killTweensOf(sys.group.scale);
+      if (id !== industry.id) {
+        sys.group.scale.set(0.001, 0.001, 0.001);
+        return;
+      }
+
+      sys.coreGroup.scale.set(0.001, 0.001, 0.001);
+      sys.subdomainContainers.forEach((sd, i) => {
+        const mesh = sys.subdomainMeshes[i];
+        gsap.killTweensOf(sd.container.scale);
+        if (mesh?.userData?.subdomain?.id !== subdomain.id) {
+          sd.container.scale.set(0.001, 0.001, 0.001);
+        } else {
+          sd.container.scale.setScalar(1);
+        }
+      });
+      if (sys.dustMat?.uniforms?.uSize) {
+        gsap.killTweensOf(sys.dustMat.uniforms.uSize);
+        sys.dustMat.uniforms.uSize.value = 0;
+      }
+    });
+
+    this.systemParticles.systems.forEach((s) => {
+      s.group.visible = false;
+    });
+
+    if (this._subdomainSolarSystem) {
+      this._subdomainSolarSystem.build(subdomain, industry);
+      this._subdomainSolarSystem.revealInstantly();
+    }
+
+    const defaultPos = new THREE.Vector3(0, 200, 750);
+    const defaultTarget = new THREE.Vector3(0, 0, 0);
+    this._applySavedCamera(persisted, defaultPos, defaultTarget);
+
+    if (company) {
+      this.currentLevel = ZOOM_LEVELS.COMPANY;
+      this.cameraCtrl.currentLevel = ZOOM_LEVELS.COMPANY;
+      this.navigationPath = [
+        { level: ZOOM_LEVELS.INDUSTRY, id: industry.id, name: industry.name, data: industry },
+        { level: ZOOM_LEVELS.SUBDOMAIN, id: subdomain.id, name: subdomain.name, data: subdomain },
+        { level: ZOOM_LEVELS.COMPANY, id: company.id, name: company.name, data: company },
+      ];
+    } else {
+      this.currentLevel = ZOOM_LEVELS.SUBDOMAIN;
+      this.cameraCtrl.currentLevel = ZOOM_LEVELS.SUBDOMAIN;
+      this.navigationPath = [
+        { level: ZOOM_LEVELS.INDUSTRY, id: industry.id, name: industry.name, data: industry },
+        { level: ZOOM_LEVELS.SUBDOMAIN, id: subdomain.id, name: subdomain.name, data: subdomain },
+      ];
+    }
+
+    this._onNavigateDone(this.navigationPath, this.currentLevel);
   }
 
   navigateToLevel(levelIndex) {
     if (levelIndex < 0) this.goToGalaxy();
     else if (levelIndex < this.navigationPath.length - 1) this.goBack();
+  }
+
+  setInteractionEnabled(enabled) {
+    this._interactionEnabled = enabled;
+    if (enabled) return;
+    if (this.hoveredObject) {
+      this._unhover(this.hoveredObject);
+      this.hoveredObject = null;
+      if (this.onHover) this.onHover(null);
+    }
   }
 
   dispose() {
