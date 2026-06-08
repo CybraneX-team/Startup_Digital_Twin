@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useEffect } from 'react';
+import { useCallback } from 'react';
 import {
   X, ChevronRight, Zap, Target,
   Users, BookOpen, TrendingUp, Shield, DollarSign, Search,
@@ -8,7 +8,7 @@ import {
   Bookmark, BookmarkCheck, ExternalLink,
 } from 'lucide-react';
 import type { PlanetActionNode, PlanetBranchNode, PlanetRootNode, CompanyPlanetContext } from '../../data/companyPlanetRoots';
-import { resolveVariant, SAMPLE_COMPETITORS } from './actionWorkspaceData';
+import { resolveVariant } from './actionWorkspaceData';
 import { useSavedWorkflows } from '../../lib/useSavedWorkflows';
 
 export interface ActionNodeWorkspaceProps {

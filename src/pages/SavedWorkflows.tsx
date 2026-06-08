@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Bookmark, BookmarkX, Search, X, ChevronRight, ChevronDown, ChevronUp,
   ExternalLink, Trash2, StickyNote, Clock, Briefcase, TrendingUp, GraduationCap,
-  Globe, Layers, ArrowLeft, Filter, Star, Sparkles, Zap,
+  Globe, Layers, ArrowLeft, Filter, Sparkles,
 } from 'lucide-react';
 import {
   useSavedWorkflows,
@@ -41,29 +41,13 @@ const ROLE_BORDER: Record<UserPlanetRole, string> = {
   investor: 'rgba(34,211,238,0.3)',
 };
 
-const ROLE_GLOW: Record<UserPlanetRole, string> = {
-  career: 'rgba(96,165,250,0.12)',
-  founder: 'rgba(249,115,22,0.12)',
-  investor: 'rgba(34,211,238,0.12)',
-};
-
 const ROLE_BG_GRADIENT: Record<UserPlanetRole, string> = {
   career: 'linear-gradient(135deg, rgba(96,165,250,0.08) 0%, rgba(167,139,250,0.05) 100%)',
   founder: 'linear-gradient(135deg, rgba(249,115,22,0.08) 0%, rgba(251,146,60,0.05) 100%)',
   investor: 'linear-gradient(135deg, rgba(34,211,238,0.08) 0%, rgba(52,211,153,0.05) 100%)',
 };
 
-function buildWorkspaceUrl(item: SavedWorkflowItem): string {
-  const params = new URLSearchParams({
-    companyId: item.companyId,
-    companyName: item.companyName,
-    role: item.role,
-    rootId: item.rootId,
-    branchId: item.branchId ?? '',
-    actionId: item.actionId ?? '',
-  });
-  return `/workspace?${params.toString()}`;
-}
+
 
 // ── Empty State ───────────────────────────────────────────────────────────────
 

@@ -111,7 +111,7 @@ export function RootInternalNodeScene({
     }
   }, [camera]);
 
-  const handleInternalClick = (path: string[], targetPos: THREE.Vector3) => {
+  const handleInternalClick = (path: string[], _targetPos: THREE.Vector3) => {
     if (path.length === 0) {
       onPathChange([]);
       flyToRootOverview();
