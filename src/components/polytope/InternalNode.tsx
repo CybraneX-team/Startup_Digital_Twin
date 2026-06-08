@@ -20,6 +20,7 @@ interface InternalNodeProps {
   setBackInfo: (info: { label: string; onClick: () => void } | null) => void;
   isDraft?: boolean;
   draftChildNode?: UInternalNode | null;
+  onNodeFocus?: (pos: THREE.Vector3) => void;
 }
 
 export function InternalNode({
@@ -37,6 +38,7 @@ export function InternalNode({
   setBackInfo,
   isDraft = false,
   draftChildNode = null,
+  onNodeFocus,
 }: InternalNodeProps) {
   const groupRef = useRef<THREE.Group>(null);
   const currentPos = useRef(startPos.clone());
@@ -131,9 +133,12 @@ export function InternalNode({
         label: parentLabel,
         onClick: () => onSelectPath(pathContext, parentPos),
       });
-      return () => setBackInfo(null);
+      if (onNodeFocus) onNodeFocus(targetPos);
+      return () => {
+        setBackInfo(null);
+      };
     }
-  }, [isMeActiveCenter, parentLabel, pathContext, parentPos, onSelectPath, setBackInfo]);
+  }, [isMeActiveCenter, parentLabel, pathContext, parentPos, onSelectPath, setBackInfo, onNodeFocus, targetPos]);
 
   useFrame(() => {
     if (groupRef.current) {
@@ -230,6 +235,7 @@ export function InternalNode({
             parentLabel={node.label}
             setBackInfo={setBackInfo}
             draftChildNode={draftChildNode}
+            onNodeFocus={onNodeFocus}
           />
         );
       })}
@@ -250,6 +256,7 @@ export function InternalNode({
           parentLabel={node.label}
           setBackInfo={setBackInfo}
           isDraft
+          onNodeFocus={onNodeFocus}
         />
       )}
 

@@ -1,7 +1,10 @@
 import { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import { Bookmark, BookmarkCheck } from 'lucide-react';
 import type { CompanyPlanetContext } from '../data/companyPlanetRoots';
-import { getExploreLevel, getPlanetNodesAtPath, canDrillInto } from '../data/companyPlanetRoots';
+import { getPlanetNodesAtPath, canDrillInto } from '../data/companyPlanetRoots';
 import { EnergyOrb2D, EnergyOrbLabel2D, computeRootLabelLayouts } from './planet/EnergyOrb2D';
+import { useSavedWorkflows } from '../lib/useSavedWorkflows';
+import type { SavedItemLevel } from '../lib/useSavedWorkflows';
 
 export const ROOT_FOCUS_FADE_MS = 480;
 export const ROOT_FOCUS_ZOOM_MS = 920;
@@ -18,6 +21,7 @@ export interface CompanyPlanet2DViewProps {
   onFocusTransitionComplete: (rootId: string) => void;
   onDrillInto: (nodeId: string) => void;
   onDrillBack: () => void;
+  onActionNodeClick?: (rootId: string, branchId: string, actionId: string) => void;
   industryColor?: string;
 }
 
@@ -78,15 +82,83 @@ export default function CompanyPlanet2DView({
   onFocusTransitionComplete,
   onDrillInto,
   onDrillBack,
+  onActionNodeClick,
   industryColor = '#C1AEFF',
 }: CompanyPlanet2DViewProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [animKey, setAnimKey] = useState(0);
   const [entranceKey, setEntranceKey] = useState(0);
   const [orbitPhase, setOrbitPhase] = useState<'deploying' | 'orbiting'>('deploying');
+  const [labelsReady, setLabelsReady] = useState(false);
   const [focusRootId, setFocusRootId] = useState<string | null>(null);
   const [focusPhase, setFocusPhase] = useState<RootFocusPhase>('idle');
   const timersRef = useRef<number[]>([]);
+
+  // ── Saved workflows hook ───────────────────────────────────────────
+  const { save, has, remove, items } = useSavedWorkflows();
+  const [justSavedId, setJustSavedId] = useState<string | null>(null);
+
+  const handleBookmark = useCallback((nodeId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    // Determine level and IDs from current path + nodeId
+    let level: SavedItemLevel;
+    let rootId: string, branchId: string | undefined, actionId: string | undefined;
+    let rootNode = context.roots[0];
+    let branchNode: (typeof rootNode.branches)[0] | undefined;
+
+    if (depth === 0) {
+      level = 'root';
+      rootId = nodeId;
+      rootNode = context.roots.find(r => r.id === nodeId) ?? context.roots[0];
+    } else if (depth === 1) {
+      level = 'branch';
+      rootId = path[0];
+      branchId = nodeId;
+      rootNode = context.roots.find(r => r.id === rootId) ?? context.roots[0];
+      branchNode = rootNode.branches.find(b => b.id === nodeId);
+    } else {
+      level = 'action';
+      rootId = path[0];
+      branchId = path[1];
+      actionId = nodeId;
+      rootNode = context.roots.find(r => r.id === rootId) ?? context.roots[0];
+      branchNode = rootNode.branches.find(b => b.id === branchId);
+    }
+
+    // Check if already saved — find the matching saved item to get its id for removal
+    const isSaved = has({ companyId: context.companyId, role: context.role, rootId, branchId, actionId });
+
+    if (isSaved) {
+      const savedItem = items.find(it =>
+        it.companyId === context.companyId &&
+        it.role === context.role &&
+        it.rootId === rootId &&
+        (it.branchId ?? '') === (branchId ?? '') &&
+        (it.actionId ?? '') === (actionId ?? '')
+      );
+      if (savedItem) remove(savedItem.id);
+      return;
+    }
+
+    save({
+      level,
+      companyId: context.companyId,
+      companyName: context.companyName,
+      role: context.role,
+      roleLabel: context.roleLabel,
+      rootId,
+      rootLabel: rootNode.label,
+      rootColor: rootNode.color,
+      rootDescription: rootNode.description,
+      branchId,
+      branchLabel: branchNode?.label,
+      actionId,
+      actionLabel: depth === 2 ? (branchNode?.actions.find(a => a.id === nodeId)?.label) : undefined,
+      actionHint: depth === 2 ? (branchNode?.actions.find(a => a.id === nodeId)?.hint) : undefined,
+    });
+    setJustSavedId(nodeId);
+    setTimeout(() => setJustSavedId(null), 2000);
+  }, [depth, path, context, has, items, remove, save]);
 
   const isTransitioning = focusPhase !== 'idle';
   const isZooming = focusPhase === 'zoom' || focusPhase === 'handoff';
@@ -130,15 +202,20 @@ export default function CompanyPlanet2DView({
   useEffect(() => {
     if (depth !== 0) return;
     setOrbitPhase('deploying');
-    const t = window.setTimeout(() => setOrbitPhase('orbiting'), ORBIT_FORM_MS);
-    return () => window.clearTimeout(t);
+    setLabelsReady(false);
+    // Labels appear right after orbs finish flying in — no need to wait for the full ring draw
+    const labelTimer = window.setTimeout(() => setLabelsReady(true), ORBIT_SPOKE_ANIM_MS + 80);
+    const orbitTimer = window.setTimeout(() => setOrbitPhase('orbiting'), ORBIT_FORM_MS);
+    return () => {
+      window.clearTimeout(labelTimer);
+      window.clearTimeout(orbitTimer);
+    };
   }, [entranceKey, depth]);
 
   const nodes = useMemo(() => getPlanetNodesAtPath(context, path), [context, path]);
   const isDeploying = depth === 0 && !isTransitioning && orbitPhase === 'deploying';
   const isOrbiting = depth === 0 && !isTransitioning && orbitPhase === 'orbiting';
-  const showRootLabels = depth === 0 && !isDeploying;
-  const level = getExploreLevel(depth);
+  const showRootLabels = depth === 0 && labelsReady && !isTransitioning;
   const orbitRingR = ringRadius(depth, nodes.length);
   const orbitCircumference = 2 * Math.PI * orbitRingR;
 
@@ -219,6 +296,11 @@ export default function CompanyPlanet2DView({
     if (canDrillInto(context, path, nodeId)) {
       setAnimKey(k => k + 1);
       onDrillInto(nodeId);
+      return;
+    }
+    // Leaf action node clicked (depth=2, no children) → open workspace
+    if (depth === 2 && onActionNodeClick && path.length >= 2) {
+      onActionNodeClick(path[0], path[1], nodeId);
     }
   };
 
@@ -360,7 +442,7 @@ export default function CompanyPlanet2DView({
                     repeatCount="indefinite"
                   />
                 )}
-                {layout.map((node, nodeIndex) => {
+                {layout.map((node) => {
                   const r = orbRadius(node.relevance, depth);
                   const isHovered = hoveredId === node.id && !isTransitioning;
                   const isFocus = node.id === focusRootId;
@@ -369,7 +451,6 @@ export default function CompanyPlanet2DView({
                   const labelAngle = node.angle;
                   const lx = node.localX ?? node.x - CX;
                   const ly = node.localY ?? node.y - CY;
-                  const nodeCount = Math.max(layout.length, 1);
                   const orbitPos = `translate(${lx}, ${ly})`;
 
                   const orbContent = (
@@ -423,8 +504,6 @@ export default function CompanyPlanet2DView({
                           style={{
                             ['--orb-lx' as string]: `${lx}`,
                             ['--orb-ly' as string]: `${ly}`,
-                            ['--orb-i' as string]: String(nodeIndex),
-                            ['--orb-n' as string]: String(nodeCount),
                           }}
                         >
                           {orbContent}
@@ -481,17 +560,68 @@ export default function CompanyPlanet2DView({
         </svg>
       </div>
 
-      <div
-        className="absolute bottom-8 left-1/2 -translate-x-1/2 px-4 py-2 rounded-full text-[10px] tracking-widest uppercase font-semibold transition-opacity duration-300 pointer-events-none"
-        style={{
-          color: '#5E5E5E',
-          background: 'rgba(0,0,0,0.55)',
-          border: `1px solid ${industryColor}22`,
-          opacity: isTransitioning ? 0 : 1,
-        }}
-      >
-        {level === 'roots' ? 'Select a root' : level === 'branches' ? 'Branches' : 'Actions'}
-      </div>
+      {/* ── Bookmark overlays positioned as HTML on top of the SVG ── */}
+      {!isTransitioning && (
+        <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 20 }}>
+          {layout.map(node => {
+            // Convert SVG coords (0-800) to % of container
+            const lx = (node.localX ?? node.x - CX) + CX;
+            const ly = (node.localY ?? node.y - CY) + CY;
+            const xPct = (lx / 800) * 100;
+            const yPct = (ly / 800) * 100;
+
+            const rootId = depth === 0 ? node.id : path[0];
+            const branchId = depth === 1 ? node.id : depth >= 2 ? path[1] : undefined;
+            const actionId = depth === 2 ? node.id : undefined;
+
+            const isSaved = has({
+              companyId: context.companyId,
+              role: context.role,
+              rootId,
+              branchId,
+              actionId,
+            });
+            const justSaved = justSavedId === node.id;
+            const isNodeHovered = hoveredId === node.id;
+
+            return (
+              <div
+                key={`bm-${node.id}`}
+                className="absolute pointer-events-auto"
+                style={{
+                  left: `${xPct}%`,
+                  top: `${yPct}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              >
+                <button
+                  onClick={(e) => handleBookmark(node.id, e)}
+                  className="flex items-center justify-center rounded-full transition-all duration-200"
+                  title={isSaved ? 'Remove bookmark' : 'Save workflow'}
+                  style={{
+                    width: 22,
+                    height: 22,
+                    marginTop: -orbRadius(node.relevance, depth) - 14,
+                    background: isSaved || justSaved
+                      ? `${node.color}30`
+                      : 'rgba(0,0,0,0.55)',
+                    border: `1px solid ${isSaved || justSaved ? node.color + '60' : 'rgba(255,255,255,0.12)'}`,
+                    opacity: isNodeHovered || isSaved ? 1 : 0,
+                    boxShadow: isSaved ? `0 0 10px ${node.color}40` : 'none',
+                    backdropFilter: 'blur(4px)',
+                    cursor: 'pointer',
+                    transition: 'opacity 0.2s, background 0.2s, border-color 0.2s',
+                  }}
+                >
+                  {isSaved || justSaved
+                    ? <BookmarkCheck style={{ width: 10, height: 10, color: node.color }} />
+                    : <Bookmark style={{ width: 10, height: 10, color: 'rgba(255,255,255,0.5)' }} />}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <style>{`
         @keyframes planet2dOrbDeploy {
@@ -547,7 +677,6 @@ export default function CompanyPlanet2DView({
         .planet2d-orb-deploy {
           transform-origin: 0px 0px;
           animation: planet2dOrbDeploy ${ORBIT_SPOKE_ANIM_MS}ms cubic-bezier(0.22, 0.85, 0.28, 1) forwards;
-          animation-delay: calc((var(--orb-i) / var(--orb-n)) * ${ORBIT_FORM_MS * 0.62}ms);
         }
         .planet2d-orbit-ring-draw {
           animation: planet2dRingDraw ${ORBIT_FORM_MS}ms cubic-bezier(0.22, 0.85, 0.28, 1) forwards;

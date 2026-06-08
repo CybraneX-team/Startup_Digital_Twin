@@ -289,10 +289,10 @@ export class CompanyPlanetRootView {
       this._lines.push(line);
 
       if (animateIn) {
-        gsap.to(mesh.scale, { x: 1, y: 1, z: 1, duration: 0.6, delay: i * 0.05, ease: 'back.out(1.7)' });
-        gsap.to(mesh.material, { opacity: 1, duration: 0.45, delay: i * 0.05 });
-        gsap.to(lineMat, { opacity: 0.35, duration: 0.45, delay: i * 0.05 });
-        gsap.from(mesh.rotation, { y: Math.PI * 2, duration: 0.85, delay: i * 0.05, ease: 'power2.out' });
+        gsap.to(mesh.scale, { x: 1, y: 1, z: 1, duration: 0.7, ease: 'back.out(1.7)' });
+        gsap.to(mesh.material, { opacity: 1, duration: 0.5 });
+        gsap.to(lineMat, { opacity: 0.35, duration: 0.5 });
+        gsap.from(mesh.rotation, { y: Math.PI * 2, duration: 0.9, ease: 'power2.out' });
       } else {
         mesh.material.opacity = 1;
       }
@@ -310,17 +310,16 @@ export class CompanyPlanetRootView {
       gsap.to(m.scale, {
         x: 0.001, y: 0.001, z: 0.001,
         duration: outDur,
-        delay: i * 0.02,
         ease: 'power2.in',
         onComplete: () => resolve(),
       });
       if (m.material) {
-        gsap.to(m.material, { opacity: 0, duration: outDur * 0.9, delay: i * 0.02 });
+        gsap.to(m.material, { opacity: 0, duration: outDur * 0.9 });
       }
     }));
 
     this._lines.forEach((l, i) => {
-      if (l.material) gsap.to(l.material, { opacity: 0, duration: outDur * 0.9, delay: i * 0.02 });
+      if (l.material) gsap.to(l.material, { opacity: 0, duration: outDur * 0.9 });
     });
 
     Promise.all(promises).then(() => {

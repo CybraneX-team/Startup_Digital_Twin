@@ -26,6 +26,8 @@ import IncubatorAuthPage from './pages/IncubatorAuthPage';
 import LandingNew from './pages/LandingNew';
 import PolytopePage from './pages/PolytopePage';
 import UniversalPage from './pages/UniversalPage';
+import WorkspacePage from './pages/WorkspacePage';
+import SavedWorkflows from './pages/SavedWorkflows';
 
 function FullPageLoader() {
   return (
@@ -253,6 +255,20 @@ function AppRoutes() {
                 <Route path="/universal" element={
                   <AuthGuard requireOnboarding>
                     <UniversalPage />
+                  </AuthGuard>
+                } />
+
+                {/* /workspace — standalone action node workspace */}
+                <Route path="/workspace" element={
+                  <AuthGuard>
+                    <WorkspacePage />
+                  </AuthGuard>
+                } />
+
+                {/* /saved — saved workflows library */}
+                <Route path="/saved" element={
+                  <AuthGuard>
+                    <SavedWorkflows />
                   </AuthGuard>
                 } />
 

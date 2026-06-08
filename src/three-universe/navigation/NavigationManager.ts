@@ -67,12 +67,14 @@ export class NavigationManager {
   _bind() {
     this._onClick = this._onClick.bind(this);
     this._onMove = this._onMove.bind(this);
+    this._onMouseLeave = this._onMouseLeave.bind(this);
     this._onKey = this._onKey.bind(this);
   }
 
   _initEvents() {
     this.canvas.addEventListener('click', this._onClick);
     this.canvas.addEventListener('mousemove', this._onMove);
+    this.canvas.addEventListener('mouseleave', this._onMouseLeave);
     window.addEventListener('keydown', this._onKey);
   }
 
@@ -83,6 +85,19 @@ export class NavigationManager {
   }
 
   _onMove(e) { this._setMouse(e); this._hover(); }
+  _onMouseLeave(e) {
+    if (this.hoveredObject) {
+      this._unhover(this.hoveredObject);
+      this.hoveredObject = null;
+      this.canvas.style.cursor = 'default';
+      if (this.onHover) this.onHover(null);
+    }
+    if (this.currentLevel === ZOOM_LEVELS.GALAXY && this._hoveredIndustryId) {
+      this._hoveredIndustryId = null;
+      this.canvas.style.cursor = 'default';
+      if (this.onHover) this.onHover(null);
+    }
+  }
   _onClick(e) { if (!this.cameraCtrl.isTransitioning) { this._setMouse(e); this._click(); } }
   _onKey(e) { 
     if (e.key === 'Escape') { 

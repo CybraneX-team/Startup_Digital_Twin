@@ -36,11 +36,6 @@ export function RootInternalNodeScene({
   const rootVisualRef = useRef<THREE.Group>(null);
   const rootEdgesMatRef = useRef<THREE.LineBasicMaterial>(null);
   const isDeepDrillDown = selectedInternalPath.length > 0;
-  const cameraHistoryRef = useRef<Array<{
-    path: string[];
-    orbitTarget: THREE.Vector3;
-    camPos: THREE.Vector3;
-  }>>([]);
   const prevBackStepRef = useRef(0);
   const setBackInfo = useCallback((_info: { label: string; onClick: () => void } | null) => {}, []);
 
@@ -62,7 +57,12 @@ export function RootInternalNodeScene({
   }, [internalPositions]);
 
   useEffect(() => {
-    cameraHistoryRef.current = [];
+    if (selectedInternalPath.length > 0) {
+      // If we mount directly into a deep path, don't play the root zoom-out animation
+      // The InternalNode will trigger onNodeFocus
+      return;
+    }
+    
     camera.position.set(0, 0, CAMERA_ZOOM_IN);
     if (orbitRef.current) {
       orbitRef.current.target.set(ROOT_POS.x, ROOT_POS.y, ROOT_POS.z);
@@ -102,54 +102,36 @@ export function RootInternalNodeScene({
     gsap.to(camera.position, { x: 0, y: 0, z: CAMERA_DIST, duration: 1.0, ease: 'power2.inOut' });
   }, [camera]);
 
-  const handleInternalClick = (path: string[], targetPos: THREE.Vector3) => {
-    if (path.length === 0) {
-      cameraHistoryRef.current = [];
-      onPathChange([]);
-      flyToRootOverview();
-      return;
-    }
-
-    if (orbitRef.current) {
-      cameraHistoryRef.current.push({
-        path: selectedInternalPath,
-        orbitTarget: orbitRef.current.target.clone(),
-        camPos: camera.position.clone(),
-      });
-    }
-    onPathChange(path);
+  const handleNodeFocus = useCallback((targetPos: THREE.Vector3) => {
     if (orbitRef.current) {
       gsap.to(orbitRef.current.target, { x: targetPos.x, y: targetPos.y, z: targetPos.z, duration: 1.0, ease: 'power2.inOut' });
       const dir = targetPos.clone().sub(ROOT_POS).normalize();
       const targetCamPos = targetPos.clone().add(dir.multiplyScalar(10));
       gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.0, ease: 'power2.inOut' });
     }
+  }, [camera]);
+
+  const handleInternalClick = (path: string[], targetPos: THREE.Vector3) => {
+    if (path.length === 0) {
+      onPathChange([]);
+      flyToRootOverview();
+      return;
+    }
+    onPathChange(path);
+    // targetPos camera animation will be handled by handleNodeFocus triggered by InternalNode
   };
 
   useEffect(() => {
     if (!requestBackStep || requestBackStep === prevBackStepRef.current) return;
     prevBackStepRef.current = requestBackStep;
 
-    const history = cameraHistoryRef.current;
-    if (history.length > 0) {
-      const prev = history[history.length - 1];
-      cameraHistoryRef.current = history.slice(0, -1);
-      onPathChange(prev.path);
-      if (orbitRef.current) {
-        gsap.to(orbitRef.current.target, {
-          x: prev.orbitTarget.x, y: prev.orbitTarget.y, z: prev.orbitTarget.z,
-          duration: 1.0, ease: 'power2.inOut',
-        });
-        gsap.to(camera.position, {
-          x: prev.camPos.x, y: prev.camPos.y, z: prev.camPos.z,
-          duration: 1.0, ease: 'power2.inOut',
-        });
-      }
+    if (selectedInternalPath.length > 0) {
+      onPathChange(selectedInternalPath.slice(0, -1));
     } else {
       onPathChange([]);
       flyToRootOverview();
     }
-  }, [requestBackStep, onPathChange, camera, flyToRootOverview]);
+  }, [requestBackStep, onPathChange, selectedInternalPath, flyToRootOverview]);
 
   useFrame(() => {
     if (rootVisualRef.current) {
@@ -240,6 +222,7 @@ export function RootInternalNodeScene({
               isVisible={isChildVisible}
               parentLabel={root.label}
               setBackInfo={setBackInfo}
+              onNodeFocus={handleNodeFocus}
             />
           );
         })}

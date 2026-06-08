@@ -1,6 +1,8 @@
+import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Hexagon, LogOut, LogIn } from 'lucide-react';
+import { Hexagon, LogOut, LogIn, Bookmark } from 'lucide-react';
 import { useAuth } from '../lib/auth';
+import { useSavedWorkflows } from '../lib/useSavedWorkflows';
 
 export default function TopBar() {
   const location = useLocation();
@@ -12,10 +14,26 @@ export default function TopBar() {
   const isTwin      = (location.pathname.startsWith('/twin') || location.pathname === '/3d') && !isData;
   const isOverview  = location.pathname.startsWith('/overview');
   const isUniversal = location.pathname === '/universal';
+  const isSaved     = location.pathname === '/saved';
 
   const isAuthed     = !!user;
   const hasCompany   = !!profile?.company_id;
   const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
+
+  const { totalCount: savedCount } = useSavedWorkflows();
+
+  // On /3d, hide the bookmark button until the user has entered a company planet
+  const [companyEnteredIn3D, setCompanyEnteredIn3D] = useState(
+    () => !!sessionStorage.getItem('company_entered_in_3d')
+  );
+  useEffect(() => {
+    const handler = () => setCompanyEnteredIn3D(true);
+    window.addEventListener('company_entered_in_3d', handler);
+    return () => window.removeEventListener('company_entered_in_3d', handler);
+  }, []);
+
+  // Bookmark button is visible when: not on /3d, OR on /3d and a company has been entered
+  const showBookmark = !is3D || companyEnteredIn3D;
 
   const initials = profile?.first_name
     ? `${profile.first_name[0]}${profile.last_name?.[0] ?? ''}`.toUpperCase()
@@ -26,6 +44,15 @@ export default function TopBar() {
     await signOut();
     navigate('/');
   }
+
+  const [workspaceOpen, setWorkspaceOpen] = useState(false);
+  useEffect(() => {
+    const handler = (e: any) => setWorkspaceOpen(e.detail);
+    window.addEventListener('workspace_toggled', handler);
+    return () => window.removeEventListener('workspace_toggled', handler);
+  }, []);
+
+  if (workspaceOpen || isSaved) return null;
 
   // ── Tabs ─────────────────────────────────────────────────────────────────
   const tabs = isBypassUser
@@ -169,6 +196,47 @@ export default function TopBar() {
                 <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#34d399', boxShadow: '0 0 6px #34d399' }} />
                 {profile?.first_name ? `${profile.first_name}'s workspace` : 'My workspace'}
               </div>
+            )}
+
+            {/* Saved Workflows bookmark button — hidden on /3d until a company is entered */}
+            {showBookmark && (
+              <button
+                onClick={() => navigate('/saved')}
+                className="relative w-8 h-8 rounded-lg flex items-center justify-center transition-all"
+                style={{
+                  color: isSaved ? '#C1AEFF' : 'rgba(255,255,255,0.35)',
+                  background: isSaved ? 'rgba(193,174,255,0.12)' : 'rgba(255,255,255,0.04)',
+                  border: isSaved ? '1px solid rgba(193,174,255,0.25)' : '1px solid rgba(255,255,255,0.06)',
+                  boxShadow: isSaved ? '0 0 12px rgba(193,174,255,0.2)' : 'none',
+                }}
+                onMouseEnter={e => {
+                  if (!isSaved) {
+                    (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.65)';
+                    (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.08)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!isSaved) {
+                    (e.currentTarget as HTMLElement).style.color = 'rgba(255,255,255,0.35)';
+                    (e.currentTarget as HTMLElement).style.background = 'rgba(255,255,255,0.04)';
+                  }
+                }}
+                title={`Saved Workflows${savedCount > 0 ? ` (${savedCount})` : ''}`}
+              >
+                <Bookmark className="w-4 h-4" />
+                {savedCount > 0 && (
+                  <span
+                    className="absolute -top-1 -right-1 min-w-[14px] h-[14px] rounded-full flex items-center justify-center text-[8px] font-bold px-0.5"
+                    style={{
+                      background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)',
+                      color: '#0d0b1e',
+                      boxShadow: '0 0 6px rgba(193,174,255,0.6)',
+                    }}
+                  >
+                    {savedCount > 99 ? '99+' : savedCount}
+                  </span>
+                )}
+              </button>
             )}
 
             {/* Avatar */}

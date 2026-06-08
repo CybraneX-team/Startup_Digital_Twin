@@ -72,14 +72,10 @@ export function OrgCore({
             textAlign="center"
             anchorX="center"
             anchorY="middle"
-            fillOpacity={
-              isDeepDrillDown ? 0 : dimmed || showWorkspaceCta ? 0.95 : 0
-            }
+            fillOpacity={isDeepDrillDown ? 0 : dimmed ? 0.65 : 0.92}
             outlineWidth={0.01}
             outlineColor="#0f172a"
-            outlineOpacity={
-              isDeepDrillDown ? 0 : dimmed || showWorkspaceCta ? 0.6 : 0
-            }
+            outlineOpacity={isDeepDrillDown ? 0 : dimmed ? 0.35 : 0.6}
           >
             {companyName}
           </Text>
@@ -91,9 +87,7 @@ export function OrgCore({
             textAlign="center"
             anchorX="center"
             anchorY="middle"
-            fillOpacity={
-              isDeepDrillDown ? 0 : dimmed || showWorkspaceCta ? 0.65 : 0
-            }
+            fillOpacity={isDeepDrillDown ? 0 : dimmed ? 0.4 : 0.65}
           >
             CORE
           </Text>

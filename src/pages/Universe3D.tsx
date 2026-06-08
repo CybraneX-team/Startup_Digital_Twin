@@ -4,6 +4,7 @@ import { Loader2, Plus, Search, Command } from 'lucide-react';
 import UniverseCanvas from '../three-universe/UniverseCanvas';
 import { useUniverseGraph } from '../data/universeGraph';
 import { useAuth } from '../lib/auth';
+import { useCompany } from '../lib/db/companies';
 import { UniverseController, type NavPathEntry, type ZoomLevel, type HoverTarget, ZOOM_LEVELS } from '../three-universe/UniverseController';
 import type { UniverseIndustry, UniverseSubdomain } from '../data/universeGraph';
 import CreateCompanyModal from '../components/CreateCompanyModal';
@@ -26,6 +27,7 @@ import {
 import { usePolytopeStore } from '../lib/usePolytopeStore';
 import { SearchTrie} from '../lib/SearchTrie';
 import type { UExternalNode, UInternalNode } from '../lib/usePolytopeStore';
+import { ActionNodeWorkspace } from '../components/workspace/ActionNodeWorkspace';
 
 // ── Side Panel ───────────────────────────────────────────────────────────────
 
@@ -217,12 +219,18 @@ function SidePanel({ data, navPath, currentLevel, controllerRef, onAddCompany, s
 
 export default function Universe3DPage() {
   const navigate = useNavigate();
-  const { pathname } = useLocation();
+  const { pathname, state } = useLocation();
   const { user, profile, canRead } = useAuth();
+  const { company } = useCompany(profile?.company_id);
   // Bypass users (VC/Incubator) have no company — pass null so the universe loads without waiting
   const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
   const companyId = isBypassUser ? null : (user ? (profile?.company_id ?? null) : undefined);
   const { data, loading, error, appendLocalCompany } = useUniverseGraph(companyId);
+
+  // Company name for the polytope core sphere — same fallback chain as UniversalPage
+  const bhCompanyName = company?.name || (profile?.company_id
+    ? profile?.first_name ? `${profile.first_name}'s workspace` : 'My workspace'
+    : 'My Organisation');
 
   const controllerRef = useRef<UniverseController | null>(null);
   const [navPath, setNavPath] = useState<NavPathEntry[]>([]);
@@ -439,6 +447,9 @@ export default function Universe3DPage() {
     setRoleModal(null);
     setPlanetIndustryColor(roleModal.industry.color);
     setInsidePlanetRoots(true);
+    // Signal to TopBar that a company planet has been entered this session
+    sessionStorage.setItem('company_entered_in_3d', '1');
+    window.dispatchEvent(new Event('company_entered_in_3d'));
   }, [roleModal]);
 
   const handleRoleModalClose = useCallback(() => {
@@ -491,10 +502,78 @@ export default function Universe3DPage() {
     window.setTimeout(() => setRootPolytopeInternalPath([branchId]), ROOT_FOCUS_TOTAL_MS + 450);
   }, [beginRootFocus]);
 
-  const handlePlanetActionSelect = useCallback((rootId: string, branchId: string, actionId: string) => {
-    beginRootFocus(rootId);
-    window.setTimeout(() => setRootPolytopeInternalPath([branchId, actionId]), ROOT_FOCUS_TOTAL_MS + 450);
-  }, [beginRootFocus]);
+  // ── Action Node Workspace ──────────────────────────────────────────────────
+  const [actionWorkspace, setActionWorkspace] = useState<{
+      rootId: string;
+    branchId: string;
+    actionId: string;
+  } | null>(null);
+
+  const [delayedActionWorkspace, setDelayedActionWorkspace] = useState(actionWorkspace);
+
+  useEffect(() => {
+    if (actionWorkspace) {
+      setDelayedActionWorkspace(actionWorkspace);
+    } else {
+      const t = setTimeout(() => setDelayedActionWorkspace(null), 500);
+      return () => clearTimeout(t);
+    }
+  }, [actionWorkspace]);
+
+  useEffect(() => {
+    if (pathname === '/3d' && state?.actionWorkspaceContext) {
+      const item = state.actionWorkspaceContext;
+      const ctx = getPlanetRootsForCompany(item.companyId, item.companyName, item.role);
+      
+      setPlanetContext(ctx);
+      setInsidePlanetRoots(true);
+      
+      setRootPolytopeMounted(true);
+      setRootPolytopeDepts(rootsToPolytopeDepartments(ctx.roots));
+      setRootPolytopeDeptId(item.rootId);
+      setRootPolytopeInternalPath([item.branchId, item.actionId]);
+      setInsideRootPolytope(true);
+      
+      setActionWorkspace({
+        rootId: item.rootId,
+        branchId: item.branchId,
+        actionId: item.actionId,
+      });
+
+      // Clear state so it doesn't reopen if navigating back
+      navigate('/3d', { replace: true, state: {} });
+    }
+  }, [pathname, state, navigate]);
+
+  const handleActionNodeClick = useCallback((rootId: string, branchId: string, actionId: string) => {
+    if (!planetContext) return;
+    setActionWorkspace({ rootId, branchId, actionId });
+  }, [planetContext]);
+
+  const handleCloseActionWorkspace = useCallback(() => {
+    setActionWorkspace(null);
+    setRootPolytopeBackStep(c => c + 1);
+  }, []);
+
+  // Resolve nodes from context for the workspace using delayed state for exit animation
+  const resolvedWorkspaceNodes = useMemo(() => {
+    if (!delayedActionWorkspace || !planetContext) return null;
+    const root = planetContext.roots.find(r => r.id === delayedActionWorkspace.rootId);
+    if (!root) return null;
+    const branch = root.branches.find(b => b.id === delayedActionWorkspace.branchId);
+    if (!branch) return null;
+    const action = branch.actions.find(a => a.id === delayedActionWorkspace.actionId);
+    if (!action) return null;
+    return { root, branch, action };
+  }, [delayedActionWorkspace, planetContext]);
+
+  // Hide TopBar when workspace opens
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('workspace_toggled', { detail: !!actionWorkspace }));
+    return () => {
+      window.dispatchEvent(new CustomEvent('workspace_toggled', { detail: false }));
+    };
+  }, [actionWorkspace]);
 
   const handleExitCompanyInterior = useCallback(() => {
     controllerRef.current?.exitCompanyPolytope();
@@ -565,6 +644,17 @@ export default function Universe3DPage() {
     controllerRef.current?.exitCompanyPolytope();
   }, [pathname]);
 
+  // Listen for 'Close Workspace' signal from the new tab to zoom back out
+  useEffect(() => {
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'ACTION_WORKSPACE_CLOSED') {
+        setRootPolytopeBackStep(c => c + 1);
+      }
+    };
+    window.addEventListener('message', handler);
+    return () => window.removeEventListener('message', handler);
+  }, []);
+
   const handleNavigate = useCallback((path: NavPathEntry[], level: ZoomLevel) => {
     setNavPath([...path]);
     setCurrentLevel(level);
@@ -589,6 +679,10 @@ export default function Universe3DPage() {
         searchInputRef.current?.focus();
       }
       if (e.key === 'Escape') {
+        if (actionWorkspace) {
+          setActionWorkspace(null);
+          return;
+        }
         if (roleModal) {
           handleRoleModalClose();
           return;
@@ -617,7 +711,7 @@ export default function Universe3DPage() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [createModal, roleModal, handleRoleModalClose, insideRootPolytope, insidePlanetRoots, planetContext, rootPolytopeInternalPath, rootPolytopeDeptId, handleExitRootPolytope, handleExitPlanetRoots]);
+  }, [createModal, roleModal, handleRoleModalClose, insideRootPolytope, insidePlanetRoots, planetContext, rootPolytopeInternalPath, rootPolytopeDeptId, handleExitRootPolytope, handleExitPlanetRoots, actionWorkspace]);
 
   if (error) {
     return (
@@ -685,7 +779,7 @@ export default function Universe3DPage() {
       >
         {bhMounted && (
           <UniversalPolytope
-            companyName="Work OS Orbit"
+            companyName={bhCompanyName}
             storeScope="twin"
             onExitIntent={handleBHExitIntent}
             transparent={true}
@@ -734,6 +828,7 @@ export default function Universe3DPage() {
             onFocusTransitionComplete={handleRootFocusTransitionComplete}
             onDrillInto={() => {}}
             onDrillBack={() => {}}
+            onActionNodeClick={handleActionNodeClick}
             industryColor={planetIndustryColor}
           />
         )}
@@ -749,8 +844,9 @@ export default function Universe3DPage() {
           visibility: insideRootPolytope ? 'visible' : 'hidden',
           pointerEvents: insideRootPolytope ? 'auto' : 'none',
           transition: insideRootPolytope
-            ? 'opacity 0.85s ease-out'
-            : 'opacity 0.45s ease-in, visibility 0s 0.45s',
+            ? 'opacity 0.85s ease-out, right 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
+            : 'opacity 0.45s ease-in, visibility 0s 0.45s, right 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          right: actionWorkspace ? '75vw' : '0',
           background: insideRootPolytope
             ? 'radial-gradient(ellipse at 50% 40%, rgba(18,10,36,0.98) 0%, rgba(2,2,6,0.99) 65%)'
             : undefined,
@@ -761,7 +857,14 @@ export default function Universe3DPage() {
             key={`${activeRootDept.id}-${rootPolytopeSwitchKey}`}
             root={activeRootDept}
             selectedInternalPath={rootPolytopeInternalPath}
-            onInternalPathChange={setRootPolytopeInternalPath}
+            onInternalPathChange={(path) => {
+              setRootPolytopeInternalPath(path);
+              if (path.length === 2) {
+                handleActionNodeClick(activeRootDept.id, path[0], path[1]);
+              } else {
+                setActionWorkspace(null);
+              }
+            }}
             requestBackStep={rootPolytopeBackStep}
             rootSwitchKey={rootPolytopeSwitchKey}
           />
@@ -783,8 +886,8 @@ export default function Universe3DPage() {
         />
       )}
 
-      {/* Bottom-left column: hidden when create modal is active OR drafting dept/node */}
-      {!createModal && !polytopeDraftDept && !polytopeDraftInternalNode && (
+      {/* Bottom-left column: hidden when create modal is active OR drafting dept/node OR action workspace open */}
+      {!createModal && !polytopeDraftDept && !polytopeDraftInternalNode && !actionWorkspace && (
         <div className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3">
           {insideRootPolytope && activeRootDept ? (
             <PolytopeSidePanel
@@ -795,7 +898,12 @@ export default function Universe3DPage() {
               onInternalBack={() => setRootPolytopeBackStep(c => c + 1)}
               onExitToSubdomain={handleExitRootPolytope}
               exitToSubdomainLabel="2D root map"
-              onNodeSelect={setRootPolytopeInternalPath}
+              onNodeSelect={(path) => {
+                setRootPolytopeInternalPath(path);
+                if (path.length === 2) {
+                  handleActionNodeClick(activeRootDept.id, path[0], path[1]);
+                }
+              }}
             />
           ) : insidePlanetRoots && planetContext ? (
             <CompanyPlanetSidePanel
@@ -804,7 +912,7 @@ export default function Universe3DPage() {
               path={[]}
               onRootSelect={handlePlanetRootSelect}
               onBranchSelect={handlePlanetBranchSelect}
-              onActionSelect={handlePlanetActionSelect}
+              onActionSelect={handleActionNodeClick}
               onDrillBack={() => {}}
               onExitToSubdomain={handleExitPlanetRoots}
               exitToSubdomainLabel={navPath.find(p => p.level === 'subdomain')?.name ?? 'Subdomain'}
@@ -1060,6 +1168,19 @@ export default function Universe3DPage() {
       >
         ESC to go back · Scroll to zoom · Click to explore
       </div>
+
+      {/* ── Action Node Workspace Overlay ── */}
+      {delayedActionWorkspace && resolvedWorkspaceNodes && planetContext && (
+        <ActionNodeWorkspace
+          key={`${delayedActionWorkspace.rootId}-${delayedActionWorkspace.branchId}-${delayedActionWorkspace.actionId}`}
+          actionNode={resolvedWorkspaceNodes.action}
+          branchNode={resolvedWorkspaceNodes.branch}
+          rootNode={resolvedWorkspaceNodes.root}
+          context={planetContext}
+          isOpen={!!actionWorkspace}
+          onClose={handleCloseActionWorkspace}
+        />
+      )}
     </div>
   );
 }
