@@ -121,7 +121,7 @@ function NavSection({
 /** Reusable workspace left nav — drop onto any page with `ws-left-nav` styling. */
 export function WorkspaceLeftPanel({ className }: { className?: string }) {
   return (
-    <aside className={`ws-left-nav flex flex-col bg-black/10 shrink-0 backdrop-blur-sm h-full ${className ?? ''}`}>
+    <aside className={`ws-left-nav flex flex-col shrink-0 h-full ${className ?? ''}`}>
       <nav className="flex-1 flex flex-col min-h-0 overflow-y-auto">
         <NavSection title="MY UNIVERSE" items={NAV_UNIVERSE} />
         <NavSection title="MY WORK" items={NAV_WORK} showDivider />
