@@ -24,6 +24,8 @@ interface ExternalNodeProps {
   isHovered: boolean;
   /** Preview node while "Add internal node" form is open */
   draftChildNode?: UInternalNode | null;
+  draftMember?: { deptId: string; nodeId: string; member: any } | null;
+  draftMemberScreenPosRef?: React.MutableRefObject<{ x: number; y: number } | null>;
 }
 
 export function ExternalNode({
@@ -41,6 +43,8 @@ export function ExternalNode({
   idx,
   isHovered,
   draftChildNode,
+  draftMember,
+  draftMemberScreenPosRef,
 }: ExternalNodeProps) {
   const meshRef = useRef<THREE.Mesh>(null);
   const labelRef = useRef<HTMLDivElement>(null);
@@ -189,6 +193,8 @@ export function ExternalNode({
             parentLabel={node.label}
             setBackInfo={setBackInfo}
             draftChildNode={draftChildNode}
+            draftMember={draftMember}
+            draftMemberScreenPosRef={draftMemberScreenPosRef}
           />
         );
       })}

@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Layers, CheckCircle2, Loader2 } from 'lucide-react';
 import type { UExternalNode, UInternalNode, UDomain } from '../lib/usePolytopeStore';
 import { U_DOMAIN_COLOR } from '../lib/usePolytopeStore';
+import { ImageUpload } from './ImageUpload';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export type CreateDepartmentMode = 'department' | 'node';
+export type CreateDepartmentMode = 'department' | 'node' | 'member';
 
 interface CreateDeptPanelProps {
   mode: 'department';
@@ -28,7 +29,18 @@ interface CreateNodePanelProps {
   onCreated: (data: Omit<UInternalNode, 'id' | 'children'>) => void;
 }
 
-type Props = CreateDeptPanelProps | CreateNodePanelProps;
+interface CreateMemberPanelProps {
+  mode: 'member';
+  dept: UExternalNode;
+  /** Live-update node label in polytope while typing */
+  onDraftUpdate?: (patch: any) => void;
+  /** Screen-space position ref of the draft node */
+  draftNodeScreenPosRef: React.MutableRefObject<{ x: number; y: number } | null>;
+  onClose: (isCancel?: boolean) => void;
+  onCreated: (data: any) => void;
+}
+
+type Props = CreateDeptPanelProps | CreateNodePanelProps | CreateMemberPanelProps;
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -86,6 +98,7 @@ function ScoreSlider({ value, onChange, label: _label }: { value: number; onChan
     </div>
   );
 }
+
 
 // ── Department Form ────────────────────────────────────────────────────────────
 
@@ -451,6 +464,163 @@ function NodeFormContent({
   );
 }
 
+// ── Member Form ──────────────────────────────────────────────────────────────────
+
+function MemberFormContent({
+  dept,
+  onDraftUpdate,
+  onSave,
+  onCancel,
+}: {
+  dept: UExternalNode;
+  onDraftUpdate?: (patch: any) => void;
+  onSave: (data: any) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [done, setDone] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+
+  const deptColor = U_DOMAIN_COLOR[dept.domain] ?? '#6366f1';
+
+  useEffect(() => {
+    setTimeout(() => nameRef.current?.focus(), 300);
+  }, []);
+
+  const handleNameChange = useCallback((v: string) => {
+    setName(v);
+    onDraftUpdate?.({ name: v || 'New Member' });
+  }, [onDraftUpdate]);
+
+  const handleRoleChange = useCallback((v: string) => {
+    setRole(v);
+    onDraftUpdate?.({ role: v || 'Member' });
+  }, [onDraftUpdate]);
+
+  const handleAvatarUrlChange = useCallback((v: string) => {
+    setAvatarUrl(v);
+    onDraftUpdate?.({ avatarUrl: v });
+  }, [onDraftUpdate]);
+
+  const isValid = name.trim().length > 0;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isValid) return;
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      setDone(true);
+      setTimeout(() => {
+        onSave({ name: name.trim(), role: role.trim(), avatarUrl: avatarUrl.trim() });
+      }, 900);
+    }, 400);
+  };
+
+  if (done) {
+    return (
+      <div className="flex flex-col items-center justify-center gap-4 py-8">
+        <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: `${deptColor}20` }}>
+          <CheckCircle2 className="w-6 h-6" style={{ color: deptColor }} />
+        </div>
+        <p className="text-white text-sm font-semibold">Member Added!</p>
+        <p className="text-[11px] text-center" style={{ color: '#5E5E5E' }}>
+          <span style={{ color: deptColor }}>{name}</span> joined the team
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="overflow-y-auto flex-1" style={{ scrollbarWidth: 'none' }}>
+      <div className="px-4 py-3.5 flex flex-col gap-3.5">
+        {/* Name */}
+        <Field label="Member Name *">
+          <input
+            ref={nameRef}
+            type="text"
+            placeholder="e.g. Alice Doe"
+            value={name}
+            onChange={e => handleNameChange(e.target.value)}
+            style={{
+              ...inputStyle,
+              fontSize: '14px',
+              padding: '10px 12px',
+              borderColor: `${deptColor}30`,
+            }}
+            onFocus={e => e.target.style.borderColor = `${deptColor}60`}
+            onBlur={e => e.target.style.borderColor = `${deptColor}30`}
+          />
+        </Field>
+
+        {/* Role */}
+        <Field label="Role">
+          <input
+            type="text"
+            placeholder="e.g. Developer"
+            value={role}
+            onChange={e => handleRoleChange(e.target.value)}
+            style={inputStyle}
+            onFocus={e => e.target.style.borderColor = 'rgba(255,255,255,0.2)'}
+            onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}
+          />
+        </Field>
+
+        {/* Avatar Upload */}
+        <Field label="Photo">
+          <ImageUpload value={avatarUrl} onChange={handleAvatarUrlChange} deptColor={deptColor} />
+        </Field>
+
+        {/* Context badge */}
+        <div
+          className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-[10px]"
+          style={{
+            background: `${deptColor}0a`,
+            border: `1px solid ${deptColor}15`,
+            color: deptColor,
+          }}
+        >
+          <Layers className="w-3 h-3 shrink-0" />
+          <span>Adding member to <strong>{dept.label}</strong></span>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div
+        className="flex items-center justify-end gap-2 px-4 py-3 shrink-0"
+        style={{ borderTop: `1px solid ${deptColor}12` }}
+      >
+        <button
+          type="button"
+          onClick={onCancel}
+          className="px-4 py-2 rounded-lg text-[11px] font-medium transition-colors hover:bg-white/5"
+          style={{ color: '#5E5E5E' }}
+        >
+          Cancel
+        </button>
+        <button
+          type="submit"
+          disabled={loading || !isValid}
+          className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-[11px] font-semibold transition-all hover:opacity-90 disabled:opacity-40"
+          style={{
+            background: `linear-gradient(135deg, ${deptColor}, ${deptColor}bb)`,
+            color: '#161618',
+          }}
+        >
+          {loading ? (
+            <><Loader2 className="w-3.5 h-3.5 animate-spin" />Adding…</>
+          ) : (
+            'Add Member'
+          )}
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ── Main Panel ─────────────────────────────────────────────────────────────────
 
 export default function CreateDepartmentPanel(props: Props) {
@@ -477,10 +647,10 @@ export default function CreateDepartmentPanel(props: Props) {
     ? U_DOMAIN_COLOR['build']
     : U_DOMAIN_COLOR[props.dept.domain] ?? '#6366f1';
 
-  const title = props.mode === 'department' ? 'New Department' : `Add Node — ${props.dept.label}`;
+  const title = props.mode === 'department' ? 'New Department' : props.mode === 'node' ? `Add Node — ${props.dept.label}` : `Add Member — ${props.dept.label}`;
   const subtitle = props.mode === 'department'
     ? 'New vertex in the polytope'
-    : `Internal node of ${props.dept.label}`;
+    : props.mode === 'node' ? `Internal node of ${props.dept.label}` : `Member of ${props.dept.label}`;
 
   const modalCenterY = modalTop + 280; // approximate center
   const modalRight = modalLeft + modalWidth;
@@ -561,8 +731,15 @@ export default function CreateDepartmentPanel(props: Props) {
             onSave={data => props.onCreated(data)}
             onCancel={() => props.onClose(true)}
           />
-        ) : (
+        ) : props.mode === 'node' ? (
           <NodeFormContent
+            dept={props.dept}
+            onDraftUpdate={props.onDraftUpdate}
+            onSave={data => props.onCreated(data)}
+            onCancel={() => props.onClose(true)}
+          />
+        ) : (
+          <MemberFormContent
             dept={props.dept}
             onDraftUpdate={props.onDraftUpdate}
             onSave={data => props.onCreated(data)}

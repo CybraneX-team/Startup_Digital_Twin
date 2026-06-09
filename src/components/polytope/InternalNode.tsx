@@ -1,10 +1,82 @@
-import { useRef, useMemo, useEffect } from 'react';
+import { useRef, useMemo, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Text, Billboard } from '@react-three/drei';
+import { Text, Billboard, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import type { UInternalNode } from '../../lib/universalPolytopeData';
 import { PlasmaSphere } from '../PolytopeShared';
 import { useDragWorkspaceStore } from '../../lib/useDragWorkspaceStore';
+
+function DraggableHtmlCard({ children, delay = 0, style }: { children: React.ReactNode, delay?: number, style?: React.CSSProperties }) {
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0 });
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    e.stopPropagation();
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    e.stopPropagation();
+    setOffset({
+      x: e.clientX - dragStart.current.x,
+      y: e.clientY - dragStart.current.y
+    });
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!isDragging) return;
+    e.stopPropagation();
+    setIsDragging(false);
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
+  return (
+    <div style={{
+      animation: `popIn 0.5s ${delay}s forwards cubic-bezier(0.175, 0.885, 0.32, 1.275)`,
+      opacity: 0,
+      transform: 'scale(0)',
+      pointerEvents: 'none'
+    }}>
+      <div
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        style={{
+          ...style,
+          transform: `translate(${offset.x}px, ${offset.y}px)`,
+          pointerEvents: 'auto',
+          cursor: isDragging ? 'grabbing' : 'grab',
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function PosTracker({ posRef }: { posRef: React.MutableRefObject<any> }) {
+  const ref = useRef<THREE.Group>(null);
+  useFrame(({ camera, gl }) => {
+    if (ref.current && posRef) {
+      const wp = new THREE.Vector3();
+      ref.current.getWorldPosition(wp);
+      wp.project(camera);
+      const rect = gl.domElement.getBoundingClientRect();
+      posRef.current = {
+        x: ((wp.x + 1) / 2) * rect.width,
+        y: (-(wp.y - 1) / 2) * rect.height,
+      };
+    }
+  });
+  return <group ref={ref} />;
+}
 
 interface InternalNodeProps {
   node: UInternalNode;
@@ -21,6 +93,8 @@ interface InternalNodeProps {
   setBackInfo: (info: { label: string; onClick: () => void } | null) => void;
   isDraft?: boolean;
   draftChildNode?: UInternalNode | null;
+  draftMember?: { deptId: string; nodeId: string; member: any } | null;
+  draftMemberScreenPosRef?: React.MutableRefObject<{ x: number; y: number } | null>;
   onNodeFocus?: (pos: THREE.Vector3) => void;
 }
 
@@ -39,6 +113,8 @@ export function InternalNode({
   setBackInfo,
   isDraft = false,
   draftChildNode = null,
+  draftMember = null,
+  draftMemberScreenPosRef,
   onNodeFocus,
 }: InternalNodeProps) {
   const groupRef = useRef<THREE.Group>(null);
@@ -199,7 +275,7 @@ export function InternalNode({
     cancelDrag();
     if (isDraft) return;
     if (selectedPath[selectedPath.length - 1] === node.id) {
-      onSelectPath(pathContext, parentPos);
+      return; // Do nothing when clicking an already active node
     } else {
       onSelectPath(myPath, targetPos);
     }
@@ -237,7 +313,7 @@ export function InternalNode({
           <Billboard follow={true} lockX={false} lockY={false} lockZ={false} position={[0, -radius * 2.8, 0]}>
             <Text
               color={isDraft ? color : "#ffffff"}
-              fontSize={Math.max(0.12, 0.22 - depth * 0.025)}
+              fontSize={Math.max(0.08, 0.15 - depth * 0.02)}
               maxWidth={3.0}
               lineHeight={1.1}
               letterSpacing={0.06}
@@ -253,9 +329,107 @@ export function InternalNode({
             </Text>
           </Billboard>
         )}
+
+        {isMeActiveCenter && node.type === 'team' && (node.members?.length || draftMember) && (
+          <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
+            {[...(node.members || []), ...(draftMember && draftMember.nodeId === node.id ? [draftMember.member] : [])].map((member, i, arr) => {
+              const angle = (i / arr.length) * Math.PI * 2;
+              // Precisely scale the radius based on member count to perfectly balance spacing
+              const r = radius * (5.5 + arr.length * 0.5);
+              const x = Math.cos(angle) * r;
+              const y = Math.sin(angle) * r;
+              const isDraft = draftMember && draftMember.nodeId === node.id && i === arr.length - 1;
+
+              return (
+                <group key={i} position={[x, y, 0]}>
+                  {isDraft && draftMemberScreenPosRef && (
+                    <PosTracker posRef={draftMemberScreenPosRef} />
+                  )}
+                  <Html center zIndexRange={[100, 0]}>
+                    <DraggableHtmlCard delay={i * 0.05} style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: '6px',
+                      width: 'max-content',
+                      color: '#ffffff',
+                      textAlign: 'center'
+                    }}>
+                      {member.avatarUrl && (
+                        <div style={{
+                          width: 72,
+                          height: 72,
+                          borderRadius: '50%',
+                          border: `2px solid ${color}`,
+                          overflow: 'hidden',
+                          boxShadow: `0 0 15px ${color}66`
+                        }}>
+                          <img src={member.avatarUrl} alt={member.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} draggable={false} />
+                        </div>
+                      )}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                        <span style={{ fontSize: '14px', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.9)' }}>{member.name}</span>
+                        <span style={{ fontSize: '11px', color: '#cbd5e1', textShadow: '0 1px 3px rgba(0,0,0,0.9)', marginTop: '2px' }}>{member.role}</span>
+                      </div>
+                    </DraggableHtmlCard>
+                  </Html>
+                </group>
+              );
+            })}
+            <Html>
+              <style>{`
+                @keyframes popIn {
+                  0% { transform: scale(0); opacity: 0; }
+                  100% { transform: scale(1); opacity: 1; }
+                }
+              `}</style>
+            </Html>
+          </Billboard>
+        )}
+
+        {isMeActiveCenter && node.type === 'project' && node.projectDetails && (
+          <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
+            <Html position={[radius * 7.5, 0, 0]} center zIndexRange={[100, 0]}>
+            <DraggableHtmlCard style={{
+              background: 'rgba(15, 23, 42, 0.85)',
+              backdropFilter: 'blur(8px)',
+              border: `1px solid ${color}88`,
+              borderRadius: '12px',
+              padding: '16px',
+              width: '240px',
+              color: '#e2e8f0',
+              boxShadow: `0 8px 32px ${color}33`,
+            }}>
+              <div style={{ fontSize: '14px', fontWeight: 'bold', borderBottom: `1px solid ${color}66`, paddingBottom: '8px', marginBottom: '8px', color: '#fff' }}>Project Summary</div>
+              <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Status:</span> <span style={{ fontWeight: 600 }}>{node.projectDetails.status || 'N/A'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Deadline:</span> <span style={{ fontWeight: 600 }}>{node.projectDetails.deadline || 'N/A'}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#94a3b8' }}>Budget:</span> <span style={{ fontWeight: 600 }}>{node.projectDetails.budget || 'N/A'}</span>
+                </div>
+                {node.projectDetails.description && (
+                  <div style={{ marginTop: '4px', fontStyle: 'italic', color: '#cbd5e1', lineHeight: 1.4 }}>
+                    "{node.projectDetails.description}"
+                  </div>
+                )}
+              </div>
+            </DraggableHtmlCard>
+              <style>{`
+                @keyframes popIn {
+                  0% { transform: scale(0); opacity: 0; }
+                  100% { transform: scale(1); opacity: 1; }
+                }
+              `}</style>
+            </Html>
+          </Billboard>
+        )}
       </group>
 
-      {node.children && node.children.map((child, i) => {
+      {node.children && !(isMeActiveCenter && node.type === 'team' && (node.members?.length || draftMember)) && node.children.map((child, i) => {
         const isChildVisible =
           isMeActiveCenter || selectedPath[selectedPath.length - 1] === child.id;
         return (
@@ -274,6 +448,8 @@ export function InternalNode({
             parentLabel={node.label}
             setBackInfo={setBackInfo}
             draftChildNode={draftChildNode}
+            draftMember={draftMember}
+            draftMemberScreenPosRef={draftMemberScreenPosRef}
             onNodeFocus={onNodeFocus}
           />
         );
@@ -299,7 +475,7 @@ export function InternalNode({
         />
       )}
 
-      {isMeActiveCenter && childEdges && (
+      {isMeActiveCenter && childEdges && !(isMeActiveCenter && node.type === 'team' && (node.members?.length || draftMember)) && (
         <lineSegments geometry={childEdges}>
           <lineBasicMaterial color={color} transparent opacity={0.4} />
         </lineSegments>

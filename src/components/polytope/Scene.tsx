@@ -1,6 +1,6 @@
 import { useRef, useState, useMemo, useEffect, type MutableRefObject } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, Stars, Sparkles, Html } from '@react-three/drei';
+import { OrbitControls, Stars, Sparkles, Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three-stdlib';
 import { gsap } from 'gsap';
@@ -44,6 +44,10 @@ export interface SceneProps {
   draftInternalNode?: { deptId: string; node: UInternalNode } | null;
   /** Ref that Scene writes the draft internal node's screen-space position to each frame */
   draftInternalNodeScreenPosRef?: MutableRefObject<{ x: number; y: number } | null>;
+  /** Transient draft member preview */
+  draftMember?: { deptId: string; nodeId: string; member: any } | null;
+  /** Ref that Scene writes the draft member's screen-space position to each frame */
+  draftMemberScreenPosRef?: MutableRefObject<{ x: number; y: number } | null>;
   selectedInternalPathProps?: string[];
   /** BDT: click core → dive animation → workspace */
   enableCoreWorkspace?: boolean;
@@ -127,6 +131,8 @@ export function Scene({
   draftNodeScreenPosRef,
   draftInternalNode,
   draftInternalNodeScreenPosRef,
+  draftMember,
+  draftMemberScreenPosRef,
   selectedInternalPathProps,
   enableCoreWorkspace = false,
   coreWorkspacePhase = 'idle',
@@ -679,7 +685,8 @@ export function Scene({
   }, [requestSelectDeptId]);
 
   const handlePointerMissed = () => {
-    if (selectedId) { setSelectedId(null); onPathChange([]); }
+    // Intentionally left blank: clicking the background should not reset the view
+    // so users don't accidentally lose their deep drill-down context.
   };
 
   // ── Render ────────────────────────────────────────────────────────────────
@@ -775,6 +782,8 @@ export function Scene({
               idx={i}
               isHovered={hoveredId === node.id}
               draftChildNode={draftChild}
+              draftMember={draftMember && draftMember.deptId === node.id ? draftMember : null}
+              draftMemberScreenPosRef={draftMemberScreenPosRef}
             />
           );
         })}

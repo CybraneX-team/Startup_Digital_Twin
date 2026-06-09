@@ -12,6 +12,7 @@ export interface PolytopeSidePanelProps {
   selectedInternalPath: string[];
   onAddDepartment?: () => void;
   onAddNode?: (deptId: string) => void;
+  onAddMember?: (deptId: string, nodeId: string) => void;
   /** Called when user clicks the back button while inside sub-nodes — go 1 step up */
   onInternalBack?: () => void;
   /** Company polytope only — leave interior and return to subdomain solar system */
@@ -26,6 +27,8 @@ export interface PolytopeSidePanelProps {
   onEditNode?: (dept: UExternalNode, node: UInternalNode) => void;
   onDeleteDepartmentClick?: (dept: UExternalNode) => void;
   onDeleteNodeClick?: (dept: UExternalNode, node: UInternalNode) => void;
+  onEditMember?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
+  onDeleteMemberClick?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -99,6 +102,9 @@ export function PolytopeSidePanel({
   onEditNode,
   onDeleteDepartmentClick,
   onDeleteNodeClick,
+  onAddMember,
+  onEditMember,
+  onDeleteMemberClick,
 }: PolytopeSidePanelProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'departments' | 'information'>('departments');
@@ -165,6 +171,14 @@ export function PolytopeSidePanel({
     }) ?? null
     : null;
   const effectiveDept = selectedDept ?? fallbackDept;
+
+  const activeNode = effectiveDept && selectedInternalPath.length > 0
+    ? findNodeAtPath(effectiveDept.internalNodes, selectedInternalPath)
+    : null;
+
+  // A grouping node (like "Teams") holds other team nodes, so it shouldn't show the members UI.
+  const isGroupingTeamNode = activeNode && activeNode.type === 'team' && activeNode.children?.some(c => c.type === 'team');
+  const isShowingMembers = activeNode && activeNode.type === 'team' && !isGroupingTeamNode;
 
   // Internal nodes at the current drill-down level
   const allVisibleNodes = effectiveDept ? getNodesAtPath(effectiveDept, selectedInternalPath) : [];
@@ -243,7 +257,9 @@ export function PolytopeSidePanel({
       ? 'DEPARTMENTS'
       : selectedInternalPath.length === 0
         ? 'INTERNAL NODES'
-        : 'SUB-NODES';
+        : isShowingMembers
+          ? 'MEMBERS'
+          : 'SUB-NODES';
 
   return (
     <div className="flex flex-col items-start gap-3">
@@ -551,6 +567,62 @@ export function PolytopeSidePanel({
                 );
               })
             )
+          ) : isShowingMembers ? (
+            /* ── MEMBERS list ── */
+            (!activeNode.members || activeNode.members.length === 0) ? (
+              <div className="px-3 py-6 text-[11px] text-center" style={{ color: '#4b5563' }}>
+                No members yet
+              </div>
+            ) : (
+              activeNode.members.map((member, i) => (
+                <div
+                  key={i}
+                  className="panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group/row"
+                  style={{ animationDelay: `${i * 22}ms` }}
+                >
+                  <span
+                    className="w-1.5 h-1.5 rounded-full shrink-0 flex-shrink-0"
+                    style={{ background: deptColor, opacity: 0.85 }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <span className="block text-[12px] text-gray-300 group-hover/row:text-white transition-colors leading-tight truncate">
+                      {member.name}
+                    </span>
+                    <span className="flex items-center gap-1.5 mt-0.5 text-[10px] text-gray-500 truncate">
+                      {member.role}
+                    </span>
+                  </div>
+                  {/* Action buttons (pencil, trash) on hover */}
+                  <div className="hidden group-hover/row:flex items-center gap-0.5 shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditMember?.(effectiveDept!, activeNode, i);
+                      }}
+                      className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+                      title="Edit Member"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (onDeleteMemberClick) {
+                          onDeleteMemberClick(effectiveDept!, activeNode, i);
+                        } else if (window.confirm(`Delete member "${member.name}"?`)) {
+                          const newMembers = activeNode.members!.filter(m => m !== member);
+                          onUpdateNode?.(effectiveDept!.id, activeNode.id, { members: newMembers, memberCount: newMembers.length });
+                        }
+                      }}
+                      className="p-1 text-gray-400 hover:text-rose-400 hover:bg-white/10 rounded transition-colors"
+                      title="Delete Member"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              ))
+            )
           ) : (
             /* ── INTERNAL NODES list ── */
             visibleNodes.length === 0 ? (
@@ -637,6 +709,8 @@ export function PolytopeSidePanel({
             onClick={() => {
               if (!showingNodes) {
                 onAddDepartment?.();
+              } else if (isShowingMembers) {
+                onAddMember?.(selectedDeptId ?? effectiveDept?.id ?? '', activeNode!.id);
               } else {
                 onAddNode?.(selectedDeptId ?? effectiveDept?.id ?? '');
               }
@@ -650,7 +724,7 @@ export function PolytopeSidePanel({
             }}
           >
             <Plus className="w-3.5 h-3.5" />
-            {!showingNodes ? 'Add Department' : 'Add Internal Node'}
+            {!showingNodes ? 'Add Department' : isShowingMembers ? 'Add Member' : 'Add Internal Node'}
           </button>
         </div>
         )}

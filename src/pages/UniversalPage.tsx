@@ -44,6 +44,10 @@ export default function UniversalPage() {
   const [draftInternalNode, setDraftInternalNode] = useState<{ deptId: string; node: UInternalNode } | null>(null);
   const draftInternalNodeScreenPosRef = useRef<{ x: number; y: number } | null>(null);
 
+  // ── Draft member state (for "Add Member" inline flow) ───────────────
+  const [draftMember, setDraftMember] = useState<{ deptId: string; nodeId: string; member: any } | null>(null);
+  const draftMemberScreenPosRef = useRef<{ x: number; y: number } | null>(null);
+
   // Camera reset trigger — increment to fly back to overview
   const [polytopeResetTrigger, setPolytopeResetTrigger] = useState(0);
 
@@ -71,6 +75,16 @@ export default function UniversalPage() {
     setManagerOpen(true);
   };
 
+  const handleEditMember = (dept: UExternalNode, node: UInternalNode, memberIndex: number) => {
+    setManagerView({ type: 'editMember', dept, node, memberIndex });
+    setManagerOpen(true);
+  };
+
+  const handleDeleteMemberClick = (dept: UExternalNode, node: UInternalNode, memberIndex: number) => {
+    setManagerView({ type: 'deleteMember', dept, node, memberIndex });
+    setManagerOpen(true);
+  };
+
   // Product workspace — click core → dive in → workspace; back → surface out
   const [corePhase, setCorePhase] = useState<CoreWorkspacePhase>('idle');
   const [workspaceMounted, setWorkspaceMounted] = useState(false);
@@ -92,6 +106,7 @@ export default function UniversalPage() {
     setInternalBackStep(0);
     setDraftDept(null);
     setDraftInternalNode(null);
+    setDraftMember(null);
     setCorePhase('idle');
     setWorkspaceMounted(false);
     setWorkspaceAnim(null);
@@ -182,6 +197,55 @@ export default function UniversalPage() {
     setSelectedDeptId(deptId);
   };
 
+  // ── Add Member: spawn draft member + show panel ─────────────────────
+  const handleAddMember = (deptId: string, nodeId: string) => {
+    const draftMemberData = {
+      name: 'New Member',
+      role: 'Member',
+      avatarUrl: '',
+      isDraft: true,
+    };
+    setDraftMember({ deptId, nodeId, member: draftMemberData });
+    if (selectedDeptId !== deptId) {
+      setSelectedDeptId(deptId);
+      setRequestSelectDeptId(deptId);
+    }
+  };
+
+  const handleDraftMemberUpdate = (patch: any) => {
+    setDraftMember(prev => prev ? { ...prev, member: { ...prev.member, ...patch } } : prev);
+  };
+
+  const handleDraftMemberClose = (isCancel?: boolean) => {
+    if (isCancel) {
+      setDraftMember(null);
+    }
+  };
+
+  const handleDraftMemberCreated = (data: any) => {
+    if (!draftMember) return;
+    const { deptId, nodeId } = draftMember;
+    const dept = store.departments.find(d => d.id === deptId);
+    if (!dept) return;
+    const findNode = (nodes: UInternalNode[], id: string): UInternalNode | undefined => {
+      for (const n of nodes) {
+        if (n.id === id) return n;
+        if (n.children) {
+          const found = findNode(n.children, id);
+          if (found) return found;
+        }
+      }
+      return undefined;
+    };
+    const targetNode = findNode(dept.internalNodes, nodeId);
+    if (targetNode && targetNode.type === 'team') {
+      const newMembers = [...(targetNode.members || []), data];
+      store.updateNode(deptId, nodeId, { members: newMembers, memberCount: newMembers.length });
+    }
+    setDraftMember(null);
+    setSelectedDeptId(deptId);
+  };
+
   // When dept is selected in 3D scene → update sidebar highlight
   const handleDepartmentChange = (id: string | null) => {
     selectionFromScene.current = true;
@@ -213,6 +277,7 @@ export default function UniversalPage() {
     setInternalBackStep(0);
     setDraftDept(null);
     setDraftInternalNode(null);
+    setDraftMember(null);
   }, []);
 
   const handleCoreClickIntent = useCallback(() => {
@@ -266,6 +331,8 @@ export default function UniversalPage() {
           draftNodeScreenPosRef={draftDeptScreenPosRef}
           draftInternalNode={draftInternalNode}
           draftInternalNodeScreenPosRef={draftInternalNodeScreenPosRef}
+          draftMember={draftMember}
+          draftMemberScreenPosRef={draftMemberScreenPosRef}
           cameraResetTrigger={polytopeResetTrigger}
           departments={store.departments}
           selectedInternalPath={internalPath}
@@ -316,7 +383,7 @@ export default function UniversalPage() {
       )}
 
       {/* ── Left sidebar panel — hidden when create panel is shown ── */}
-      {isPolytopeInteractive && !draftDept && !draftInternalNode && (
+      {isPolytopeInteractive && !draftDept && !draftInternalNode && !draftMember && (
         <div className="fixed bottom-6 left-4 z-[60] pointer-events-auto">
           <PolytopeSidePanel
             departments={store.departments}
@@ -325,6 +392,7 @@ export default function UniversalPage() {
             selectedInternalPath={internalPath}
             onAddDepartment={handleAddDepartment}
             onAddNode={handleAddNode}
+            onAddMember={handleAddMember}
             onInternalBack={() => setInternalBackStep(c => c + 1)}
             onUpdateDepartment={store.updateDepartment}
             onDeleteDepartment={store.deleteDepartment}
@@ -335,6 +403,8 @@ export default function UniversalPage() {
             onEditNode={handleEditNode}
             onDeleteDepartmentClick={handleDeleteDepartmentClick}
             onDeleteNodeClick={handleDeleteNodeClick}
+            onEditMember={handleEditMember}
+            onDeleteMemberClick={handleDeleteMemberClick}
           />
         </div>
       )}
@@ -362,6 +432,22 @@ export default function UniversalPage() {
             onDraftUpdate={handleDraftNodeUpdate}
             onClose={handleDraftNodeClose}
             onCreated={handleDraftNodeCreated}
+          />
+        );
+      })()}
+
+      {/* ── Draft Member Creation Panel ── */}
+      {draftMember && (() => {
+        const dept = store.departments.find(d => d.id === draftMember.deptId);
+        if (!dept) return null;
+        return (
+          <CreateDepartmentPanel
+            mode="member"
+            dept={dept}
+            draftNodeScreenPosRef={draftMemberScreenPosRef}
+            onDraftUpdate={handleDraftMemberUpdate}
+            onClose={handleDraftMemberClose}
+            onCreated={handleDraftMemberCreated}
           />
         );
       })()}

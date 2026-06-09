@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Plus, X, Edit3, Trash2, ChevronRight, ChevronDown, ArrowLeft, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Plus, X, Edit3, Trash2, ChevronRight, ChevronDown, RotateCcw, AlertTriangle } from 'lucide-react';
 import type { UExternalNode, UInternalNode, UDomain } from '../lib/usePolytopeStore';
 import { U_DOMAIN_COLOR } from '../lib/usePolytopeStore';
+import { ImageUpload } from './ImageUpload';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -30,7 +31,9 @@ type View =
   | { type: 'nodes'; dept: UExternalNode }
   | { type: 'addNode'; dept: UExternalNode }
   | { type: 'editNode'; dept: UExternalNode; node: UInternalNode }
-  | { type: 'deleteNode'; dept: UExternalNode; node: UInternalNode };
+  | { type: 'deleteNode'; dept: UExternalNode; node: UInternalNode }
+  | { type: 'editMember'; dept: UExternalNode; node: UInternalNode; memberIndex: number }
+  | { type: 'deleteMember'; dept: UExternalNode; node: UInternalNode; memberIndex: number };
 
 const DOMAINS: UDomain[] = ['direction', 'build', 'delivery', 'market', 'control', 'people'];
 const NODE_TYPES: UInternalNode['type'][] = ['team', 'process', 'project', 'resource', 'decision', 'risk', 'metric'];
@@ -359,10 +362,38 @@ function NodeForm({ initial, onSave, onCancel }: {
   const [type, setType] = useState<UInternalNode['type']>(initial?.type ?? 'team');
   const [score, setScore] = useState(initial?.score ?? 75);
 
+  const [memberCount, setMemberCount] = useState(initial?.memberCount ?? 0);
+  const [membersStr, setMembersStr] = useState(JSON.stringify(initial?.members ?? [], null, 2));
+
+  const [projDescription, setProjDescription] = useState(initial?.projectDetails?.description ?? '');
+  const [projStatus, setProjStatus] = useState(initial?.projectDetails?.status ?? '');
+  const [projDeadline, setProjDeadline] = useState(initial?.projectDetails?.deadline ?? '');
+  const [projBudget, setProjBudget] = useState(initial?.projectDetails?.budget ?? '');
+
   const isValid = label.trim().length > 0;
 
+  const handleSave = () => {
+    if (!isValid) return;
+    let parsedMembers: any[] = [];
+    if (type === 'team') {
+      try {
+        parsedMembers = JSON.parse(membersStr);
+      } catch (e) {
+        console.error("Failed to parse members JSON");
+      }
+    }
+    
+    onSave({
+      label: label.trim(),
+      type,
+      score,
+      ...(type === 'team' ? { memberCount, members: parsedMembers } : {}),
+      ...(type === 'project' ? { projectDetails: { description: projDescription, status: projStatus, deadline: projDeadline, budget: projBudget } } : {})
+    });
+  };
+
   return (
-    <div>
+    <div style={{ maxHeight: 460, overflowY: 'auto', paddingRight: 4 }}>
       <FieldGroup label="Node Label">
         <input style={INPUT_STYLE} placeholder="e.g. Backend Team" value={label} onChange={e => setLabel(e.target.value)} />
       </FieldGroup>
@@ -386,12 +417,74 @@ function NodeForm({ initial, onSave, onCancel }: {
         <ScoreSlider value={score} onChange={setScore} />
       </FieldGroup>
 
+      {type === 'team' && (
+        <>
+          <FieldGroup label="Member Count">
+            <input type="number" style={INPUT_STYLE} value={memberCount} onChange={e => setMemberCount(parseInt(e.target.value) || 0)} />
+          </FieldGroup>
+          <FieldGroup label="Members JSON">
+            <textarea style={{...INPUT_STYLE, height: 100, fontFamily: 'monospace' }} value={membersStr} onChange={e => setMembersStr(e.target.value)} />
+          </FieldGroup>
+        </>
+      )}
+
+      {type === 'project' && (
+        <>
+          <FieldGroup label="Status">
+             <input style={INPUT_STYLE} placeholder="e.g. In Progress" value={projStatus} onChange={e => setProjStatus(e.target.value)} />
+          </FieldGroup>
+          <FieldGroup label="Deadline">
+             <input style={INPUT_STYLE} placeholder="e.g. Q3 2026" value={projDeadline} onChange={e => setProjDeadline(e.target.value)} />
+          </FieldGroup>
+          <FieldGroup label="Budget">
+             <input style={INPUT_STYLE} placeholder="e.g. $50k" value={projBudget} onChange={e => setProjBudget(e.target.value)} />
+          </FieldGroup>
+          <FieldGroup label="Description">
+             <textarea style={{...INPUT_STYLE, height: 60}} placeholder="Project description..." value={projDescription} onChange={e => setProjDescription(e.target.value)} />
+          </FieldGroup>
+        </>
+      )}
+
       <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
         <button onClick={onCancel} style={BTN_GHOST}>Cancel</button>
-        <button onClick={() => isValid && onSave({ label: label.trim(), type, score })}
+        <button onClick={handleSave}
           style={{ ...BTN_PRIMARY, opacity: isValid ? 1 : 0.4, cursor: isValid ? 'pointer' : 'not-allowed' }}>
           {initial?.id ? 'Save Changes' : 'Add Node'}
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Member Form ──────────────────────────────────────────────────────────────
+
+function MemberForm({ initial, onSave, onCancel }: {
+  initial?: any;
+  onSave: (m: any) => void;
+  onCancel: () => void;
+}) {
+  const [name, setName] = useState(initial?.name ?? '');
+  const [role, setRole] = useState(initial?.role ?? '');
+  const [avatarUrl, setAvatarUrl] = useState(initial?.avatarUrl ?? '');
+  const isValid = name.trim().length > 0;
+  
+  return (
+    <div style={{ maxHeight: 460, overflowY: 'auto', paddingRight: 4 }}>
+      <FieldGroup label="Name">
+        <input style={INPUT_STYLE} placeholder="e.g. Alice" value={name} onChange={e => setName(e.target.value)} />
+      </FieldGroup>
+      <FieldGroup label="Role">
+        <input style={INPUT_STYLE} placeholder="e.g. Lead Engineer" value={role} onChange={e => setRole(e.target.value)} />
+      </FieldGroup>
+      
+      <div style={{ marginTop: 12 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Photo</div>
+        <ImageUpload value={avatarUrl} onChange={setAvatarUrl} deptColor="#6366f1" />
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24, paddingBottom: 4 }}>
+        <button onClick={onCancel} style={{ ...BTN_GHOST, width: 90 }}>Cancel</button>
+        <button onClick={() => isValid && onSave({ ...initial, name: name.trim(), role: role.trim(), avatarUrl })} style={{ ...BTN_PRIMARY, width: 90, opacity: isValid ? 1 : 0.5 }}>Save</button>
       </div>
     </div>
   );
@@ -449,13 +542,14 @@ export function PolytopeManager(props: Props) {
       case 'editDept': return `Edit: ${view.dept.label}`;
       case 'deleteDept': return 'Delete Department';
       case 'nodes': return `${view.dept.label} — Nodes`;
-      case 'addNode': return `Add Node to ${view.dept.label}`;
-      case 'editNode': return `Edit Node`;
-      case 'deleteNode': return 'Delete Node';
+      case 'addNode': return `Add Node in ${view.dept.label}`;
+      case 'editNode': return `Edit ${view.node.label}`;
+      case 'deleteNode': return `Delete ${view.node.label}`;
+      case 'editMember': return `Edit Member`;
+      case 'deleteMember': return `Delete Member`;
     }
   };
 
-  const canGoBack = view.type !== 'home';
   const goBack = () => {
     switch (view.type) {
       case 'addDept':
@@ -470,6 +564,10 @@ export function PolytopeManager(props: Props) {
         // need to refresh dept from props since it may have been mutated
         const freshDept = props.departments.find(d => d.id === (view as any).dept.id);
         setView({ type: 'nodes', dept: freshDept ?? (view as any).dept });
+        break;
+      case 'editMember':
+      case 'deleteMember':
+        closeModal();
         break;
     }
   };
@@ -518,6 +616,32 @@ export function PolytopeManager(props: Props) {
           title="Delete Node?"
           message={`"${view.node.label}" will be permanently removed from ${view.dept.label}.`}
           onConfirm={() => { props.onDeleteNode(view.dept.id, view.node.id); goBack(); }}
+          onCancel={goBack}
+        />;
+
+      case 'editMember':
+        const memberToEdit = view.node.members?.[view.memberIndex];
+        return <MemberForm
+          initial={memberToEdit}
+          onSave={m => {
+            const newMembers = [...(view.node.members || [])];
+            newMembers[view.memberIndex] = m;
+            props.onUpdateNode(view.dept.id, view.node.id, { members: newMembers });
+            goBack();
+          }}
+          onCancel={goBack}
+        />;
+
+      case 'deleteMember':
+        const memberToDelete = view.node.members?.[view.memberIndex];
+        return <ConfirmDelete
+          title="Delete Member?"
+          message={`"${memberToDelete?.name}" will be permanently removed from ${view.node.label}.`}
+          onConfirm={() => {
+            const newMembers = view.node.members!.filter((_, i) => i !== view.memberIndex);
+            props.onUpdateNode(view.dept.id, view.node.id, { members: newMembers, memberCount: newMembers.length });
+            goBack();
+          }}
           onCancel={goBack}
         />;
     }
@@ -586,11 +710,6 @@ export function PolytopeManager(props: Props) {
               borderBottom: '1px solid rgba(136, 170, 255, 0.2)',
               background: 'rgba(136, 170, 255, 0.05)',
             }}>
-              {canGoBack && (
-                <button onClick={goBack} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#6366f1', padding: 4, display: 'flex' }}>
-                  <ArrowLeft size={18} />
-                </button>
-              )}
               <div style={{ flex: 1, fontSize: 15, fontWeight: 700, color: '#e2e8f0' }}>{getTitle()}</div>
               <button onClick={closeModal} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#475569', padding: 4, display: 'flex' }}>
                 <X size={18} />

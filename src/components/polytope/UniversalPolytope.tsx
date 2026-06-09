@@ -31,6 +31,10 @@ export interface UniversalPolytopeProps {
   draftInternalNode?: { deptId: string; node: UInternalNode } | null;
   /** Ref written by Scene each frame with screen-space position of the draft internal node */
   draftInternalNodeScreenPosRef?: MutableRefObject<{ x: number; y: number } | null>;
+  /** Transient draft member preview */
+  draftMember?: { deptId: string; nodeId: string; member: any } | null;
+  /** Ref written by Scene each frame with screen-space position of the draft member */
+  draftMemberScreenPosRef?: MutableRefObject<{ x: number; y: number } | null>;
   /** Optional departments list to synchronize with external state store */
   departments?: UExternalNode[];
   /** Optional current selected internal path to synchronize drill-down state */
@@ -60,6 +64,8 @@ export default function UniversalPolytope({
   draftNodeScreenPosRef,
   draftInternalNode,
   draftInternalNodeScreenPosRef,
+  draftMember,
+  draftMemberScreenPosRef,
   departments,
   selectedInternalPath,
   enableCoreWorkspace = false,
@@ -110,6 +116,8 @@ export default function UniversalPolytope({
           draftNodeScreenPosRef={draftNodeScreenPosRef}
           draftInternalNode={draftInternalNode}
           draftInternalNodeScreenPosRef={draftInternalNodeScreenPosRef}
+          draftMember={draftMember}
+          draftMemberScreenPosRef={draftMemberScreenPosRef}
           selectedInternalPathProps={selectedInternalPath}
           enableCoreWorkspace={enableCoreWorkspace}
           coreWorkspacePhase={coreWorkspacePhase}
