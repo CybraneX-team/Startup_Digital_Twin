@@ -379,13 +379,14 @@ export class CameraController {
       return;
     }
 
+    const fsT = this._fullscreenT ?? 0;
     const scale = THREE.MathUtils.lerp(1, 0.48, t);
     const fullW = width / scale;
     const fullH = height / scale;
     const subW = width;
     const subH = height * THREE.MathUtils.lerp(1, 0.38, t);
     const offsetX = (fullW - subW) * 0.5;
-    const offsetY = height * THREE.MathUtils.lerp(0, 0.11, t) + (fullH - subH) * 0.5;
+    const offsetY = height * THREE.MathUtils.lerp(0, 0.11, t) + (fullH - subH) * 0.5 + fsT * fullH * 0.65;
 
     this.camera.setViewOffset(fullW, fullH, offsetX, offsetY, subW, subH);
     this.camera.updateProjectionMatrix();
@@ -399,13 +400,14 @@ export class CameraController {
       return;
     }
 
+    const fsT = this._fullscreenT ?? 0;
     const scale = THREE.MathUtils.lerp(1, 0.60, t);
     const fullW = width / scale;
     const fullH = height / scale;
     const subW = width;
     const subH = height;
     const offsetX = (fullW - subW) * 0.5;
-    const offsetY = (fullH - subH) * 0.58 + height * 0.24 * t;
+    const offsetY = (fullH - subH) * 0.58 + height * 0.24 * t + fsT * fullH * 0.85;
 
     this.camera.setViewOffset(fullW, fullH, offsetX, offsetY, subW, subH);
     this.camera.updateProjectionMatrix();
@@ -466,9 +468,9 @@ export class CameraController {
       duration: 0.88,
       ease: 'power3.inOut',
       onUpdate: () => {
-        this._workspaceComposeT = state.t;
-        this._applyWorkspaceFrame(width, height, state.t, mode);
-        this.onWorkspaceComposeUpdate?.(state.t, mode);
+         this._workspaceComposeT = state.t;
+         this._applyWorkspaceFrame(width, height, state.t, mode);
+         this.onWorkspaceComposeUpdate?.(state.t, mode);
       },
       onComplete: () => {
         this._workspaceComposeT = targetT;
@@ -501,11 +503,46 @@ export class CameraController {
     this._applyWorkspaceFrame(width, height, t, this._workspaceComposeMode);
   }
 
+  _fullscreenT = 0;
+  _lastIsFS = false;
+  _fullscreenTween = null;
+
+  _updateFullscreenTransition() {
+    const isFS = !!document.querySelector('.ws-canvas-wrap--fullscreen');
+    if (isFS !== this._lastIsFS) {
+      this._lastIsFS = isFS;
+      if (this._fullscreenTween) {
+        this._fullscreenTween.kill();
+      }
+
+      const targetFS = isFS ? 1 : 0;
+      const startFS = this._fullscreenT;
+      const state = { t: startFS };
+
+      this._fullscreenTween = gsap.to(state, {
+        t: targetFS,
+        duration: 2.2,
+        ease: 'power3.inOut',
+        onUpdate: () => {
+          this._fullscreenT = state.t;
+          const width = this.canvas.clientWidth;
+          const height = this.canvas.clientHeight;
+          this.updateWorkspaceComposeSize(width, height);
+        },
+        onComplete: () => {
+          this._fullscreenT = targetFS;
+          this._fullscreenTween = null;
+        },
+      });
+    }
+  }
+
   update() {
     if (this._interactionLocked) {
       this.controls.enabled = false;
       this.controls.autoRotate = false;
     }
+    this._updateFullscreenTransition();
     this.controls.update();
   }
 
@@ -514,6 +551,7 @@ export class CameraController {
     clearTimeout(this._autoRotateTimer);
     if (this._flyTimeline) this._flyTimeline.kill();
     if (this._workspaceComposeTween) this._workspaceComposeTween.kill();
+    if (this._fullscreenTween) this._fullscreenTween.kill();
     this.camera.clearViewOffset();
   }
 }

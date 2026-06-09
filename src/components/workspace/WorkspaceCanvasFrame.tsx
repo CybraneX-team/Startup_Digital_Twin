@@ -6,14 +6,17 @@ import {
   CANVAS_FRAME_PATH_NORMALIZED,
   CANVAS_FRAME_VIEWBOX,
   CANVAS_TAB_REGION,
+  CANVAS_FRAME_PATH_FULL,
+  CANVAS_FRAME_PATH_FULL_NORMALIZED,
 } from './canvasFrameShape';
 
 interface WorkspaceCanvasFrameProps {
   tabLabel?: ReactNode;
   children: ReactNode;
+  isFullscreen?: boolean;
 }
 
-export function WorkspaceCanvasFrame({ tabLabel, children }: WorkspaceCanvasFrameProps) {
+export function WorkspaceCanvasFrame({ tabLabel, children, isFullscreen = false }: WorkspaceCanvasFrameProps) {
   const { w, h } = CANVAS_FRAME_VIEWBOX;
 
   const innerStyle: CSSProperties = {
@@ -21,8 +24,11 @@ export function WorkspaceCanvasFrame({ tabLabel, children }: WorkspaceCanvasFram
     WebkitClipPath: `url(#${CANVAS_CLIP_PATH_ID})`,
   };
 
+  const fillPath = isFullscreen ? CANVAS_FRAME_PATH_FULL : CANVAS_FRAME_PATH;
+  const clipPath = isFullscreen ? CANVAS_FRAME_PATH_FULL_NORMALIZED : CANVAS_FRAME_PATH_NORMALIZED;
+
   return (
-    <div className="ws-canvas-frame">
+    <div className={`ws-canvas-frame ${isFullscreen ? 'ws-canvas-frame--fullscreen' : ''}`}>
       <svg
         className="ws-canvas-frame-svg"
         viewBox={`0 0 ${w} ${h}`}
@@ -31,11 +37,11 @@ export function WorkspaceCanvasFrame({ tabLabel, children }: WorkspaceCanvasFram
       >
         <defs>
           <clipPath id={CANVAS_CLIP_PATH_ID} clipPathUnits="objectBoundingBox">
-            <path d={CANVAS_FRAME_PATH_NORMALIZED} />
+            <path d={clipPath} className="ws-canvas-clip-path" />
           </clipPath>
         </defs>
-        <path className="ws-canvas-frame-fill" d={CANVAS_FRAME_PATH} />
-        <path className="ws-canvas-frame-stroke" d={CANVAS_FRAME_PATH} />
+        <path className="ws-canvas-frame-fill" d={fillPath} />
+        <path className="ws-canvas-frame-stroke" d={fillPath} />
       </svg>
 
       <div className="ws-canvas-frame-inner" style={innerStyle}>

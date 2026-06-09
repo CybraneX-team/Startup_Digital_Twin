@@ -24,1361 +24,1666 @@
 }
 
 /* Custom Components */
-  /* Foreground cards — no stroke, relative bg */
-  .glass-card {
-    background: #1B1B1D;
-    border-radius: 1rem;
+/* Foreground cards — no stroke, relative bg */
+.glass-card {
+  background: #1B1B1D;
+  border-radius: 1rem;
+}
+
+.metric-card {
+  background: #1B1B1D;
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  transition: background 0.2s ease;
+}
+
+.metric-card:hover {
+  background: #202024;
+}
+
+.status-pulse {
+  animation: pulse-anim 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse-anim {
+
+  0%,
+  100% {
+    opacity: 1;
   }
 
-  .metric-card {
-    background: #1B1B1D;
-    border-radius: 0.75rem;
-    padding: 1.25rem;
-    transition: background 0.2s ease;
+  50% {
+    opacity: 0.4;
+  }
+}
+
+/* CTA gradient text */
+.gradient-text {
+  background: linear-gradient(135deg, #F9C6FF, #C1AEFF);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* CTA gradient button */
+.cta-gradient {
+  background: linear-gradient(135deg, #F9C6FF, #C1AEFF);
+  color: #161618;
+  font-weight: 600;
+}
+
+.cta-gradient:hover {
+  opacity: 0.9;
+}
+
+/* App background */
+.cosmos-bg {
+  background: #161618;
+}
+
+/* Product workspace — enter/exit from polytope core */
+@keyframes workspace-enter {
+  0% {
+    opacity: 0;
+    transform: scale(0.72);
+    filter: blur(12px);
   }
 
-  .metric-card:hover {
-    background: #202024;
+  55% {
+    opacity: 1;
+    filter: blur(2px);
   }
 
-  .status-pulse {
-    animation: pulse-anim 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
+  }
+}
+
+@keyframes workspace-exit {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    filter: blur(0);
   }
 
-  @keyframes pulse-anim {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.4; }
+  100% {
+    opacity: 0;
+    transform: scale(1.08);
+    filter: blur(14px);
+  }
+}
+
+@keyframes core-dive-flash {
+  0% {
+    opacity: 0;
+    transform: scale(0.2);
   }
 
-  /* CTA gradient text */
-  .gradient-text {
-    background: linear-gradient(135deg, #F9C6FF, #C1AEFF);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+  35% {
+    opacity: 0.85;
   }
 
-  /* CTA gradient button */
-  .cta-gradient {
-    background: linear-gradient(135deg, #F9C6FF, #C1AEFF);
-    color: #161618;
-    font-weight: 600;
+  100% {
+    opacity: 0;
+    transform: scale(2.4);
+  }
+}
+
+.workspace-panel-enter {
+  animation: workspace-enter 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.workspace-panel-exit {
+  animation: workspace-exit 0.52s cubic-bezier(0.55, 0, 1, 0.45) forwards;
+}
+
+.core-dive-flash {
+  animation: core-dive-flash 2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes open-workspace-chevron-rise {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
   }
 
-  .cta-gradient:hover {
+  35% {
     opacity: 0.9;
   }
 
-  /* App background */
-  .cosmos-bg {
-    background: #161618;
-  }
-
-  /* Product workspace — enter/exit from polytope core */
-  @keyframes workspace-enter {
-    0% {
-      opacity: 0;
-      transform: scale(0.72);
-      filter: blur(12px);
-    }
-    55% {
-      opacity: 1;
-      filter: blur(2px);
-    }
-    100% {
-      opacity: 1;
-      transform: scale(1);
-      filter: blur(0);
-    }
-  }
-
-  @keyframes workspace-exit {
-    0% {
-      opacity: 1;
-      transform: scale(1);
-      filter: blur(0);
-    }
-    100% {
-      opacity: 0;
-      transform: scale(1.08);
-      filter: blur(14px);
-    }
-  }
-
-  @keyframes core-dive-flash {
-    0% {
-      opacity: 0;
-      transform: scale(0.2);
-    }
-    35% {
-      opacity: 0.85;
-    }
-    100% {
-      opacity: 0;
-      transform: scale(2.4);
-    }
-  }
-
-  .workspace-panel-enter {
-    animation: workspace-enter 0.95s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-
-  .workspace-panel-exit {
-    animation: workspace-exit 0.52s cubic-bezier(0.55, 0, 1, 0.45) forwards;
-  }
-
-  .core-dive-flash {
-    animation: core-dive-flash 2s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-    pointer-events: none;
-  }
-
-  @keyframes open-workspace-chevron-rise {
-    0% {
-      opacity: 0;
-      transform: translateY(8px);
-    }
-    35% {
-      opacity: 0.9;
-    }
-    100% {
-      opacity: 0;
-      transform: translateY(-16px);
-    }
-  }
-
-  .open-workspace-cue {
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    padding: 4px 12px 0;
-  }
-
-  .open-workspace-cue__chevron {
-    animation: open-workspace-chevron-rise 1.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-    will-change: transform, opacity;
-  }
-
-  .open-workspace-cue__chevron--second {
-    animation-delay: 0.4s;
-  }
-
-  .open-workspace-cue:hover .open-workspace-cue__chevron {
-    animation-duration: 1.35s;
-  }
-
-  /* ── 3D Twin → workspace transition ── */
-  .twin-universe-viewport {
-    position: absolute;
-    inset: 0;
-  }
-
-  /* Catches pointer events over the universe while workspace is open (grid gaps pass through shell). */
-  .twin-universe-interaction-blocker {
-    position: absolute;
-    inset: 0;
-    z-index: 23;
-    pointer-events: auto;
-    background: transparent;
-  }
-
-  .universe-galaxy-sidebar-host {
-    z-index: 22;
-    transition:
-      opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1),
-      transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-
-  .universe-galaxy-sidebar-host--float {
-    position: absolute;
-    bottom: 1.5rem;
-    left: 1rem;
-  }
-
-  .universe-galaxy-sidebar-host--exit {
+  100% {
     opacity: 0;
-    transform: translateX(-28px) scale(0.94);
-    pointer-events: none;
+    transform: translateY(-16px);
+  }
+}
+
+.open-workspace-cue {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 12px 0;
+}
+
+.open-workspace-cue__chevron {
+  animation: open-workspace-chevron-rise 1.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform, opacity;
+}
+
+.open-workspace-cue__chevron--second {
+  animation-delay: 0.4s;
+}
+
+.open-workspace-cue:hover .open-workspace-cue__chevron {
+  animation-duration: 1.35s;
+}
+
+/* ── 3D Twin → workspace transition ── */
+.twin-universe-viewport {
+  position: absolute;
+  inset: 0;
+}
+
+/* Catches pointer events over the universe while workspace is open (grid gaps pass through shell). */
+.twin-universe-interaction-blocker {
+  position: absolute;
+  inset: 0;
+  z-index: 23;
+  pointer-events: auto;
+  background: transparent;
+}
+
+.universe-galaxy-sidebar-host {
+  z-index: 22;
+  transition:
+    opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.universe-galaxy-sidebar-host--float {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 1rem;
+}
+
+.universe-galaxy-sidebar-host--exit {
+  opacity: 0;
+  transform: translateX(-28px) scale(0.94);
+  pointer-events: none;
+}
+
+.twin-workspace-shell {
+  position: absolute;
+  inset: 0;
+  z-index: 24;
+  padding: 3.5rem 0.75rem 0.5rem;
+  display: grid;
+  grid-template-columns: 228px minmax(0, 1fr) 268px;
+  grid-template-rows: 34vh minmax(0, 1fr);
+  gap: 12px;
+  pointer-events: none;
+  background: transparent;
+  transition: grid-template-rows 2.2s cubic-bezier(0.645, 0.045, 0.355, 1), gap 2.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+
+.twin-workspace-panel {
+  pointer-events: auto;
+  min-height: 0;
+  opacity: 0;
+}
+
+/* Remove transform and animation layer in open phase so browser renders backdrop-filter */
+.twin-workspace-shell--open .twin-workspace-panel {
+  transform: none !important;
+  animation: none !important;
+  opacity: 1 !important;
+}
+
+.twin-workspace-panel--left {
+  grid-column: 1;
+  grid-row: 1 / -1;
+  transform: translateX(-110%);
+}
+
+.twin-workspace-panel--right {
+  grid-column: 3;
+  grid-row: 1 / -1;
+  transform: translateX(110%);
+}
+
+.twin-workspace-panel--canvas {
+  grid-column: 2;
+  grid-row: 2;
+  transform: translateY(110%);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.twin-workspace-panel--in {
+  animation: twin-panel-snap-in 0.68s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.twin-workspace-panel--left.twin-workspace-panel--in {
+  animation-name: twin-panel-from-left;
+}
+
+.twin-workspace-panel--right.twin-workspace-panel--in {
+  animation-name: twin-panel-from-right;
+  animation-delay: 0.06s;
+}
+
+.twin-workspace-panel--canvas.twin-workspace-panel--in {
+  animation-name: twin-panel-from-bottom;
+  animation-delay: 0.1s;
+}
+
+.twin-workspace-panel--out {
+  animation: twin-panel-snap-out 0.62s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.twin-workspace-panel--left.twin-workspace-panel--out {
+  animation-name: twin-panel-to-left;
+}
+
+.twin-workspace-panel--right.twin-workspace-panel--out {
+  animation-name: twin-panel-to-right;
+  animation-delay: 0.04s;
+}
+
+.twin-workspace-panel--canvas.twin-workspace-panel--out {
+  animation-name: twin-panel-to-bottom;
+  animation-delay: 0.08s;
+}
+
+.twin-workspace-close {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: center;
+  align-self: end;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.25rem 0.85rem 0.15rem;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  pointer-events: auto;
+  opacity: 0;
+  animation: twin-workspace-close-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.42s forwards;
+  transition: transform 2.2s cubic-bezier(0.645, 0.045, 0.355, 1), opacity 2.2s ease;
+}
+
+.twin-workspace-shell--closing .twin-workspace-close {
+  animation: twin-workspace-close-out 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  pointer-events: none;
+}
+
+.twin-workspace-close:disabled {
+  cursor: default;
+}
+
+.twin-workspace-close__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  transition: color 0.2s ease;
+}
+
+.twin-workspace-close:hover .twin-workspace-close__label {
+  color: rgba(255, 255, 255, 0.92);
+}
+
+.twin-workspace-close__chevrons {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 2rem;
+  height: 1.65rem;
+}
+
+.twin-workspace-close__chevron {
+  position: absolute;
+  top: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: rgba(255, 255, 255, 0.55);
+  animation: twin-workspace-close-chevron 1.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  will-change: transform, opacity;
+}
+
+.twin-workspace-close__chevron--second {
+  animation-delay: 0.4s;
+}
+
+.twin-workspace-close:hover .twin-workspace-close__chevron {
+  color: #c1aeff;
+  animation-duration: 1.35s;
+}
+
+@keyframes twin-workspace-close-chevron {
+  0% {
+    opacity: 0;
+    transform: translateY(-8px);
   }
 
-  .twin-workspace-shell {
-    position: absolute;
-    inset: 0;
-    z-index: 24;
-    padding: 3.5rem 0.75rem 0.5rem;
-    display: grid;
-    grid-template-columns: 228px minmax(0, 1fr) 268px;
-    grid-template-rows: minmax(140px, 34vh) minmax(0, 1fr);
-    gap: 12px;
-    pointer-events: none;
-    background: transparent;
+  35% {
+    opacity: 0.9;
   }
 
-  .twin-workspace-panel {
-    pointer-events: auto;
-    min-height: 0;
+  100% {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+}
+
+@keyframes twin-workspace-close-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes twin-workspace-close-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes twin-panel-to-left {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(-110%);
+  }
+}
+
+@keyframes twin-panel-to-right {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(110%);
+  }
+}
+
+@keyframes twin-panel-to-bottom {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(110%);
+  }
+}
+
+@keyframes twin-panel-snap-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
     opacity: 0;
   }
+}
 
-  /* Remove transform and animation layer in open phase so browser renders backdrop-filter */
-  .twin-workspace-shell--open .twin-workspace-panel {
-    transform: none !important;
-    animation: none !important;
-    opacity: 1 !important;
-  }
-
-  .twin-workspace-panel--left {
-    grid-column: 1;
-    grid-row: 1 / -1;
+@keyframes twin-panel-from-left {
+  from {
+    opacity: 0;
     transform: translateX(-110%);
   }
 
-  .twin-workspace-panel--right {
-    grid-column: 3;
-    grid-row: 1 / -1;
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes twin-panel-from-right {
+  from {
+    opacity: 0;
     transform: translateX(110%);
   }
 
-  .twin-workspace-panel--canvas {
-    grid-column: 2;
-    grid-row: 2;
-    transform: translateY(110%);
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
+}
 
-  .twin-workspace-panel--in {
-    animation: twin-panel-snap-in 0.68s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-  }
-
-  .twin-workspace-panel--left.twin-workspace-panel--in {
-    animation-name: twin-panel-from-left;
-  }
-
-  .twin-workspace-panel--right.twin-workspace-panel--in {
-    animation-name: twin-panel-from-right;
-    animation-delay: 0.06s;
-  }
-
-  .twin-workspace-panel--canvas.twin-workspace-panel--in {
-    animation-name: twin-panel-from-bottom;
-    animation-delay: 0.1s;
-  }
-
-  .twin-workspace-panel--out {
-    animation: twin-panel-snap-out 0.62s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  }
-
-  .twin-workspace-panel--left.twin-workspace-panel--out {
-    animation-name: twin-panel-to-left;
-  }
-
-  .twin-workspace-panel--right.twin-workspace-panel--out {
-    animation-name: twin-panel-to-right;
-    animation-delay: 0.04s;
-  }
-
-  .twin-workspace-panel--canvas.twin-workspace-panel--out {
-    animation-name: twin-panel-to-bottom;
-    animation-delay: 0.08s;
-  }
-
-  .twin-workspace-close {
-    grid-column: 2;
-    grid-row: 1;
-    justify-self: center;
-    align-self: end;
-    margin-bottom: 0.35rem;
-    z-index: 2;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.25rem 0.85rem 0.15rem;
-    border: none;
-    background: transparent;
-    cursor: pointer;
-    pointer-events: auto;
+@keyframes twin-panel-from-bottom {
+  from {
     opacity: 0;
-    animation: twin-workspace-close-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) 0.42s forwards;
+    transform: translateY(110%);
   }
 
-  .twin-workspace-shell--closing .twin-workspace-close {
-    animation: twin-workspace-close-out 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    pointer-events: none;
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.workspace-bg-grid {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
+
+.workspace-insight-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+
+.workspace-insight-card:hover:not(.workspace-insight-card--pinned) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+  border-color: rgba(193, 174, 255, 0.25) !important;
+}
+
+.workspace-pin-card {
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.workspace-pin-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+@keyframes workspace-zone-pulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(193, 174, 255, 0);
   }
 
-  .twin-workspace-close:disabled {
-    cursor: default;
+  50% {
+    box-shadow: 0 0 0 4px rgba(193, 174, 255, 0.15);
   }
+}
 
-  .twin-workspace-close__label {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.45);
-    transition: color 0.2s ease;
-  }
+.workspace-zone-drop-target {
+  animation: workspace-zone-pulse 1.2s ease-in-out infinite;
+  border-color: rgba(193, 174, 255, 0.45) !important;
+  background: rgba(193, 174, 255, 0.06) !important;
+}
 
-  .twin-workspace-close:hover .twin-workspace-close__label {
-    color: rgba(255, 255, 255, 0.92);
-  }
+/* Industry OS workspace — glassmorphic shell */
+.ws-shell {
+  background-color: #0a1428;
+  background-image: url('/workspace_bg.png');
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
 
-  .twin-workspace-close__chevrons {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    width: 2rem;
-    height: 1.65rem;
-  }
+.ws-glass {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+}
 
-  .twin-workspace-close__chevron {
-    position: absolute;
-    top: 0;
-    width: 1.25rem;
-    height: 1.25rem;
-    color: rgba(255, 255, 255, 0.55);
-    animation: twin-workspace-close-chevron 1.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-    will-change: transform, opacity;
-  }
+/* Shared panel glass — left nav, active canvas, etc. */
+.ws-panel-glass {
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(20px) saturate(1.35);
+  -webkit-backdrop-filter: blur(20px) saturate(1.35);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
 
-  .twin-workspace-close__chevron--second {
-    animation-delay: 0.4s;
-  }
+.ws-glass-strong {
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-right-color: rgba(148, 163, 255, 0.2);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset -1px 0 0 rgba(129, 140, 248, 0.12);
+}
 
-  .twin-workspace-close:hover .twin-workspace-close__chevron {
-    color: #c1aeff;
-    animation-duration: 1.35s;
-  }
 
-  @keyframes twin-workspace-close-chevron {
-    0% {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-    35% {
-      opacity: 0.9;
-    }
-    100% {
-      opacity: 0;
-      transform: translateY(16px);
-    }
-  }
-
-  @keyframes twin-workspace-close-in {
-    from {
-      opacity: 0;
-      transform: translateY(-8px);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  @keyframes twin-workspace-close-out {
-    from {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    to {
-      opacity: 0;
-      transform: translateY(-6px);
-    }
-  }
-
-  @keyframes twin-panel-to-left {
-    from {
-      opacity: 1;
-      transform: translateX(0);
-    }
-    to {
-      opacity: 0;
-      transform: translateX(-110%);
-    }
-  }
-
-  @keyframes twin-panel-to-right {
-    from {
-      opacity: 1;
-      transform: translateX(0);
-    }
-    to {
-      opacity: 0;
-      transform: translateX(110%);
-    }
-  }
-
-  @keyframes twin-panel-to-bottom {
-    from {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    to {
-      opacity: 0;
-      transform: translateY(110%);
-    }
-  }
-
-  @keyframes twin-panel-snap-out {
-    from {
-      opacity: 1;
-    }
-    to {
-      opacity: 0;
-    }
-  }
-
-  @keyframes twin-panel-from-left {
-    from {
-      opacity: 0;
-      transform: translateX(-110%);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-
-  @keyframes twin-panel-from-right {
-    from {
-      opacity: 0;
-      transform: translateX(110%);
-    }
-    to {
-      opacity: 1;
-      transform: translateX(0);
-    }
-  }
-
-  @keyframes twin-panel-from-bottom {
-    from {
-      opacity: 0;
-      transform: translateY(110%);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0);
-    }
-  }
-
-  .workspace-bg-grid {
-    background-image:
-      linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-    background-size: 48px 48px;
-  }
-
-  .workspace-insight-card {
-    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-  }
-
-  .workspace-insight-card:hover:not(.workspace-insight-card--pinned) {
-    transform: translateY(-2px);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
-    border-color: rgba(193, 174, 255, 0.25) !important;
-  }
-
-  .workspace-pin-card {
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-  }
-
-  .workspace-pin-card:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-  }
-
-  @keyframes workspace-zone-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(193, 174, 255, 0); }
-    50% { box-shadow: 0 0 0 4px rgba(193, 174, 255, 0.15); }
-  }
-
-  .workspace-zone-drop-target {
-    animation: workspace-zone-pulse 1.2s ease-in-out infinite;
-    border-color: rgba(193, 174, 255, 0.45) !important;
-    background: rgba(193, 174, 255, 0.06) !important;
-  }
-
-  /* Industry OS workspace — glassmorphic shell */
-  .ws-shell {
-    background-color: #0a1428;
-    background-image: url('/workspace_bg.png');
-    background-size: cover;
-    background-position: center center;
-    background-repeat: no-repeat;
-  }
-
-  .ws-glass {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(20px) saturate(1.4);
-    -webkit-backdrop-filter: blur(20px) saturate(1.4);
-  }
-
-  /* Shared panel glass — left nav, active canvas, etc. */
-  .ws-panel-glass {
-    background: rgba(0, 0, 0, 0.3);
-    backdrop-filter: blur(20px) saturate(1.35);
-    -webkit-backdrop-filter: blur(20px) saturate(1.35);
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.35),
-      inset 0 1px 0 rgba(255, 255, 255, 0.07);
-  }
-
-  .ws-glass-strong {
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-right-color: rgba(148, 163, 255, 0.2);
-    backdrop-filter: blur(24px) saturate(1.4);
-    -webkit-backdrop-filter: blur(24px) saturate(1.4);
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.12),
-      inset -1px 0 0 rgba(129, 140, 248, 0.12);
-  }
-  
-
-  .ws-glass-panel {
-    background: linear-gradient(
-      165deg,
+.ws-glass-panel {
+  background: linear-gradient(165deg,
       rgba(255, 255, 255, 0.07) 0%,
-      rgba(255, 255, 255, 0.02) 100%
-    );
-    border: 1px solid rgba(255, 255, 255, 0.09);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
-  }
+      rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
 
-  .ws-zone-active {
-    background: rgba(193, 174, 255, 0.08) !important;
-    border-color: rgba(193, 174, 255, 0.28) !important;
-    box-shadow:
-      0 0 0 1px rgba(193, 174, 255, 0.12),
-      inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  }
+.ws-zone-active {
+  background: rgba(193, 174, 255, 0.08) !important;
+  border-color: rgba(193, 174, 255, 0.28) !important;
+  box-shadow:
+    0 0 0 1px rgba(193, 174, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
 
-  .ws-input {
-    background: rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
+.ws-input {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
 
-  .ws-input:focus {
-    border-color: rgba(193, 174, 255, 0.35);
-    box-shadow: 0 0 0 3px rgba(193, 174, 255, 0.1);
-    outline: none;
-  }
+.ws-input:focus {
+  border-color: rgba(193, 174, 255, 0.35);
+  box-shadow: 0 0 0 3px rgba(193, 174, 255, 0.1);
+  outline: none;
+}
 
-  .ws-btn-ghost {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    transition: background 0.2s ease, border-color 0.2s ease;
-  }
+.ws-btn-ghost {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
 
-  .ws-btn-ghost:hover {
-    background: rgba(255, 255, 255, 0.09);
-    border-color: rgba(255, 255, 255, 0.16);
-  }
+.ws-btn-ghost:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.16);
+}
 
-  .ws-btn-primary {
-    background: linear-gradient(135deg, rgba(249, 198, 255, 0.22), rgba(193, 174, 255, 0.14));
-    border: 1px solid rgba(193, 174, 255, 0.35);
-    color: #f0e8ff;
-    transition: filter 0.2s ease, box-shadow 0.2s ease;
-  }
+.ws-btn-primary {
+  background: linear-gradient(135deg, rgba(249, 198, 255, 0.22), rgba(193, 174, 255, 0.14));
+  border: 1px solid rgba(193, 174, 255, 0.35);
+  color: #f0e8ff;
+  transition: filter 0.2s ease, box-shadow 0.2s ease;
+}
 
-  .ws-btn-primary:hover {
-    filter: brightness(1.08);
-    box-shadow: 0 4px 20px rgba(193, 174, 255, 0.15);
-  }
+.ws-btn-primary:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 4px 20px rgba(193, 174, 255, 0.15);
+}
 
-  .ws-drop-surface {
-    background: rgba(255, 255, 255, 0.02);
-    border: 1px dashed rgba(255, 255, 255, 0.12);
-    transition: border-color 0.2s ease, background 0.2s ease;
-  }
+.ws-drop-surface {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
 
-  .ws-drop-surface-active {
-    border-color: rgba(193, 174, 255, 0.4) !important;
-    background: rgba(193, 174, 255, 0.04) !important;
-  }
+.ws-drop-surface-active {
+  border-color: rgba(193, 174, 255, 0.4) !important;
+  background: rgba(193, 174, 255, 0.04) !important;
+}
 
-  .workspace-insight-card {
-    background: rgba(255, 255, 255, 0.03) !important;
-    border: 1px solid rgba(255, 255, 255, 0.07) !important;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-  }
+.workspace-insight-card {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
 
-  .workspace-pin-card {
-    background: rgba(255, 255, 255, 0.04) !important;
-    border: 1px solid rgba(255, 255, 255, 0.09) !important;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
-  }
+.workspace-pin-card {
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.09) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
 
-  .workspace-pin-card:hover {
-    border-color: rgba(193, 174, 255, 0.2) !important;
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.35),
-      inset 0 1px 0 rgba(255, 255, 255, 0.06);
-  }
+.workspace-pin-card:hover {
+  border-color: rgba(193, 174, 255, 0.2) !important;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
 
-  /* ── BDT Product Workspace (screenshot layout) ── */
-  .ws-layout {
-    max-width: 1920px;
-    margin: 0 auto;
-    width: 100%;
-  }
+/* ── BDT Product Workspace (screenshot layout) ── */
+.ws-layout {
+  max-width: 1920px;
+  margin: 0 auto;
+  width: 100%;
+}
 
-  .ws-planet-zone {
-    height: min(38vh, 340px);
-    min-height: 260px;
-  }
+.ws-planet-zone {
+  height: min(38vh, 340px);
+  min-height: 260px;
+  transition: height 2.2s cubic-bezier(0.645, 0.045, 0.355, 1), min-height 2.2s cubic-bezier(0.645, 0.045, 0.355, 1), opacity 2.2s ease, transform 2.2s cubic-bezier(0.645, 0.045, 0.355, 1), margin 2.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+}
 
-  .ws-planet-svg {
-    filter: drop-shadow(0 0 48px rgba(129, 140, 248, 0.15));
-  }
+.ws-planet-svg {
+  filter: drop-shadow(0 0 48px rgba(129, 140, 248, 0.15));
+}
 
-  .ws-canvas-wrap {
-    perspective: 1400px;
-    perspective-origin: 50% 20%;
-  }
+.ws-canvas-wrap {
+  perspective: 1400px;
+  perspective-origin: 50% 20%;
+  container-type: inline-size;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
 
-  .ws-canvas-trapezium {
-    width: 100%;
-    transform: rotateX(2.5deg);
-    transform-origin: 50% 0%;
-  }
+.ws-canvas-trapezium {
+  width: 100%;
+  transform: rotateX(0deg); /* Reset 3D tilt to ensure text sharpness and prevent rasterization blur */
+  transform-origin: 50% 0%;
+}
 
-  .ws-canvas-frame {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    min-height: 0;
-    overflow: visible;
-    filter: drop-shadow(0 8px 32px rgba(0, 0, 0, 0.35));
-  }
+.ws-canvas-frame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: visible;
+  filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.2));
+}
 
-  .ws-canvas-frame-svg {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    overflow: visible;
-  }
+.ws-canvas-frame-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
 
-  .ws-canvas-frame-fill {
-    fill: rgba(7, 10, 22, 0.72);
-  }
+.ws-canvas-frame-fill {
+  /* fill: #000000; */
+}
 
-  .ws-canvas-frame-stroke {
-    fill: none;
-    stroke: rgba(255, 255, 255, 0.12);
-    stroke-width: 1px;
-    stroke-linejoin: round;
-    stroke-linecap: round;
-    vector-effect: non-scaling-stroke;
-    shape-rendering: geometricPrecision;
-  }
+.ws-canvas-frame-stroke {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.2);
+  stroke-width: 1px;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+  shape-rendering: geometricPrecision;
+}
 
-  .ws-canvas-frame-inner {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    background: transparent;
-    backdrop-filter: blur(24px) saturate(1.4);
-    -webkit-backdrop-filter: blur(24px) saturate(1.4);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.12),
-      inset -1px 0 0 rgba(129, 140, 248, 0.12);
-  }
+.ws-canvas-frame-inner {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: transparent;
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset -1px 0 0 rgba(129, 140, 248, 0.12);
+}
 
-  .ws-canvas-tab-slot {
-    position: absolute;
-    display: flex;
-    align-items: center;
-    justify-content: flex-start;
-    padding-left: 4px;
-    pointer-events: none;
-    z-index: 2;
-  }
+.ws-canvas-tab-slot {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-left: 4px;
+  pointer-events: none;
+  z-index: 2;
+}
 
-  .ws-canvas-tab-label {
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.24em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.55);
-  }
+.ws-canvas-tab-label {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  margin-left: -160px;
+}
 
-  .ws-canvas-frame-body {
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-    min-height: 0;
-    background: transparent;
-  }
+.ws-canvas-toolbar {
+  margin-top: -160px;
+}
 
-  /* Inset header content so it sits between the two raised top shoulders */
-  .ws-canvas-inset {
-    margin-left: 4.5%;
-    margin-right: 4.5%;
-  }
+.ws-canvas-frame-body {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: transparent;
+}
 
-  /* Stage stays inside the shape near the top (which is narrowest); the
+/* Inset header content so it sits between the two raised top shoulders */
+/* Collapsed version */
+.ws-canvas-inset {
+  margin-left: 6%;
+  margin-right: 6%;
+  transition: margin-left 2.2s cubic-bezier(0.645, 0.045, 0.355, 1), margin-right 2.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+
+/* Expanded version (fullscreen) */
+.ws-canvas-wrap--fullscreen .ws-canvas-inset {
+  margin-left: 3%;
+  margin-right: 3%;
+}
+
+/* Stage stays inside the shape near the top (which is narrowest); the
      splayed lower body provides decorative margin around the cards. */
-  .ws-canvas-stage-pad {
-    padding-left: 13%;
-    padding-right: 13%;
-  }
+.ws-canvas-stage-pad {
+  padding-left: 13%;
+  padding-right: 13%;
+}
 
-  .ws-canvas-toolbar-divider {
-    height: 1px;
-    background: linear-gradient(
-      90deg,
+.ws-canvas-toolbar-divider {
+  height: 1px;
+  background: linear-gradient(90deg,
       transparent 0%,
       rgba(255, 255, 255, 0.1) 20%,
       rgba(255, 255, 255, 0.1) 80%,
-      transparent 100%
-    );
-  }
+      transparent 100%);
+}
 
-  .ws-canvas-stage {
-    background:
-      linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
-      radial-gradient(ellipse 80% 60% at 50% 40%, rgba(56, 189, 248, 0.05) 0%, transparent 55%);
-    background-size: 28px 28px, 28px 28px, 100% 100%;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 12px;
-  }
+.ws-canvas-stage {
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    radial-gradient(ellipse 80% 60% at 50% 40%, rgba(56, 189, 248, 0.05) 0%, transparent 55%);
+  background-size: 28px 28px, 28px 28px, 100% 100%;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 12px;
+}
 
-  .ws-glass-block {
-    --extrude: 5px;
-    --radius: 14px;
-    position: absolute;
-    z-index: 1;
-  }
+.ws-glass-block {
+  --extrude: 5px;
+  --radius: 14px;
+  position: absolute;
+  z-index: 1;
+}
 
-  .ws-glass-block--hero {
-    z-index: 3;
-  }
+.ws-glass-block--hero {
+  z-index: 3;
+}
 
-  /* darker base slab — visible bottom/right edge for 3D depth */
-  .ws-glass-block__extrude {
-    position: absolute;
-    inset: 0;
-    border-radius: var(--radius);
-    transform: translate(var(--extrude), var(--extrude));
-    background: linear-gradient(
-      160deg,
+/* darker base slab — visible bottom/right edge for 3D depth */
+.ws-glass-block__extrude {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  transform: translate(var(--extrude), var(--extrude));
+  background: linear-gradient(160deg,
       color-mix(in srgb, var(--card-accent) 22%, transparent) 0%,
-      transparent 75%
-    );
-    border: 1px solid color-mix(in srgb, var(--card-accent) 22%, rgba(255, 255, 255, 0.06));
-    box-shadow:
-      0 10px 28px rgba(0, 0, 0, 0.55),
-      0 0 20px color-mix(in srgb, var(--card-accent) 15%, transparent);
-    z-index: 0;
-  }
+      transparent 75%);
+  border: 1px solid color-mix(in srgb, var(--card-accent) 22%, rgba(255, 255, 255, 0.06));
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.55),
+    0 0 20px color-mix(in srgb, var(--card-accent) 15%, transparent);
+  z-index: 0;
+}
 
-  /* top glass face */
-  .ws-glass-block__face {
-    position: absolute;
-    inset: 0;
-    padding: 11px 12px;
-    border-radius: var(--radius);
-    background:
-      linear-gradient(
-        152deg,
-        color-mix(in srgb, var(--card-accent) 26%, transparent) 0%,
-        color-mix(in srgb, var(--card-accent) 8%, transparent) 42%,
-        transparent 100%
-      ),
-      rgba(8, 12, 24, 0.32);
-    backdrop-filter: blur(24px) saturate(1.5);
-    -webkit-backdrop-filter: blur(24px) saturate(1.5);
-    border: 1px solid color-mix(in srgb, var(--card-accent) 38%, rgba(255, 255, 255, 0.1));
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.16),
-      inset 1px 0 0 color-mix(in srgb, var(--card-accent) 45%, rgba(255, 255, 255, 0.06)),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.25),
-      0 0 0 1px color-mix(in srgb, var(--card-accent) 20%, transparent),
-      0 0 36px color-mix(in srgb, var(--card-accent) 24%, transparent),
-      0 14px 32px rgba(0, 0, 0, 0.42);
-    z-index: 1;
-    overflow: hidden;
-  }
+/* top glass face */
+.ws-glass-block__face {
+  position: absolute;
+  inset: 0;
+  padding: 11px 12px;
+  border-radius: var(--radius);
+  background:
+    linear-gradient(152deg,
+      color-mix(in srgb, var(--card-accent) 26%, transparent) 0%,
+      color-mix(in srgb, var(--card-accent) 8%, transparent) 42%,
+      transparent 100%),
+    rgba(8, 12, 24, 0.32);
+  backdrop-filter: blur(24px) saturate(1.5);
+  -webkit-backdrop-filter: blur(24px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, var(--card-accent) 38%, rgba(255, 255, 255, 0.1));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 1px 0 0 color-mix(in srgb, var(--card-accent) 45%, rgba(255, 255, 255, 0.06)),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.25),
+    0 0 0 1px color-mix(in srgb, var(--card-accent) 20%, transparent),
+    0 0 12px color-mix(in srgb, var(--card-accent) 10%, transparent),
+    0 4px 12px rgba(0, 0, 0, 0.22);
+  z-index: 1;
+  overflow: hidden;
+}
 
-  /* bright accent rim along top edge */
-  .ws-glass-block__face::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 6%;
-    right: 6%;
-    height: 1px;
-    border-radius: 1px;
-    background: linear-gradient(
-      90deg,
+/* bright accent rim along top edge */
+.ws-glass-block__face::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 6%;
+  right: 6%;
+  height: 1px;
+  border-radius: 1px;
+  background: linear-gradient(90deg,
       transparent 0%,
       var(--card-accent) 35%,
       color-mix(in srgb, var(--card-accent) 70%, white) 50%,
       var(--card-accent) 65%,
-      transparent 100%
-    );
-    opacity: 0.85;
-    filter: blur(0.4px);
-    pointer-events: none;
-    z-index: 2;
-  }
+      transparent 100%);
+  opacity: 0.85;
+  filter: blur(0.4px);
+  pointer-events: none;
+  z-index: 2;
+}
 
-  /* top-left sheen + left accent glow */
-  .ws-glass-block__face::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background:
-      linear-gradient(125deg, rgba(255, 255, 255, 0.09) 0%, transparent 38%),
-      linear-gradient(90deg, color-mix(in srgb, var(--card-accent) 12%, transparent) 0%, transparent 18%);
-    pointer-events: none;
-    z-index: 1;
-  }
+/* top-left sheen + left accent glow */
+.ws-glass-block__face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background:
+    linear-gradient(125deg, rgba(255, 255, 255, 0.09) 0%, transparent 38%),
+    linear-gradient(90deg, color-mix(in srgb, var(--card-accent) 12%, transparent) 0%, transparent 18%);
+  pointer-events: none;
+  z-index: 1;
+}
 
-  .ws-glass-block--hero .ws-glass-block__face {
-    background:
-      linear-gradient(
-        152deg,
-        color-mix(in srgb, var(--card-accent) 38%, transparent) 0%,
-        color-mix(in srgb, var(--card-accent) 12%, transparent) 38%,
-        transparent 100%
-      ),
-      rgba(8, 12, 24, 0.36);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      inset 1px 0 0 color-mix(in srgb, var(--card-accent) 55%, rgba(255, 255, 255, 0.08)),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.2),
-      0 0 0 1px color-mix(in srgb, var(--card-accent) 28%, transparent),
-      0 0 48px color-mix(in srgb, var(--card-accent) 32%, transparent),
-      0 16px 40px rgba(0, 0, 0, 0.48);
-  }
+.ws-glass-block--hero .ws-glass-block__face {
+  background:
+    linear-gradient(152deg,
+      color-mix(in srgb, var(--card-accent) 38%, transparent) 0%,
+      color-mix(in srgb, var(--card-accent) 12%, transparent) 38%,
+      transparent 100%),
+    rgba(8, 12, 24, 0.36);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    inset 1px 0 0 color-mix(in srgb, var(--card-accent) 55%, rgba(255, 255, 255, 0.08)),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.2),
+    0 0 0 1px color-mix(in srgb, var(--card-accent) 28%, transparent),
+    0 0 16px color-mix(in srgb, var(--card-accent) 12%, transparent),
+    0 6px 16px rgba(0, 0, 0, 0.28);
+}
 
-  .ws-glass-block--hero .ws-glass-block__extrude {
-    background: linear-gradient(
-      160deg,
+.ws-glass-block--hero .ws-glass-block__extrude {
+  background: linear-gradient(160deg,
       color-mix(in srgb, var(--card-accent) 28%, transparent) 0%,
-      transparent 75%
-    );
-    box-shadow:
-      0 12px 32px rgba(0, 0, 0, 0.6),
-      0 0 28px color-mix(in srgb, var(--card-accent) 22%, transparent);
-  }
+      transparent 75%);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.6),
+    0 0 28px color-mix(in srgb, var(--card-accent) 22%, transparent);
+}
 
-  /* keep content above pseudo-layers */
-  .ws-glass-block__face > * {
-    position: relative;
-    z-index: 3;
-  }
+/* keep content above pseudo-layers */
+.ws-glass-block__face>* {
+  position: relative;
+  z-index: 3;
+}
 
-  .ws-card-eyebrow {
-    font-size: 9.5px;
-    font-weight: 700;
-    letter-spacing: 0.13em;
-    text-transform: uppercase;
-  }
+.ws-card-eyebrow {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
 
-  .ws-card-close {
-    color: rgba(255, 255, 255, 0.28);
-    cursor: pointer;
-    transition: color 0.15s ease;
-  }
+.ws-card-close {
+  color: rgba(255, 255, 255, 0.28);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
 
-  .ws-card-close:hover {
-    color: rgba(255, 255, 255, 0.7);
-  }
+.ws-card-close:hover {
+  color: rgba(255, 255, 255, 0.7);
+}
 
-  .ws-hero-tag {
-    font-size: 10px;
-    font-weight: 500;
-    color: rgba(224, 235, 255, 0.85);
-    padding: 3px 9px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(147, 197, 253, 0.25);
-  }
+.ws-hero-tag {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(224, 235, 255, 0.85);
+  padding: 3px 9px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(147, 197, 253, 0.25);
+}
 
-  .ws-conn-node {
-    position: absolute;
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    transform: translate(-50%, -50%);
-    background: #bfdbfe;
-    box-shadow:
-      0 0 0 2px rgba(8, 12, 26, 0.9),
-      0 0 8px rgba(147, 197, 253, 0.9);
-    z-index: 3;
-  }
+.ws-conn-node {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: #bfdbfe;
+  box-shadow:
+    0 0 0 2px rgba(8, 12, 26, 0.9),
+    0 0 8px rgba(147, 197, 253, 0.9);
+  z-index: 3;
+}
 
-  .ws-left-nav {
-    width: 228px;
-    padding: 20px 14px 16px;
-    border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    border-right-color: rgba(148, 163, 255, 0.2);
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.01) 100%);
-    backdrop-filter: blur(24px) saturate(1.4);
-    -webkit-backdrop-filter: blur(24px) saturate(1.4);
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.12),
-      inset -1px 0 0 rgba(129, 140, 248, 0.12);
-  }
+.ws-left-nav {
+  width: 228px;
+  padding: 20px 14px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-right-color: rgba(148, 163, 255, 0.2);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.01) 100%);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset -1px 0 0 rgba(129, 140, 248, 0.12);
+}
 
-  .ws-nav-section {
-    padding-bottom: 4px;
-  }
+.ws-nav-section {
+  padding-bottom: 4px;
+}
 
-  .ws-nav-section-title {
-    padding: 0 10px 10px;
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: rgba(255, 255, 255, 0.32);
-  }
+.ws-nav-section-title {
+  padding: 0 10px 10px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.32);
+}
 
-  .ws-nav-divider {
-    margin: 12px 8px 14px;
-    border: none;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
-  }
+.ws-nav-divider {
+  margin: 12px 8px 14px;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
 
-  .ws-nav-list {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
+.ws-nav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
 
-  .ws-nav-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 12px;
-    border-radius: 14px;
-    font-size: 14px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.72);
-    background: transparent;
-    border: 1px solid transparent;
-    cursor: pointer;
-    transition:
-      background 0.2s ease,
-      color 0.2s ease,
-      box-shadow 0.2s ease,
-      border-color 0.2s ease;
-  }
+.ws-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.72);
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
 
-  .ws-nav-item:hover {
-    background: rgba(255, 255, 255, 0.05);
-    color: rgba(255, 255, 255, 0.92);
-  }
+.ws-nav-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.92);
+}
 
-  .ws-nav-item--active {
-    color: #ffffff;
-    background: linear-gradient(
-      102deg,
+.ws-nav-item--active {
+  color: #ffffff;
+  background: linear-gradient(102deg,
       rgba(120, 108, 255, 0.38) 0%,
       rgba(88, 80, 200, 0.22) 42%,
-      rgba(25, 32, 72, 0.42) 100%
-    );
-    border-color: rgba(186, 168, 255, 0.52);
-    backdrop-filter: blur(14px) saturate(1.5);
-    -webkit-backdrop-filter: blur(14px) saturate(1.5);
-    box-shadow:
-      0 4px 18px rgba(0, 0, 0, 0.28),
-      0 0 22px rgba(124, 58, 237, 0.22),
-      inset 0 1px 0 rgba(255, 255, 255, 0.28),
-      inset 1px 0 0 rgba(196, 181, 253, 0.14);
-  }
+      rgba(25, 32, 72, 0.42) 100%);
+  border-color: rgba(186, 168, 255, 0.52);
+  backdrop-filter: blur(14px) saturate(1.5);
+  -webkit-backdrop-filter: blur(14px) saturate(1.5);
+  box-shadow:
+    0 4px 18px rgba(0, 0, 0, 0.28),
+    0 0 22px rgba(124, 58, 237, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    inset 1px 0 0 rgba(196, 181, 253, 0.14);
+}
 
-  .ws-nav-item--active:hover {
-    color: #ffffff;
-    background: linear-gradient(
-      102deg,
+.ws-nav-item--active:hover {
+  color: #ffffff;
+  background: linear-gradient(102deg,
       rgba(130, 118, 255, 0.44) 0%,
       rgba(92, 84, 210, 0.26) 42%,
-      rgba(28, 36, 80, 0.46) 100%
-    );
-    border-color: rgba(196, 181, 253, 0.62);
-    box-shadow:
-      0 4px 20px rgba(0, 0, 0, 0.3),
-      0 0 26px rgba(124, 58, 237, 0.28),
-      inset 0 1px 0 rgba(255, 255, 255, 0.32),
-      inset 1px 0 0 rgba(196, 181, 253, 0.18);
+      rgba(28, 36, 80, 0.46) 100%);
+  border-color: rgba(196, 181, 253, 0.62);
+  box-shadow:
+    0 4px 20px rgba(0, 0, 0, 0.3),
+    0 0 26px rgba(124, 58, 237, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 1px 0 0 rgba(196, 181, 253, 0.18);
+}
+
+.ws-nav-item--active svg {
+  filter: drop-shadow(0 0 5px rgba(167, 139, 250, 0.65));
+}
+
+.ws-nav-item--active .ws-nav-chevron {
+  color: rgba(186, 210, 255, 0.55);
+}
+
+.ws-nav-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #ffffff;
+  background: #7c3aed;
+  box-shadow: 0 2px 8px rgba(124, 58, 237, 0.45);
+}
+
+.ws-nav-new-shortcut {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.ws-nav-new-shortcut:hover {
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.ws-back-fab {
+  position: absolute;
+  top: calc(3.5rem + 14px);
+  left: 248px;
+  z-index: 80;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  color: rgba(255, 255, 255, 0.65);
+  background: rgba(12, 14, 28, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: color 0.2s ease, background 0.2s ease;
+}
+
+.ws-back-fab:hover:not(:disabled) {
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ws-back-fab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.ws-signal-card {
+  background: transparent;
+  transition: border-color 0.2s ease;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.05);
+}
+
+.ws-signal-card:hover {
+  border-color: rgba(193, 174, 255, 0.2);
+}
+
+.ws-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: background 0.2s ease;
+}
+
+.ws-icon-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.ws-btn-share {
+  background: rgba(139, 92, 246, 0.25);
+  border: 1px solid rgba(139, 92, 246, 0.45);
+  color: #f0e8ff;
+}
+
+.ws-btn-share:hover {
+  background: rgba(139, 92, 246, 0.35);
+}
+
+.ws-mini-btn {
+  width: 20px;
+  height: 18px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.ws-toolbar-ai {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.45), rgba(193, 174, 255, 0.25));
+  border: 1px solid rgba(193, 174, 255, 0.4);
+  color: #fff;
+  box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2);
+}
+
+.ws-toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* Focus Today panel */
+.ws-focus-panel {
+  padding: 16px 16px 14px;
+  border-radius: 16px;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.ws-focus-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ws-focus-title {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #ffffff;
+}
+
+.ws-focus-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: -2px;
+  padding: 2px;
+  color: rgba(255, 255, 255, 0.38);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.ws-focus-close:hover {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.ws-focus-status {
+  margin-top: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(186, 210, 255, 0.55);
+}
+
+.ws-focus-progress-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.ws-focus-progress-track {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.ws-focus-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #4f5cff 0%, #7c5cff 45%, #a855f7 100%);
+  box-shadow:
+    0 0 14px rgba(168, 85, 247, 0.55),
+    0 0 6px rgba(99, 102, 241, 0.4);
+  transition: width 0.4s cubic-bezier(0.22, 0.85, 0.28, 1);
+}
+
+.ws-focus-pct {
+  flex-shrink: 0;
+  min-width: 2.25rem;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: right;
+}
+
+.ws-focus-list {
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ws-focus-task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ws-focus-check {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ws-focus-check--done {
+  background: linear-gradient(135deg, #5b6cff 0%, #8b5cf6 55%, #a855f7 100%);
+  box-shadow: 0 0 10px rgba(139, 92, 246, 0.45);
+}
+
+.ws-focus-check--open {
+  border: 1.5px solid rgba(255, 255, 255, 0.38);
+  background: transparent;
+}
+
+.ws-focus-task-label {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.ws-focus-task-label--done {
+  color: rgba(230, 236, 255, 0.72);
+}
+
+.ws-focus-more {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.38);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.ws-focus-more:hover {
+  color: rgba(255, 255, 255, 0.62);
+}
+
+/* Canvas minimap (right panel, below Focus Today) */
+.ws-minimap-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-left: 0px;
+  flex-shrink: 0;
+}
+
+.ws-minimap-panel {
+  flex: 1;
+  min-width: 0;
+  padding: 8px;
+  border-radius: 14px;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(24px) saturate(1.4);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12);
+}
+
+.ws-minimap-view {
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ws-minimap-viewport {
+  position: absolute;
+  left: 22%;
+  top: 18%;
+  width: 56%;
+  height: 52%;
+  border: 1.5px solid rgba(193, 174, 255, 0.75);
+  border-radius: 2px;
+  box-shadow: 0 0 12px rgba(139, 92, 246, 0.25);
+  pointer-events: none;
+}
+
+.ws-minimap-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.ws-minimap-control-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.ws-minimap-control-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.85);
+}
+
+@keyframes energyOrbRingSpin {
+  from {
+    transform: rotate(0deg);
   }
 
-  .ws-nav-item--active svg {
-    filter: drop-shadow(0 0 5px rgba(167, 139, 250, 0.65));
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.energy-orb-ring-spin {
+  transform-origin: center;
+  animation: energyOrbRingSpin 14s linear infinite;
+}
+
+/* Fullscreen Active Canvas frame and layout rules */
+.ws-canvas-frame-fill,
+.ws-canvas-frame-stroke,
+.ws-canvas-clip-path {
+  transition: d 2.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+
+.twin-workspace-shell:has(.ws-canvas-wrap--fullscreen) {
+  grid-template-rows: 0vh minmax(0, 1fr);
+  gap: 0px 12px;
+}
+
+.ws-center:has(.ws-canvas-wrap--fullscreen) .ws-planet-zone {
+  height: 0px !important;
+  min-height: 0px !important;
+  margin: 0px !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transform: translateY(-100%) scale(0.9) !important;
+}
+
+/* When active canvas is fullscreen, disable pointer events on the 3D viewport */
+div:has(.ws-canvas-wrap--fullscreen) .twin-universe-viewport {
+  pointer-events: none;
+}
+
+/* Container Queries for responsive active workspace canvas content */
+@container (max-width: 1200px) {
+  .ws-canvas-tab-slot {
+    left: 8% !important;
   }
 
-  .ws-nav-item--active .ws-nav-chevron {
-    color: rgba(186, 210, 255, 0.55);
+  .ws-canvas-tab-label {
+    margin-left: -60px !important;
   }
 
-  .ws-nav-badge {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 22px;
-    height: 22px;
-    padding: 0 6px;
-    border-radius: 999px;
-    font-size: 11px;
-    font-weight: 700;
-    color: #ffffff;
-    background: #7c3aed;
-    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.45);
+  .ws-canvas-toolbar {
+    margin-top: -120px !important;
+  }
+}
+
+@container (max-width: 880px) {
+
+  /* Position the Active Canvas tab slot and label properly at the top-left corner */
+  .ws-canvas-tab-slot {
+    left: 16px !important;
+    width: auto !important;
   }
 
-  .ws-nav-new-shortcut {
-    margin-top: 4px;
-    color: rgba(255, 255, 255, 0.55);
+  .ws-canvas-tab-label {
+    margin-left: 0px !important;
+    margin-top: 8px !important;
   }
 
-  .ws-nav-new-shortcut:hover {
-    color: rgba(255, 255, 255, 0.88);
+  /* Reset the body paddingTop to a clean fixed offset and place the toolbar inline */
+  .ws-canvas-frame-body {
+    padding-top: 54px !important;
   }
 
-  .ws-back-fab {
-    position: absolute;
-    top: calc(3.5rem + 14px);
-    left: 248px;
-    z-index: 80;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 36px;
-    height: 36px;
-    border-radius: 12px;
-    color: rgba(255, 255, 255, 0.65);
-    background: rgba(12, 14, 28, 0.55);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    transition: color 0.2s ease, background 0.2s ease;
+  .ws-canvas-toolbar {
+    margin-top: 0px !important;
+    margin-left: 16px !important;
+    margin-right: 16px !important;
   }
 
-  .ws-back-fab:hover:not(:disabled) {
-    color: #ffffff;
-    background: rgba(255, 255, 255, 0.08);
+  /* Make the canvas stage pad scrollable vertically and reduce side spacing */
+  .ws-canvas-stage-pad {
+    overflow-y: auto !important;
+    padding-left: 20px !important;
+    padding-right: 20px !important;
+    padding-bottom: 24px !important;
   }
 
-  .ws-back-fab:disabled {
-    opacity: 0.45;
-    cursor: not-allowed;
+  /* Hide connection lines and connector nodes */
+  .ws-canvas-stage-area>svg,
+  .ws-conn-node {
+    display: none !important;
   }
 
-  .ws-signal-card {
-    background: transparent;
-    transition: border-color 0.2s ease;
-    border-bottom: 0.5px solid rgba(255, 255, 255, 0.05);
+  /* Convert the absolute stage area to an auto-wrapping CSS Grid */
+  .ws-canvas-stage-area {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    display: grid !important;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)) !important;
+    gap: 20px !important;
+    padding: 12px 0px !important;
   }
 
-  .ws-signal-card:hover {
-    border-color: rgba(193, 174, 255, 0.2);
+  /* Make glass blocks relative and auto-sized so they stack in the grid */
+  .ws-glass-block {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    width: auto !important;
+    height: auto !important;
+    min-height: 160px !important;
+    margin: 0 !important;
   }
 
-  .ws-icon-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    color: rgba(255, 255, 255, 0.45);
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    transition: background 0.2s ease;
+  .ws-glass-block__extrude {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    transform: translate(var(--extrude), var(--extrude)) !important;
   }
 
-  .ws-icon-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.8);
+  .ws-glass-block__face {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: 100% !important;
   }
+}
 
-  .ws-btn-share {
-    background: rgba(139, 92, 246, 0.25);
-    border: 1px solid rgba(139, 92, 246, 0.45);
-    color: #f0e8ff;
-  }
+@container (max-width: 500px) {
 
-  .ws-btn-share:hover {
-    background: rgba(139, 92, 246, 0.35);
+  /* Handle micro-responsiveness of toolbar */
+  .ws-canvas-toolbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
   }
+}
 
-  .ws-mini-btn {
-    width: 20px;
-    height: 18px;
-    border-radius: 4px;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    color: rgba(255, 255, 255, 0.5);
-  }
+/* ── Glassmorphic Range Sliders ── */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  height: 5px;
+  outline: none;
+  transition: background 0.2s ease;
+}
 
-  .ws-toolbar-ai {
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.45), rgba(193, 174, 255, 0.25));
-    border: 1px solid rgba(193, 174, 255, 0.4);
-    color: #fff;
-    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.2);
-  }
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #a855f7;
+  cursor: pointer;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.6);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
 
-  .ws-toolbar-btn:hover {
-    background: rgba(255, 255, 255, 0.06);
-    color: rgba(255, 255, 255, 0.85);
-  }
+input[type="range"]::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+  background: #c084fc;
+}
 
-  /* Focus Today panel */
-  .ws-focus-panel {
-    padding: 16px 16px 14px;
-    border-radius: 16px;
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(24px) saturate(1.4);
-    -webkit-backdrop-filter: blur(24px) saturate(1.4);
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  }
+input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #a855f7;
+  cursor: pointer;
+  border: 1.5px solid rgba(255, 255, 255, 0.9);
+  box-shadow: 0 0 10px rgba(168, 85, 247, 0.6);
+  transition: transform 0.15s ease, background-color 0.15s ease;
+}
 
-  .ws-focus-header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 8px;
-  }
+input[type="range"]::-moz-range-thumb:hover {
+  transform: scale(1.15);
+  background: #c084fc;
+}
 
-  .ws-focus-title {
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: #ffffff;
+/* ── Card Expansion Morph Animations ── */
+@keyframes slideUpFade {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
   }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
 
-  .ws-focus-close {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-top: -2px;
-    padding: 2px;
-    color: rgba(255, 255, 255, 0.38);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    transition: color 0.2s ease;
-  }
+.animate-slide-up-fade {
+  animation: slideUpFade 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 
-  .ws-focus-close:hover {
-    color: rgba(255, 255, 255, 0.75);
-  }
+/* Stagger delay classes */
+.delay-50 {
+  animation-delay: 50ms;
+}
+.delay-100 {
+  animation-delay: 100ms;
+}
+.delay-150 {
+  animation-delay: 150ms;
+}
+.delay-200 {
+  animation-delay: 200ms;
+}
+.delay-250 {
+  animation-delay: 250ms;
+}
+.delay-300 {
+  animation-delay: 300ms;
+}
 
-  .ws-focus-status {
-    margin-top: 8px;
-    font-size: 12px;
-    font-weight: 500;
-    color: rgba(186, 210, 255, 0.55);
-  }
+/* Stage area override when card is active */
+.ws-canvas-stage-area--active {
+  position: absolute !important;
+  inset: 0px !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: block !important;
+  z-index: 10 !important;
+}
 
-  .ws-focus-progress-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-top: 12px;
-  }
+/* Active expanded glass block card override */
+.ws-glass-block--active {
+  position: absolute !important;
+  left: 0% !important;
+  top: 0% !important;
+  width: 100% !important;
+  height: 100% !important;
+  z-index: 50 !important;
+  transform: none !important;
+}
 
-  .ws-focus-progress-track {
-    flex: 1;
-    height: 8px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.08);
-    overflow: hidden;
-  }
+/* Ensure absolute children of glass block face are positioned absolute, bypassing face > * relative override */
+.ws-glass-block__face > .absolute {
+  position: absolute !important;
+}
 
-  .ws-focus-progress-fill {
-    height: 100%;
-    border-radius: 999px;
-    background: linear-gradient(90deg, #4f5cff 0%, #7c5cff 45%, #a855f7 100%);
-    box-shadow:
-      0 0 14px rgba(168, 85, 247, 0.55),
-      0 0 6px rgba(99, 102, 241, 0.4);
-    transition: width 0.4s cubic-bezier(0.22, 0.85, 0.28, 1);
-  }
+/* Custom sleek scrollbar for the Copilot chat messages container */
+.ws-chat-messages-container::-webkit-scrollbar {
+  width: 6px;
+}
 
-  .ws-focus-pct {
-    flex-shrink: 0;
-    min-width: 2.25rem;
-    font-size: 12px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.45);
-    text-align: right;
-  }
+.ws-chat-messages-container::-webkit-scrollbar-track {
+  background: transparent;
+}
 
-  .ws-focus-list {
-    margin: 14px 0 0;
-    padding: 0;
-    list-style: none;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
+.ws-chat-messages-container::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
 
-  .ws-focus-task {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-  }
+.ws-chat-messages-container::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
 
-  .ws-focus-check {
-    flex-shrink: 0;
-    width: 18px;
-    height: 18px;
-    border-radius: 999px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+@keyframes slideLeftFade {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
   }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
 
-  .ws-focus-check--done {
-    background: linear-gradient(135deg, #5b6cff 0%, #8b5cf6 55%, #a855f7 100%);
-    box-shadow: 0 0 10px rgba(139, 92, 246, 0.45);
-  }
-
-  .ws-focus-check--open {
-    border: 1.5px solid rgba(255, 255, 255, 0.38);
-    background: transparent;
-  }
-
-  .ws-focus-task-label {
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.35;
-    color: rgba(255, 255, 255, 0.82);
-  }
-
-  .ws-focus-task-label--done {
-    color: rgba(230, 236, 255, 0.72);
-  }
-
-  .ws-focus-more {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 12px;
-    padding: 0;
-    font-size: 12px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.38);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    transition: color 0.2s ease;
-  }
-
-  .ws-focus-more:hover {
-    color: rgba(255, 255, 255, 0.62);
-  }
-
-  /* Canvas minimap (right panel, below Focus Today) */
-  .ws-minimap-wrap {
-    display: flex;
-    align-items: flex-start;
-    gap: 8px;
-    width: 260px;
-    margin-left: 0px;
-    flex-shrink: 0;
-  }
-
-  .ws-minimap-panel {
-    flex: 1;
-    min-width: 0;
-    padding: 8px;
-    border-radius: 14px;
-    background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(24px) saturate(1.4);
-    -webkit-backdrop-filter: blur(24px) saturate(1.4);
-    box-shadow:
-      0 8px 32px rgba(0, 0, 0, 0.4),
-      inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  }
-
-  .ws-minimap-view {
-    aspect-ratio: 4 / 3;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-  }
-
-  .ws-minimap-viewport {
-    position: absolute;
-    left: 22%;
-    top: 18%;
-    width: 56%;
-    height: 52%;
-    border: 1.5px solid rgba(193, 174, 255, 0.75);
-    border-radius: 2px;
-    box-shadow: 0 0 12px rgba(139, 92, 246, 0.25);
-    pointer-events: none;
-  }
-
-  .ws-minimap-controls {
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    padding-top: 4px;
-  }
-
-  .ws-minimap-control-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
-    background: rgba(255, 255, 255, 0.03);
-    border: 1px solid rgba(255, 255, 255, 0.08);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    color: rgba(255, 255, 255, 0.55);
-    cursor: pointer;
-    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-  }
-
-  .ws-minimap-control-btn:hover {
-    background: rgba(255, 255, 255, 0.08);
-    color: rgba(255, 255, 255, 0.85);
-  }
-
-  @keyframes energyOrbRingSpin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-
-  .energy-orb-ring-spin {
-    transform-origin: center;
-    animation: energyOrbRingSpin 14s linear infinite;
-  }
+.animate-slide-left-fade {
+  animation: slideLeftFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
