@@ -96,6 +96,7 @@ export function PolytopeSidePanel({
   onExitToSubdomain,
   exitToSubdomainLabel,
   onDeleteDepartment,
+  onUpdateNode,
   onDeleteNode,
   onNodeSelect,
   onEditDepartment,
