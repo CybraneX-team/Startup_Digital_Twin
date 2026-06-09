@@ -9,6 +9,7 @@ import {
   ZOOM_LEVELS,
 } from '../../three-universe/UniverseController';
 import { SearchTrie } from '../../lib/SearchTrie';
+import { CompanyTagDropdown } from '../planet/CompanyTagDropdown';
 
 export interface UniverseSidePanelProps {
   data: ReturnType<typeof useUniverseGraph>['data'];
@@ -48,7 +49,7 @@ export function UniverseSidePanel({
   const listKey = `${currentLevel}-${navPath.map(e => e.id).join('-')}`;
 
   let sectionLabel = 'GALAXIES';
-  let items: { id: string; name: string; color?: string; meta?: string; onClick?: () => void }[] = [];
+  let items: { id: string; name: string; color?: string; meta?: string; type?: string; onClick?: () => void }[] = [];
   let onItemClick = (_id: string) => {};
 
   const isSearchActive = searchQuery.trim().length > 0;
@@ -102,6 +103,7 @@ export function UniverseSidePanel({
       name: r.name,
       color: r.color,
       meta: r.meta,
+      type: r.type,
       onClick: () => {
         if (r.type === 'industry') controllerRef.current?.routeTo('industry', r.industryId!);
         else if (r.type === 'subdomain') {
@@ -119,6 +121,7 @@ export function UniverseSidePanel({
       name: ind.name,
       color: ind.color,
       meta: `${ind.subdomains.length} domains`,
+      type: 'industry',
     }));
     onItemClick = id => controllerRef.current?.zoomToIndustry(id);
   } else if (isIndustry && industry) {
@@ -128,6 +131,7 @@ export function UniverseSidePanel({
       name: sd.name,
       color: sd.color ?? industry.color,
       meta: `${sd.companies.length} companies`,
+      type: 'subdomain',
     }));
     onItemClick = id => controllerRef.current?.zoomToSubdomain(industry.id, id);
   } else if (isSubdomainOrDeeper && industry && subdomain) {
@@ -137,6 +141,7 @@ export function UniverseSidePanel({
       name: co.name,
       color: industry.color,
       meta: co.employees ? `${co.employees.toLocaleString()} emp` : (co.stage ?? ''),
+      type: 'company',
     }));
     onItemClick = id => controllerRef.current?.zoomToCompany(industry.id, subdomain.id, id);
   }
@@ -173,26 +178,41 @@ export function UniverseSidePanel({
               if (item.onClick) item.onClick();
               else onItemClick(item.id);
             }}
-            className="panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group"
+            className="panel-item-in w-full flex flex-col items-start px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group"
             style={{ animationDelay: `${i * 28}ms` }}
           >
-            <span
-              className="w-2 h-2 rounded-full shrink-0 transition-transform group-hover:scale-125"
-              style={{
-                background: item.color ?? '#7c3aed',
-                boxShadow: `0 0 8px ${item.color ?? '#7c3aed'}70`,
-              }}
-            />
-            <span className="flex-1 min-w-0">
-              <span className="block text-[12px] text-gray-300 group-hover:text-white transition-colors leading-tight truncate">
-                {item.name}
-              </span>
-              {item.meta && (
-                <span className="block text-[10px] leading-tight mt-0.5" style={{ color: '#4b5563' }}>
-                  {item.meta}
+            <div className="flex items-center gap-2.5 w-full">
+              <span
+                className="w-2 h-2 rounded-full shrink-0 transition-transform group-hover:scale-125"
+                style={{
+                  background: item.color ?? '#7c3aed',
+                  boxShadow: `0 0 8px ${item.color ?? '#7c3aed'}70`,
+                }}
+              />
+              <span className="flex-1 min-w-0">
+                <span className="block text-[12px] text-gray-300 group-hover:text-white transition-colors leading-tight truncate">
+                  {item.name}
                 </span>
-              )}
-            </span>
+                {item.meta && (
+                  <span className="block text-[10px] leading-tight mt-0.5" style={{ color: '#4b5563' }}>
+                    {item.meta}
+                  </span>
+                )}
+              </span>
+            </div>
+            
+            {item.type === 'company' && (
+              <div 
+                className="w-full mt-2 overflow-hidden max-h-0 opacity-0 group-hover:max-h-20 group-hover:opacity-100 transition-all duration-300"
+                onClick={e => e.stopPropagation()}
+              >
+                <CompanyTagDropdown 
+                  companyId={item.id} 
+                  companyName={item.name} 
+                  industryColor={item.color} 
+                />
+              </div>
+            )}
           </button>
         ))}
       </div>

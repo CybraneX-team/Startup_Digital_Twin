@@ -1,6 +1,6 @@
 import { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
-import { Html } from '@react-three/drei';
+import { Text, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
 import type { UInternalNode } from '../../lib/universalPolytopeData';
 import { PlasmaSphere } from '../PolytopeShared';
@@ -213,7 +213,7 @@ export function InternalNode({
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={cancelDrag}
-        onPointerOut={(e) => {
+        onPointerOut={() => {
           cancelDrag();
           if (!isDraft) document.body.style.cursor = 'auto';
         }}
@@ -234,25 +234,24 @@ export function InternalNode({
           speed={isMeActiveCenter ? 1.5 : 0.2}
         />
         {isVisible && !isHiddenParent && (
-          <Html position={[0, -radius * 2.5, 0]} center zIndexRange={[-10, -100]} prepend>
-            <div style={{
-              color: 'white',
-              background: 'rgba(0,0,0,0.6)',
-              padding: '2px 6px',
-              borderRadius: '4px',
-              fontSize: `${Math.max(8, 12 - depth)}px`,
-              fontWeight: 'bold',
-              backdropFilter: 'blur(4px)',
-              border: isDraft ? `1.5px dashed ${color}` : `1px solid ${color}40`,
-              pointerEvents: 'none',
-              whiteSpace: 'nowrap',
-              opacity: isDraft ? 1 : isMeActiveCenter || isMeAncestor ? 1 : 0.7,
-              transition: 'opacity 0.2s',
-              boxShadow: isDraft ? `0 0 12px ${color}50` : undefined,
-            }}>
+          <Billboard follow={true} lockX={false} lockY={false} lockZ={false} position={[0, -radius * 2.8, 0]}>
+            <Text
+              color={isDraft ? color : "#ffffff"}
+              fontSize={Math.max(0.12, 0.22 - depth * 0.025)}
+              maxWidth={3.0}
+              lineHeight={1.1}
+              letterSpacing={0.06}
+              textAlign="center"
+              anchorX="center"
+              anchorY="middle"
+              fillOpacity={isDraft ? 1 : isMeActiveCenter || isMeAncestor ? 0.95 : 0.65}
+              outlineWidth={0.006}
+              outlineColor="#000000"
+              outlineOpacity={0.8}
+            >
               {isDraft ? `✦ ${node.label}` : node.label}
-            </div>
-          </Html>
+            </Text>
+          </Billboard>
         )}
       </group>
 

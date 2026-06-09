@@ -723,23 +723,24 @@ export function Scene({
                 <group position={pos}>
                   <PlasmaSphere color={color} radius={0.3} opacity={1.0} glowIntensity={4.0} depthWrite={false} speed={4} />
                 </group>
-                <Html position={[pos.x, pos.y - 1.5, pos.z]} center zIndexRange={[100, 0]}>
-                  <div style={{
-                    color,
-                    background: 'rgba(0,0,0,0.88)',
-                    padding: '5px 12px',
-                    borderRadius: '5px',
-                    fontSize: '12px',
-                    fontWeight: 'bold',
-                    border: `1.5px dashed ${color}`,
-                    pointerEvents: 'none',
-                    whiteSpace: 'nowrap',
-                    boxShadow: `0 0 16px ${color}60`,
-                    letterSpacing: '0.02em',
-                  }}>
+                <Billboard position={[pos.x, pos.y - 1.5, pos.z]} follow={true} lockX={false} lockY={false} lockZ={false}>
+                  <Text
+                    color={color}
+                    fontSize={0.25}
+                    maxWidth={4.0}
+                    lineHeight={1.1}
+                    letterSpacing={0.06}
+                    textAlign="center"
+                    anchorX="center"
+                    anchorY="middle"
+                    fillOpacity={0.95}
+                    outlineWidth={0.01}
+                    outlineColor="#000000"
+                    outlineOpacity={0.8}
+                  >
                     ✦ {node.label}
-                  </div>
-                </Html>
+                  </Text>
+                </Billboard>
               </group>
             );
           }
