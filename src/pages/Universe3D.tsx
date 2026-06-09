@@ -1055,25 +1055,6 @@ export default function Universe3DPage() {
         </div>
       )}
 
-      {/* Legend */}
-      {!insideBH && !insideCompanyInterior && !insidePlanetRoots && !insideRootPolytope && (
-        <div
-          className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 text-xs px-4 py-2 rounded-full backdrop-blur-md z-10"
-          style={{ background: 'rgba(0,0,0,0.55)', color: '#5E5E5E', border: '1px solid rgba(255,255,255,0.06)' }}
-        >
-          {[
-            { color: '#7c3aed', label: 'Galaxy' },
-            { color: '#C1AEFF', label: 'Subdomain' },
-            { color: '#38bdf8', label: 'Company' },
-            { color: '#2dd4bf', label: 'Department' },
-          ].map((l) => (
-            <div key={l.label} className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full" style={{ background: l.color }} />
-              {l.label}
-            </div>
-          ))}
-        </div>
-      )}
 
       {/* Open workspace — bottom center */}
       {!loading && data && !createModal && !polytopeDraftDept && !polytopeDraftInternalNode && !insideBH && !insideCompanyInterior && !insidePlanetRoots && !insideRootPolytope && twinWorkspacePhase === 'closed' && (
