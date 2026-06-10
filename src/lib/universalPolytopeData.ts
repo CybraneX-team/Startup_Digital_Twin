@@ -75,37 +75,6 @@ export function resolvePolytopeNodeCount(deptCount: number): {
 }
 
 // ── Internal node definitions per department ────────────────────────────────
-type InternalDef = { 
-  label: string; 
-  type: UInternalNode['type']; 
-  score: number; 
-  memberCount?: number;
-  members?: TeamMember[];
-  projectDetails?: ProjectDetails;
-  children?: InternalDef[] 
-};
-
-function buildTree(parentId: string, defs: InternalDef[], depth = 1): UInternalNode[] {
-  return defs.map((d, i) => ({
-    id: `${parentId}_d${depth}_${i}`,
-    label: d.label,
-    type: d.type,
-    score: d.score,
-    memberCount: d.memberCount,
-    members: d.members,
-    projectDetails: d.projectDetails,
-    children: d.children ? buildTree(`${parentId}_d${depth}_${i}`, d.children, depth + 1) : [],
-  }));
-}
-
-// Helper to gen members
-function genMembers(count: number, roles: string[]): TeamMember[] {
-  return Array.from({ length: count }).map((_, i) => ({
-    name: `Member ${i + 1}`,
-    role: roles[i % roles.length],
-    avatarUrl: `https://i.pravatar.cc/150?u=user${Math.random()}`
-  }));
-}
 
 // ── 13 Real Departments ─────────────────────────────────────────────────────
 const DEPARTMENTS: UExternalNode[] = [

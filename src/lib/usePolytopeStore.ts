@@ -174,7 +174,7 @@ const useGlobalPolytopeStore = create<PolytopeStoreState>((set) => ({
   },
 }));
 
-export function usePolytopeStore(scope?: PolytopeStoreScope) {
-  // We ignore `scope` now since everything is shared globally!
+export function usePolytopeStore(_scope?: PolytopeStoreScope) {
+  // We ignore `_scope` now since everything is shared globally!
   return useGlobalPolytopeStore();
 }
