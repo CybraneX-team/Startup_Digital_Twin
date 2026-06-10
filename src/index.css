@@ -795,6 +795,7 @@
   transition: margin-left 2.2s cubic-bezier(0.645, 0.045, 0.355, 1), margin-right 2.2s cubic-bezier(0.645, 0.045, 0.355, 1);
 }
 
+
 /* Expanded version (fullscreen) */
 .ws-canvas-wrap--fullscreen .ws-canvas-inset {
   margin-left: 3%;

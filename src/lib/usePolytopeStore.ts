@@ -178,3 +178,21 @@ export function usePolytopeStore(_scope?: PolytopeStoreScope) {
   // We ignore `_scope` now since everything is shared globally!
   return useGlobalPolytopeStore();
 }
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key === SHARED_STORAGE_KEY) {
+      try {
+        const next = event.newValue ? JSON.parse(event.newValue) : null;
+        if (next) {
+          useGlobalPolytopeStore.setState({ departments: next });
+        } else {
+          useGlobalPolytopeStore.setState({ departments: DEFAULT_NODES });
+        }
+      } catch (e) {
+        console.error('Error syncing polytope store departments from storage event:', e);
+      }
+    }
+  });
+}
+
