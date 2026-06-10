@@ -96,6 +96,7 @@ interface InternalNodeProps {
   draftMember?: { deptId: string; nodeId: string; member: any } | null;
   draftMemberScreenPosRef?: React.MutableRefObject<{ x: number; y: number } | null>;
   onNodeFocus?: (pos: THREE.Vector3, node: UInternalNode) => void;
+  rootPos?: THREE.Vector3;
 }
 
 export function InternalNode({
@@ -116,6 +117,7 @@ export function InternalNode({
   draftMember = null,
   draftMemberScreenPosRef,
   onNodeFocus,
+  rootPos,
 }: InternalNodeProps) {
   const groupRef = useRef<THREE.Group>(null);
   const currentPos = useRef(startPos.clone());
@@ -139,7 +141,10 @@ export function InternalNode({
     const pts: THREE.Vector3[] = [];
     const ringRadius = 1.4 * Math.pow(0.7, depth - 1);
 
-    const dir = targetPos.clone().normalize();
+    const effectiveRoot = rootPos || new THREE.Vector3(0, 0, 0);
+    const offset = targetPos.clone().sub(effectiveRoot);
+    const dir = offset.lengthSq() > 0.0001 ? offset.normalize() : new THREE.Vector3(0, 0, 1);
+
     const localUp = new THREE.Vector3(0, 1, 0);
     if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
     const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();
@@ -275,7 +280,8 @@ export function InternalNode({
     cancelDrag();
     if (isDraft) return;
     if (selectedPath[selectedPath.length - 1] === node.id) {
-      return; // Do nothing when clicking an already active node
+      onSelectPath(pathContext, parentPos);
+      return;
     } else {
       onSelectPath(myPath, targetPos);
     }
@@ -298,7 +304,7 @@ export function InternalNode({
         <PlasmaSphere
           color={color}
           radius={radius}
-          opacity={isDraft ? 0.85 : isHiddenParent ? 0.0 : 1.0}
+         opacity={isDraft ? 0.85 : isHiddenParent ? 0.0 : 1.0}
           glowIntensity={
             isDraft ? 2.8
             : isHiddenParent ? 0
@@ -451,6 +457,7 @@ export function InternalNode({
             draftMember={draftMember}
             draftMemberScreenPosRef={draftMemberScreenPosRef}
             onNodeFocus={onNodeFocus}
+            rootPos={rootPos}
           />
         );
       })}
@@ -472,6 +479,7 @@ export function InternalNode({
           setBackInfo={setBackInfo}
           isDraft
           onNodeFocus={onNodeFocus}
+          rootPos={rootPos}
         />
       )}
 

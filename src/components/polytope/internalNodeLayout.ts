@@ -44,13 +44,17 @@ export function findNodeAtPath(nodes: UInternalNode[], path: string[]): UInterna
 export function computeDraftChildNodePosition(
   parentPos: THREE.Vector3,
   existingCount: number,
-  depth: number
+  depth: number,
+  rootPos?: THREE.Vector3
 ): THREE.Vector3 {
   const count = existingCount + 1;
   const idx = existingCount;
   const ringRadius = 1.4 * Math.pow(0.7, depth - 1);
 
-  const dir = parentPos.clone().normalize();
+  const effectiveRoot = rootPos || new THREE.Vector3(0, 0, 0);
+  const offset = parentPos.clone().sub(effectiveRoot);
+  const dir = offset.lengthSq() > 0.0001 ? offset.normalize() : new THREE.Vector3(0, 0, 1);
+
   const localUp = new THREE.Vector3(0, 1, 0);
   if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
   const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();

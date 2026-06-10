@@ -3,7 +3,6 @@ import type { UserPlanetRole } from '../data/companyPlanetRoots';
 
 export interface CompanyRoleModalProps {
   companyName: string;
-  industryColor?: string;
   onSelect: (role: UserPlanetRole) => void;
   onClose: () => void;
 }
@@ -40,7 +39,6 @@ const ROLES: {
 
 export default function CompanyRoleModal({
   companyName,
-  industryColor = '#C1AEFF',
   onSelect,
   onClose,
 }: CompanyRoleModalProps) {
@@ -110,10 +108,7 @@ export default function CompanyRoleModal({
           })}
         </div>
 
-        <div className="px-5 pb-4 flex justify-between items-center">
-          <span className="text-[10px]" style={{ color: industryColor }}>
-            Roots sized by relevance · brighter = stronger signal
-          </span>
+        <div className="px-5 pb-4 flex justify-end items-center">
           <button
             type="button"
             onClick={onClose}

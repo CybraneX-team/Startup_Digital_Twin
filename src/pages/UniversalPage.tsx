@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useLayoutEffect } from 'react';
-import { useLocation } from 'react-router-dom';
+
 import UniversalPolytope from '../components/UniversalPolytope';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
 import { PolytopeManager } from '../components/PolytopeManager';
@@ -14,11 +14,10 @@ import type { CoreWorkspacePhase } from '../lib/coreWorkspaceTransition';
 export default function UniversalPage() {
   const { profile } = useAuth();
   const { company } = useCompany(profile?.company_id);
-  const location = useLocation();
   const store = usePolytopeStore('bdt');
 
-  /** New session id + deferred mount = fresh WebGL canvas after leaving 3D twin. */
-  const [bdtSessionId, setBdtSessionId] = useState(() => Date.now());
+  /** New session id */
+  const [bdtSessionId] = useState(() => Date.now());
   const [showBdtCanvas, setShowBdtCanvas] = useState(false);
 
   // Sidebar state — which dept is selected in sidebar, and internal drill-down path
@@ -92,29 +91,13 @@ export default function UniversalPage() {
   const isPolytopeInteractive = corePhase === 'idle';
 
   useLayoutEffect(() => {
-    if (location.pathname !== '/universal') {
-      setShowBdtCanvas(false);
-      return;
+    // We no longer unmount/remount the canvas or reset state on path change.
+    // The component stays persistently mounted to preserve its state.
+    if (!showBdtCanvas) {
+      const rafId = requestAnimationFrame(() => setShowBdtCanvas(true));
+      return () => cancelAnimationFrame(rafId);
     }
-
-    setShowBdtCanvas(false);
-    setBdtSessionId(Date.now());
-    setPolytopeResetTrigger(t => t + 1);
-    setSelectedDeptId(null);
-    setInternalPath([]);
-    setRequestSelectDeptId(null);
-    setInternalBackStep(0);
-    setDraftDept(null);
-    setDraftInternalNode(null);
-    setDraftMember(null);
-    setCorePhase('idle');
-    setWorkspaceMounted(false);
-    setWorkspaceAnim(null);
-    setManagerOpen(false);
-
-    const rafId = requestAnimationFrame(() => setShowBdtCanvas(true));
-    return () => cancelAnimationFrame(rafId);
-  }, [location.pathname]);
+  }, [showBdtCanvas]);
 
   // Use the actual company name from the database, fallback to heuristic if loading
   const companyName = company?.name || (profile?.company_id

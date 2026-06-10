@@ -155,9 +155,23 @@ function AppRoutes() {
         </div>
       )}
 
-      {/* Normal app shell — removed from layout entirely when on /3d */}
-      <div style={{ display: (isFullyAuthed && is3DUniverse) ? 'none' : 'block' }}>
-        <div className={isUniversal ? 'min-h-screen bg-black' : 'min-h-screen cosmos-bg'}>
+      {/* Persistent Universal Page (BDT) — always mounted so state persists */}
+      {isFullyAuthed && (
+        <div
+          className="fixed inset-0 z-40"
+          style={{
+            visibility: isUniversal ? 'visible' : 'hidden',
+            pointerEvents: isUniversal ? 'auto' : 'none',
+          }}
+        >
+          <TopBar />
+          <UniversalPage />
+        </div>
+      )}
+
+      {/* Normal app shell — removed from layout entirely when on /3d or /universal */}
+      <div style={{ display: (isFullyAuthed && (is3DUniverse || isUniversal)) ? 'none' : 'block' }}>
+        <div className="min-h-screen cosmos-bg">
           <TopBar />
           {isTwinGraph ? (
             <Routes>
@@ -251,12 +265,8 @@ function AppRoutes() {
                   </AuthGuard>
                 } />
 
-                {/* /universal — universal polytope viewer based on spec */}
-                <Route path="/universal" element={
-                  <AuthGuard requireOnboarding>
-                    <UniversalPage />
-                  </AuthGuard>
-                } />
+                {/* /universal is handled as a persistent overlay above, but we keep an empty route so router is happy if needed */}
+                <Route path="/universal" element={<AuthGuard requireOnboarding><></></AuthGuard>} />
 
                 {/* /workspace — standalone action node workspace */}
                 <Route path="/workspace" element={

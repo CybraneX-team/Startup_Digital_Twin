@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronRight, Check } from 'lucide-react';
 import { 
   useSavedWorkflows, 
@@ -24,6 +25,20 @@ export function CompanyTagDropdown({
 }: CompanyTagDropdownProps) {
   const { save, items, remove } = useSavedWorkflows();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const buttonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!menuOpen) return;
+    const handleClose = () => setMenuOpen(false);
+    window.addEventListener('click', handleClose);
+    // On scroll in any container, it might be better to close or reposition, but closing is safer
+    window.addEventListener('scroll', handleClose, true);
+    return () => {
+      window.removeEventListener('click', handleClose);
+      window.removeEventListener('scroll', handleClose, true);
+    };
+  }, [menuOpen]);
   
   // Resolve role
   const resolvedRole = role ?? ((localStorage.getItem('active_role') as UserPlanetRole) || 'founder');
@@ -66,8 +81,13 @@ export function CompanyTagDropdown({
   return (
     <div className="relative w-full" onClick={e => e.stopPropagation()}>
       <button
+        ref={buttonRef}
         onClick={(e) => {
           e.stopPropagation();
+          if (!menuOpen && buttonRef.current) {
+            const rect = buttonRef.current.getBoundingClientRect();
+            setCoords({ top: rect.top, left: rect.right + 12 });
+          }
           setMenuOpen(!menuOpen);
         }}
         className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all"
@@ -84,13 +104,16 @@ export function CompanyTagDropdown({
         <ChevronRight className="w-3.5 h-3.5 transition-transform" />
       </button>
 
-      {menuOpen && (
+      {menuOpen && createPortal(
         <div
-          className="absolute left-[115%] top-0 w-48 rounded-xl overflow-hidden shadow-2xl z-[9999] border border-white/10"
+          className="fixed w-48 rounded-xl overflow-hidden shadow-2xl z-[99999] border border-white/10"
           style={{
+            top: coords.top,
+            left: coords.left,
             background: 'rgba(15, 15, 20, 0.95)',
             backdropFilter: 'blur(20px)',
           }}
+          onClick={e => e.stopPropagation()}
         >
           <div className="py-1">
             {(Object.entries(COMPANY_TAG_LABELS) as [CompanyTag, string][]).map(([tag, label]) => {
@@ -112,7 +135,8 @@ export function CompanyTagDropdown({
               );
             })}
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

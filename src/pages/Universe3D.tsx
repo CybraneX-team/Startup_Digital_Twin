@@ -33,7 +33,11 @@ import {
   TWIN_WORKSPACE_CLOSE_MS,
   isTwinWorkspaceActive,
 } from '../lib/twinWorkspaceTransition';
-import { clearUniverseNavState } from '../lib/universeNavPersistence';
+import {
+  savePlanetState,
+  loadPlanetState,
+  clearPlanetState,
+} from '../lib/universeNavPersistence';
 import { usePolytopeStore } from '../lib/usePolytopeStore';
 import type { UExternalNode, UInternalNode } from '../lib/usePolytopeStore';
 import { ActionNodeWorkspace } from '../components/workspace/ActionNodeWorkspace';
@@ -442,8 +446,44 @@ export default function Universe3DPage() {
 
       // Clear state so it doesn't reopen if navigating back
       navigate('/3d', { replace: true, state: {} });
+    } else if (pathname === '/3d') {
+      const pState = loadPlanetState();
+      if (pState) {
+        const ctx = getPlanetRootsForCompany(pState.companyId, pState.companyName, pState.role as UserPlanetRole);
+        setPlanetContext(ctx);
+        setInsidePlanetRoots(true);
+        if (pState.insideRootPolytope && pState.rootPolytopeDeptId) {
+          setRootPolytopeMounted(true);
+          setRootPolytopeDepts(rootsToPolytopeDepartments(ctx.roots));
+          setRootPolytopeDeptId(pState.rootPolytopeDeptId);
+          setRootPolytopeInternalPath(pState.rootPolytopeInternalPath || []);
+          setInsideRootPolytope(true);
+        }
+      }
     }
   }, [pathname, state, navigate]);
+
+  // Persist planet state on change
+  useEffect(() => {
+    if (insidePlanetRoots && planetContext) {
+      savePlanetState({
+        companyId: planetContext.companyId,
+        companyName: planetContext.companyName,
+        role: planetContext.role,
+        insideRootPolytope,
+        rootPolytopeDeptId,
+        rootPolytopeInternalPath,
+      });
+    } else if (!insidePlanetRoots) {
+      clearPlanetState();
+    }
+  }, [
+    insidePlanetRoots,
+    planetContext,
+    insideRootPolytope,
+    rootPolytopeDeptId,
+    rootPolytopeInternalPath,
+  ]);
 
   const handleActionNodeClick = useCallback((rootId: string, branchId: string, actionId: string) => {
     if (!planetContext) return;
@@ -569,34 +609,9 @@ export default function Universe3DPage() {
       const rafId = requestAnimationFrame(() => controllerRef.current?.resize());
       return () => cancelAnimationFrame(rafId);
     }
-
-    // Left 3D twin — close overlays so BDT (/universal) is fully independent
-    setInsideBH(false);
-    setInsideCompanyInterior(false);
-    setCompanyInteriorPath([]);
-    setInsidePlanetRoots(false);
-    setInsideRootPolytope(false);
-    setPlanetContext(null);
-    setPlanetSearchQuery('');
-    setRoleModal(null);
-    setRootPolytopeDeptId(null);
-    setRootPolytopeInternalPath([]);
-    setRootPolytopeBackStep(0);
-    setPolytopeDraftDept(null);
-    setPolytopeDraftInternalNode(null);
-    setPolytopeDraftMember(null);
-    setPolytopeDeptId(null);
-    setPolytopeInternalPath([]);
-    setPolytopeRequestSelectDeptId(null);
-    setPolytopeInternalBackStep(0);
-    setTwinWorkspacePhase('closed');
-    openWorkspacePendingRef.current = false;
-    clearTwinWorkspaceTimers();
-    clearUniverseNavState();
-    controllerRef.current?.exitTwinWorkspaceFocus();
-    controllerRef.current?.exitBlackHole();
-    controllerRef.current?.exitCompanyPolytope();
-  }, [pathname, clearTwinWorkspaceTimers]);
+    // We no longer clear state when leaving /3d, so that the 3D Twin state persists
+    // when the user navigates away and comes back.
+  }, [pathname]);
 
   // Listen for 'Close Workspace' signal from the new tab to zoom back out
   useEffect(() => {
@@ -679,6 +694,7 @@ export default function Universe3DPage() {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (pathname !== '/3d') return;
       // Cmd+K or Ctrl+K
       if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === ' ')) {
         e.preventDefault();
@@ -836,7 +852,6 @@ export default function Universe3DPage() {
       {roleModal && (
         <CompanyRoleModal
           companyName={roleModal.company.name}
-          industryColor={roleModal.industry.color}
           onSelect={handleRoleSelect}
           onClose={handleRoleModalClose}
         />

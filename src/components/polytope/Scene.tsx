@@ -560,7 +560,7 @@ export function Scene({
       );
     }
     if (coreGroupRef.current) {
-      const deepScale = isDeepDrillDown ? 0.0 : 1.0;
+      const deepScale = selectedId !== null ? 0.0 : 1.0;
       const diveScale = 1 + dive * 2.8;
       const targetScale = deepScale * diveScale;
       coreGroupRef.current.scale.lerp(

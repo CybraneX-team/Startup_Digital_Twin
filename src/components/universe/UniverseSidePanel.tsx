@@ -172,14 +172,16 @@ export function UniverseSidePanel({
 
       <div key={listKey} className="overflow-y-auto pb-2" style={{ scrollbarWidth: 'none' }}>
         {items.map((item, i) => (
-          <button
+          <div
             key={item.meta + '-' + item.id}
             onClick={() => {
               if (item.onClick) item.onClick();
               else onItemClick(item.id);
             }}
-            className="panel-item-in w-full flex flex-col items-start px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group"
+            className="panel-item-in w-full flex flex-col items-start px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group cursor-pointer"
             style={{ animationDelay: `${i * 28}ms` }}
+            role="button"
+            tabIndex={0}
           >
             <div className="flex items-center gap-2.5 w-full">
               <span
@@ -213,7 +215,7 @@ export function UniverseSidePanel({
                 />
               </div>
             )}
-          </button>
+          </div>
         ))}
       </div>
 

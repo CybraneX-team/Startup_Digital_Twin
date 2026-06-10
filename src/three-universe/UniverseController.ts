@@ -536,6 +536,9 @@ export class UniverseController {
         ctrl.isTransitioning = false;
         ctrl.controls.update();
         this._bhCapturing = false;
+        if (this.navigation) {
+          this.navigation._persistNavState([], ZOOM_LEVELS.GALAXY);
+        }
       },
     });
     gsap.to(ctrl.controls.target, {

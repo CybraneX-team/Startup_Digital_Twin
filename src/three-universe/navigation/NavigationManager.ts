@@ -76,13 +76,31 @@ export class NavigationManager {
 
   _persistNavState(path, level) {
     if (level === ZOOM_LEVELS.GALAXY) {
-      clearUniverseNavState();
-      return;
+      if (this.galaxyParticles && this.galaxyParticles._insideBH) {
+        // Do not clear state if we are inside the black hole, we want to save it below!
+      } else {
+        clearUniverseNavState();
+        return;
+      }
     }
     if (level === ZOOM_LEVELS.DEPARTMENT) return;
 
     const industryId = path[0]?.id;
-    if (!industryId) return;
+    if (!industryId) {
+      if (this.galaxyParticles?._insideBH) {
+        const cam = this.camera.position;
+        const target = this.cameraCtrl.controls.target;
+        saveUniverseNavState({
+          level: 'industry', // fallback
+          industryId: 'bh',
+          interiorMode: null,
+          insideBH: true,
+          cameraPosition: [cam.x, cam.y, cam.z],
+          cameraTarget: [target.x, target.y, target.z],
+        });
+      }
+      return;
+    }
 
     const cam = this.camera.position;
     const target = this.cameraCtrl.controls.target;
@@ -98,6 +116,8 @@ export class NavigationManager {
       industryId,
       subdomainId: path[1]?.id,
       companyId: path[2]?.id,
+      interiorMode: this._companyInteriorMode || null,
+      insideBH: !!this.galaxyParticles?._insideBH,
       cameraPosition: [cam.x, cam.y, cam.z],
       cameraTarget: [target.x, target.y, target.z],
     });
@@ -985,6 +1005,16 @@ export class NavigationManager {
 
   /** Restore industry/subdomain view after page refresh (no fly animations). */
   restorePersistedView(persisted, industries) {
+    if (persisted.insideBH) {
+      if (this.galaxyParticles && this.galaxyParticles.onEnterBH) {
+        this.galaxyParticles.onEnterBH();
+        this.camera.position.set(0, 0, 500); // Inside BH camera
+        this.cameraCtrl.controls.target.set(0, 0, 0);
+        this.cameraCtrl.controls.update();
+      }
+      return true;
+    }
+
     const industry = industries.find((i) => i.id === persisted.industryId);
     if (!industry) {
       clearUniverseNavState();
@@ -1011,12 +1041,21 @@ export class NavigationManager {
     let company = null;
     if (persisted.level === 'company' && persisted.companyId) {
       company = subdomain.companies?.find((c) => c.id === persisted.companyId) ?? null;
-      if (company && this._isLoggedInCompany(company)) {
-        company = null;
-      }
+      // DO NOT clear company if it's the logged-in one, so we can restore the interior view
     }
 
     this._snapToSubdomain(industry, subdomain, idx, persisted, company);
+
+    if (company && persisted.interiorMode) {
+      if (persisted.interiorMode === 'dept') {
+        this._enterLoggedInDeptInterior(industry, subdomain, company);
+      } else if (persisted.interiorMode === 'planet') {
+        // Find dummy tree since it's not saved (it will be regenerated)
+        // We'll let the user click to re-initiate, or we just pass a default
+        this._enterPlanetRootView(industry, subdomain, company, [], this.navigationPath);
+      }
+    }
+
     return true;
   }
 

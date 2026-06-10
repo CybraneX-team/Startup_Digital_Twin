@@ -235,6 +235,7 @@ export function RootInternalNodeScene({
               parentLabel={root.label}
               setBackInfo={setBackInfo}
               onNodeFocus={handleNodeFocus}
+              rootPos={ROOT_POS}
             />
           );
         })}

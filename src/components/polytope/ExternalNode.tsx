@@ -97,7 +97,7 @@ export function ExternalNode({
       if (labelRef.current.innerText !== newText) labelRef.current.innerText = newText;
     }
     if (linesMaterialRef.current) {
-      const targetOpacity = isSelected && !isDeepDrillDown ? 0.3 : 0;
+      const targetOpacity = isSelected && !isDeepDrillDown ? 0.7 : 0;
       linesMaterialRef.current.opacity = THREE.MathUtils.lerp(
         linesMaterialRef.current.opacity,
         targetOpacity,
