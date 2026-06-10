@@ -1060,22 +1060,20 @@ function WorkspaceChatCopilot() {
             <button
               type="button"
               onClick={() => setActiveView('upload')}
-              className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
-                activeView === 'upload'
+              className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${activeView === 'upload'
                   ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300 shadow-lg shadow-indigo-500/5'
                   : 'bg-white/[0.02] border-white/5 text-white/45 hover:text-white/80 hover:bg-white/[0.04]'
-              }`}
+                }`}
             >
               File Upload
             </button>
             <button
               type="button"
               onClick={() => setActiveView('nodes')}
-              className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${
-                activeView === 'nodes'
+              className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${activeView === 'nodes'
                   ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300 shadow-lg shadow-indigo-500/5'
                   : 'bg-white/[0.02] border-white/5 text-white/45 hover:text-white/80 hover:bg-white/[0.04]'
-              }`}
+                }`}
             >
               Saved Nodes
             </button>

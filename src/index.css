@@ -225,19 +225,35 @@
   gap: 12px;
   pointer-events: none;
   background: transparent;
-  transition: grid-template-rows 2.2s cubic-bezier(0.645, 0.045, 0.355, 1), gap 2.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+  transition:
+    grid-template-columns 2.2s cubic-bezier(0.645, 0.045, 0.355, 1),
+    grid-template-rows 2.2s cubic-bezier(0.645, 0.045, 0.355, 1),
+    gap 2.2s cubic-bezier(0.645, 0.045, 0.355, 1),
+    padding-left 2.2s cubic-bezier(0.645, 0.045, 0.355, 1),
+    padding-right 2.2s cubic-bezier(0.645, 0.045, 0.355, 1);
 }
 
 .twin-workspace-panel {
   pointer-events: auto;
   min-height: 0;
   opacity: 0;
+  transition: transform 2.2s cubic-bezier(0.645, 0.045, 0.355, 1), opacity 2.2s cubic-bezier(0.645, 0.045, 0.355, 1);
 }
 
-/* Remove transform and animation layer in open phase so browser renders backdrop-filter */
 .twin-workspace-shell--open .twin-workspace-panel {
-  transform: none !important;
   animation: none !important;
+}
+
+/* Keep the canvas panel visible and in position even during fullscreen */
+.twin-workspace-shell--open .twin-workspace-panel--canvas {
+  transform: none !important;
+  opacity: 1 !important;
+}
+
+/* Remove transform and animation layer in open phase for left/right panels so they can transition out in fullscreen */
+.twin-workspace-shell--open:not(:has(.ws-canvas-wrap--fullscreen)) .twin-workspace-panel--left,
+.twin-workspace-shell--open:not(:has(.ws-canvas-wrap--fullscreen)) .twin-workspace-panel--right {
+  transform: none !important;
   opacity: 1 !important;
 }
 
@@ -688,7 +704,8 @@
 
 .ws-canvas-trapezium {
   width: 100%;
-  transform: rotateX(0deg); /* Reset 3D tilt to ensure text sharpness and prevent rasterization blur */
+  transform: rotateX(0deg);
+  /* Reset 3D tilt to ensure text sharpness and prevent rasterization blur */
   transform-origin: 50% 0%;
 }
 
@@ -758,7 +775,7 @@
 }
 
 .ws-canvas-toolbar {
-  margin-top: -160px;
+  margin-top: 0px !important;
 }
 
 .ws-canvas-frame-body {
@@ -767,6 +784,7 @@
   flex: 1;
   min-height: 0;
   background: transparent;
+  padding-top: 64px !important;
 }
 
 /* Inset header content so it sits between the two raised top shoulders */
@@ -1427,9 +1445,70 @@
   transition: d 2.2s cubic-bezier(0.645, 0.045, 0.355, 1);
 }
 
+
+
 .twin-workspace-shell:has(.ws-canvas-wrap--fullscreen) {
+  grid-template-columns: 0px minmax(0, 1fr) 0px;
   grid-template-rows: 0vh minmax(0, 1fr);
-  gap: 0px 12px;
+  gap: 0px;
+  padding-left: 0px;
+  padding-right: 0px;
+}
+
+.twin-workspace-shell:has(.ws-canvas-wrap--fullscreen) .twin-workspace-panel--left {
+  transform: translateX(-115%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+.twin-workspace-shell:has(.ws-canvas-wrap--fullscreen) .twin-workspace-panel--right {
+  transform: translateX(115%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Product Workspace full-width transitions when active canvas is fullscreen */
+.ws-layout {
+  transition: gap 2.2s cubic-bezier(0.645, 0.045, 0.355, 1), padding 2.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+
+.ws-left-nav,
+.ws-right-panel {
+  transition:
+    transform 2.2s cubic-bezier(0.645, 0.045, 0.355, 1),
+    opacity 2.2s cubic-bezier(0.645, 0.045, 0.355, 1),
+    width 2.2s cubic-bezier(0.645, 0.045, 0.355, 1),
+    margin 2.2s cubic-bezier(0.645, 0.045, 0.355, 1),
+    padding 2.2s cubic-bezier(0.645, 0.045, 0.355, 1),
+    border-width 2.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+}
+
+.ws-layout:has(.ws-canvas-wrap--fullscreen) {
+  gap: 0px !important;
+  padding-left: 0px !important;
+  padding-right: 0px !important;
+}
+
+.ws-layout:has(.ws-canvas-wrap--fullscreen) .ws-left-nav {
+  transform: translateX(-115%) !important;
+  opacity: 0 !important;
+  width: 0px !important;
+  margin-right: 0px !important;
+  padding-left: 0px !important;
+  padding-right: 0px !important;
+  border-width: 0px !important;
+  pointer-events: none !important;
+}
+
+.ws-layout:has(.ws-canvas-wrap--fullscreen) .ws-right-panel {
+  transform: translateX(115%) !important;
+  opacity: 0 !important;
+  width: 0px !important;
+  margin-left: 0px !important;
+  padding-left: 0px !important;
+  padding-right: 0px !important;
+  border-width: 0px !important;
+  pointer-events: none !important;
 }
 
 .ws-center:has(.ws-canvas-wrap--fullscreen) .ws-planet-zone {
@@ -1599,6 +1678,7 @@ input[type="range"]::-moz-range-thumb:hover {
     opacity: 0;
     transform: translateY(12px) scale(0.98);
   }
+
   to {
     opacity: 1;
     transform: translateY(0) scale(1);
@@ -1613,18 +1693,23 @@ input[type="range"]::-moz-range-thumb:hover {
 .delay-50 {
   animation-delay: 50ms;
 }
+
 .delay-100 {
   animation-delay: 100ms;
 }
+
 .delay-150 {
   animation-delay: 150ms;
 }
+
 .delay-200 {
   animation-delay: 200ms;
 }
+
 .delay-250 {
   animation-delay: 250ms;
 }
+
 .delay-300 {
   animation-delay: 300ms;
 }
@@ -1651,7 +1736,7 @@ input[type="range"]::-moz-range-thumb:hover {
 }
 
 /* Ensure absolute children of glass block face are positioned absolute, bypassing face > * relative override */
-.ws-glass-block__face > .absolute {
+.ws-glass-block__face>.absolute {
   position: absolute !important;
 }
 
@@ -1678,6 +1763,7 @@ input[type="range"]::-moz-range-thumb:hover {
     opacity: 0;
     transform: translateX(20px);
   }
+
   to {
     opacity: 1;
     transform: translateX(0);

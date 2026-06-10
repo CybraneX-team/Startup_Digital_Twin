@@ -123,8 +123,8 @@ export const CANVAS_FRAME_POINTS_FULL = [
   { x: 605, y: 50 }, // 3 valley (right)
   { x: 665, y: 30 }, // 4 ramp end → right shoulder
   { x: 1000, y: 30 }, // 5 top-right corner
-  { x: 988, y: 600 }, // 6 bottom-right (straight down)
-  { x: 12, y: 600 }, // 7 bottom-left (straight down)
+  { x: 1000, y: 600 }, // 6 bottom-right (straight down)
+  { x: 0, y: 600 }, // 7 bottom-left (straight down)
 ] as const;
 
 const CORNERS_FULL = buildCorners(CANVAS_FRAME_POINTS_FULL, CANVAS_CORNER_RADIUS);
