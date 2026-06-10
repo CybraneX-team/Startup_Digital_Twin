@@ -22,6 +22,8 @@ import type { CoreWorkspacePhase } from '../../lib/coreWorkspaceTransition';
 import { CORE_DIVE_DURATION_S, CORE_SURFACE_DURATION_S } from '../../lib/coreWorkspaceTransition';
 import { useDragWorkspaceStore } from '../../lib/useDragWorkspaceStore';
 
+const DEPT_ZOOM_DISTANCE = 10;
+
 // ── Types ────────────────────────────────────────────────────────────────────
 
 export interface SceneProps {
@@ -65,16 +67,16 @@ function findNodePosition(
   currentDepth: number = 1
 ): THREE.Vector3 | null {
   if (path.length === 0) return deptPos;
-  
+
   const targetId = path[0];
   const idx = internalNodes.findIndex(n => n.id === targetId);
   if (idx === -1) return null;
-  
+
   const node = internalNodes[idx];
   const nodePos = computeInternalNodePosition(deptPos, idx, internalNodes.length);
-  
+
   if (path.length === 1) return nodePos;
-  
+
   return findChildNodePosition(node, nodePos, path.slice(1), currentDepth);
 }
 
@@ -86,11 +88,11 @@ function findChildNodePosition(
 ): THREE.Vector3 | null {
   if (path.length === 0) return parentPos;
   if (!parentNode.children || parentNode.children.length === 0) return null;
-  
+
   const targetId = path[0];
   const idx = parentNode.children.findIndex(c => c.id === targetId);
   if (idx === -1) return null;
-  
+
   const node = parentNode.children[idx];
   const count = parentNode.children.length;
   const ringRadius = 1.4 * Math.pow(0.7, depth - 1);
@@ -108,7 +110,7 @@ function findChildNodePosition(
   const childPos = childCenter.clone()
     .add(right.clone().multiplyScalar(Math.cos(angle) * ringRadius))
     .add(up.clone().multiplyScalar(Math.sin(angle) * ringRadius));
-    
+
   if (path.length === 1) return childPos;
   return findChildNodePosition(node, childPos, path.slice(1), depth + 1);
 }
@@ -207,7 +209,7 @@ export function Scene({
       const camTarget = pos.clone().add(dir.multiplyScalar(22));
       gsap.to(camera.position, { x: camTarget.x, y: camTarget.y, z: camTarget.z, duration: 1.5, ease: 'power3.inOut' });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftDept?.id]);
 
   // ── Draft internal node: save camera, fly to preview slot, restore on exit ──
@@ -251,7 +253,7 @@ export function Scene({
       };
     }
     // Keep camera fixed — draft preview appears at its final ring slot (see ExternalNode)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draftInternalNode?.node.id, draftInternalNode?.deptId]);
 
   // ── Camera reset to overview (entry, create confirm, draft dept cancel) ────
@@ -351,7 +353,7 @@ export function Scene({
     if (coreWorkspacePhase === 'idle' && prev === 'workspace') {
       diveBlendRef.current.value = 0;
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coreWorkspacePhase]);
 
   const handleCoreClick = () => {
@@ -375,16 +377,16 @@ export function Scene({
   useEffect(() => {
     const nextPath = selectedInternalPathProps ?? [];
     if (nextPath.length === prevPathPropsRef.current.length &&
-        nextPath.every((id, idx) => id === prevPathPropsRef.current[idx])) {
+      nextPath.every((id, idx) => id === prevPathPropsRef.current[idx])) {
       return;
     }
     prevPathPropsRef.current = nextPath;
-    
+
     if (nextPath.length === selectedInternalPath.length &&
-        nextPath.every((id, idx) => id === selectedInternalPath[idx])) {
+      nextPath.every((id, idx) => id === selectedInternalPath[idx])) {
       return;
     }
-    
+
     // If drilling deeper from sidebar selection, save current camera to history
     if (nextPath.length > selectedInternalPath.length && orbitRef.current) {
       cameraHistoryRef.current.push({
@@ -397,18 +399,18 @@ export function Scene({
       // we can truncate history to match the new path length to keep history in sync.
       cameraHistoryRef.current = cameraHistoryRef.current.filter(h => h.path.length < nextPath.length);
     }
-    
+
     setSelectedInternalPath(nextPath);
-    
+
     if (selectedId === null) return;
     const deptIdx = ACTIVE_NODES.findIndex(n => n.id === selectedId);
     if (deptIdx === -1) return;
     const deptPos = ACTIVE_NODE_POSITIONS[deptIdx];
-    
+
     if (nextPath.length === 0) {
       if (orbitRef.current && deptPos) {
         const dir = deptPos.clone().normalize();
-        const { camPos, orbitTarget } = computeCameraFraming(deptPos, dir, ACTIVE_NODES[deptIdx].internalNodes.length, 24);
+        const { camPos, orbitTarget } = computeCameraFraming(deptPos, dir, ACTIVE_NODES[deptIdx].internalNodes.length, DEPT_ZOOM_DISTANCE);
         gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.2, ease: 'power2.inOut' });
         gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.2, ease: 'power2.inOut' });
       }
@@ -452,7 +454,7 @@ export function Scene({
       const extPos = EXTERNAL_NODE_POSITIONS[extNodeIdx];
       if (orbitRef.current && extPos) {
         const dir = extPos.clone().normalize();
-        const { camPos, orbitTarget } = computeCameraFraming(extPos, dir, ACTIVE_NODES[extNodeIdx].internalNodes.length, 24);
+        const { camPos, orbitTarget } = computeCameraFraming(extPos, dir, ACTIVE_NODES[extNodeIdx].internalNodes.length, DEPT_ZOOM_DISTANCE);
         gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.2, ease: 'power2.inOut' });
         gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.2, ease: 'power2.inOut' });
       }
@@ -506,7 +508,7 @@ export function Scene({
         const extPos = ACTIVE_NODE_POSITIONS[extIdx];
         if (extPos) {
           const dir = extPos.clone().normalize();
-          const { camPos, orbitTarget } = computeCameraFraming(extPos, dir, ACTIVE_NODES[extIdx].internalNodes.length, 24);
+          const { camPos, orbitTarget } = computeCameraFraming(extPos, dir, ACTIVE_NODES[extIdx].internalNodes.length, DEPT_ZOOM_DISTANCE);
           gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.2, ease: 'power2.inOut' });
           gsap.to(camera.position, {
             x: camPos.x, y: camPos.y, z: camPos.z,
@@ -591,7 +593,7 @@ export function Scene({
       if (deptIdx !== -1) {
         const dept = ACTIVE_NODES[deptIdx];
         const deptPos = ACTIVE_NODE_POSITIONS[deptIdx];
-        
+
         let draftPos: THREE.Vector3;
         const path = selectedInternalPathProps ?? [];
         if (path.length === 0) {
@@ -615,7 +617,7 @@ export function Scene({
             );
           }
         }
-        
+
         const wp3 = draftPos.clone().project(cam);
         const rect = renderer.domElement.getBoundingClientRect();
         draftInternalNodeScreenPosRef.current = {
@@ -658,7 +660,7 @@ export function Scene({
       if (orbitRef.current) {
         const nodeObj = ACTIVE_NODES.find(n => n.id === id);
         const dir = pos.clone().normalize();
-        const { camPos, orbitTarget } = computeCameraFraming(pos, dir, nodeObj?.internalNodes.length ?? 0, 24);
+        const { camPos, orbitTarget } = computeCameraFraming(pos, dir, nodeObj?.internalNodes.length ?? 0, DEPT_ZOOM_DISTANCE);
         gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.5, ease: 'power3.inOut' });
         gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.5, ease: 'power3.inOut' });
       }
@@ -681,11 +683,11 @@ export function Scene({
     if (orbitRef.current) {
       const nodeObj = ACTIVE_NODES[idx];
       const dir = pos.clone().normalize();
-      const { camPos, orbitTarget } = computeCameraFraming(pos, dir, nodeObj?.internalNodes.length ?? 0, 24);
+      const { camPos, orbitTarget } = computeCameraFraming(pos, dir, nodeObj?.internalNodes.length ?? 0, DEPT_ZOOM_DISTANCE);
       gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.5, ease: 'power3.inOut' });
       gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.5, ease: 'power3.inOut' });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestSelectDeptId]);
 
   const handlePointerMissed = () => {
