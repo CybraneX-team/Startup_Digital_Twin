@@ -110,6 +110,7 @@ export default function LandingNew() {
 
     welcomeIntensity.current = 0;
 
+    /*
     // Speak "Welcome to Work OS"
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
@@ -130,6 +131,7 @@ export default function LandingNew() {
       if (voice) utter.voice = voice;
       window.speechSynthesis.speak(utter);
     }
+    */
 
     // 3. Drive intensity ref each frame via scripted curve
     cancelAnimationFrame(intensityDriverRef.current); // kill any leftover loop from previous play
@@ -183,7 +185,7 @@ export default function LandingNew() {
     cancelAnimationFrame(intensityDriverRef.current);
     intensityDriverRef.current = 0;
     welcomeIntensity.current = 0;
-    window.speechSynthesis?.cancel();
+    // window.speechSynthesis?.cancel();
     setShowCards(false);
     setOrbMinimized(false);
     setOrbAnimating(true);
@@ -212,7 +214,8 @@ export default function LandingNew() {
   const navigate = useNavigate();
 
   // ── Orb AI voice: speaks any text, drives orb boundary via oscillating intensity ──
-  const speakWithOrb = (text: string) => {
+  const speakWithOrb = (_text: string) => {
+    /*
     if (!('speechSynthesis' in window)) return;
     window.speechSynthesis.cancel();
     cancelAnimationFrame(intensityDriverRef.current);
@@ -254,6 +257,7 @@ export default function LandingNew() {
     };
 
     window.speechSynthesis.speak(utter);
+    */
   };
 
   // Speak greeting when choose-path screen appears
