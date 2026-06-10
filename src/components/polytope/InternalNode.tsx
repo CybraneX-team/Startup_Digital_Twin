@@ -95,7 +95,7 @@ interface InternalNodeProps {
   draftChildNode?: UInternalNode | null;
   draftMember?: { deptId: string; nodeId: string; member: any } | null;
   draftMemberScreenPosRef?: React.MutableRefObject<{ x: number; y: number } | null>;
-  onNodeFocus?: (pos: THREE.Vector3) => void;
+  onNodeFocus?: (pos: THREE.Vector3, node: UInternalNode) => void;
 }
 
 export function InternalNode({
@@ -210,7 +210,7 @@ export function InternalNode({
         label: parentLabel,
         onClick: () => onSelectPath(pathContext, parentPos),
       });
-      if (onNodeFocus) onNodeFocus(targetPos);
+      if (onNodeFocus) onNodeFocus(targetPos, node);
       return () => {
         setBackInfo(null);
       };

@@ -1,16 +1,12 @@
-import { useState, useCallback } from 'react';
+import { create } from 'zustand';
 import { U_NODES, U_DOMAIN_COLOR } from './universalPolytopeData';
 import type { UExternalNode, UInternalNode, UDomain } from './universalPolytopeData';
 
-/** Twin (/3d) and BDT (/universal) keep separate department graphs — no cross-route sync. */
+/** Twin (/3d) and BDT (/universal) now share the same graph globally. */
 export type PolytopeStoreScope = 'twin' | 'bdt';
 
-const STORAGE_KEYS: Record<PolytopeStoreScope, string> = {
-  twin: 'polytope_departments_twin_v1',
-  bdt: 'polytope_departments_bdt_v1',
-};
-
-/** Legacy shared key — migrate once into twin scope for existing users. */
+const SHARED_STORAGE_KEY = 'polytope_departments_bdt_v1';
+const FALLBACK_TWIN_KEY = 'polytope_departments_twin_v1';
 const LEGACY_STORAGE_KEY = 'polytope_departments_v1';
 
 export type { UExternalNode, UInternalNode, UDomain };
@@ -18,16 +14,12 @@ export { U_DOMAIN_COLOR };
 
 const DEFAULT_NODES = U_NODES.filter(n => n.domain !== 'inactive');
 
-function loadFromStorage(scope: PolytopeStoreScope): UExternalNode[] | null {
+function loadFromStorage(): UExternalNode[] | null {
   try {
-    const key = STORAGE_KEYS[scope];
-    let raw = localStorage.getItem(key);
-    if (!raw && scope === 'twin') {
-      raw = localStorage.getItem(LEGACY_STORAGE_KEY);
-      if (raw) {
-        localStorage.setItem(key, raw);
-      }
-    }
+    let raw = localStorage.getItem(SHARED_STORAGE_KEY);
+    if (!raw) raw = localStorage.getItem(FALLBACK_TWIN_KEY);
+    if (!raw) raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    
     if (!raw) return null;
     return JSON.parse(raw) as UExternalNode[];
   } catch {
@@ -35,8 +27,8 @@ function loadFromStorage(scope: PolytopeStoreScope): UExternalNode[] | null {
   }
 }
 
-function saveToStorage(scope: PolytopeStoreScope, nodes: UExternalNode[]) {
-  localStorage.setItem(STORAGE_KEYS[scope], JSON.stringify(nodes));
+function saveToStorage(nodes: UExternalNode[]) {
+  localStorage.setItem(SHARED_STORAGE_KEY, JSON.stringify(nodes));
 }
 
 function addNodeToTree(nodes: UInternalNode[], path: string[], newNode: UInternalNode): UInternalNode[] {
@@ -90,81 +82,99 @@ function deleteNodeFromTree(nodes: UInternalNode[], nodeId: string): UInternalNo
   });
 }
 
-export function usePolytopeStore(scope: PolytopeStoreScope = 'twin') {
-  const [departments, setDepartments] = useState<UExternalNode[]>(() => {
-    return loadFromStorage(scope) ?? DEFAULT_NODES;
-  });
+interface PolytopeStoreState {
+  departments: UExternalNode[];
+  addDepartment: (dept: Omit<UExternalNode, 'id' | 'internalNodes'>) => UExternalNode;
+  updateDepartment: (id: string, updates: Partial<Omit<UExternalNode, 'id' | 'internalNodes'>>) => void;
+  deleteDepartment: (id: string) => void;
+  addNode: (deptId: string, node: Omit<UInternalNode, 'id' | 'children'>, path?: string[]) => UInternalNode;
+  updateNode: (deptId: string, nodeId: string, updates: Partial<Omit<UInternalNode, 'id' | 'children'>>) => void;
+  deleteNode: (deptId: string, nodeId: string) => void;
+  resetToDefaults: () => void;
+}
 
-  const persist = useCallback((next: UExternalNode[]) => {
-    setDepartments(next);
-    saveToStorage(scope, next);
-  }, [scope]);
+const useGlobalPolytopeStore = create<PolytopeStoreState>((set) => ({
+  departments: loadFromStorage() ?? DEFAULT_NODES,
 
-  // ── Department CRUD ────────────────────────────────────────────────────────
-
-  const addDepartment = useCallback((dept: Omit<UExternalNode, 'id' | 'internalNodes'>) => {
+  addDepartment: (dept) => {
     const newDept: UExternalNode = {
       ...dept,
       id: `dept_${Date.now()}`,
       internalNodes: [],
     };
-    persist([...departments, newDept]);
+    set((state) => {
+      const next = [...state.departments, newDept];
+      saveToStorage(next);
+      return { departments: next };
+    });
     return newDept;
-  }, [departments, persist]);
+  },
 
-  const updateDepartment = useCallback((id: string, updates: Partial<Omit<UExternalNode, 'id' | 'internalNodes'>>) => {
-    persist(departments.map(d => d.id === id ? { ...d, ...updates } : d));
-  }, [departments, persist]);
+  updateDepartment: (id, updates) => {
+    set((state) => {
+      const next = state.departments.map(d => d.id === id ? { ...d, ...updates } : d);
+      saveToStorage(next);
+      return { departments: next };
+    });
+  },
 
-  const deleteDepartment = useCallback((id: string) => {
-    persist(departments.filter(d => d.id !== id));
-  }, [departments, persist]);
+  deleteDepartment: (id) => {
+    set((state) => {
+      const next = state.departments.filter(d => d.id !== id);
+      saveToStorage(next);
+      return { departments: next };
+    });
+  },
 
-  // ── Internal Node CRUD ─────────────────────────────────────────────────────
-
-  const addNode = useCallback((deptId: string, node: Omit<UInternalNode, 'id' | 'children'>, path: string[] = []) => {
+  addNode: (deptId, node, path = []) => {
     const newNode: UInternalNode = {
       ...node,
       id: `node_${Date.now()}`,
       children: [],
     };
-    persist(departments.map(d =>
-      d.id === deptId
-        ? { ...d, internalNodes: addNodeToTree(d.internalNodes, path, newNode) }
-        : d
-    ));
+    set((state) => {
+      const next = state.departments.map(d =>
+        d.id === deptId
+          ? { ...d, internalNodes: addNodeToTree(d.internalNodes, path, newNode) }
+          : d
+      );
+      saveToStorage(next);
+      return { departments: next };
+    });
     return newNode;
-  }, [departments, persist]);
+  },
 
-  const updateNode = useCallback((deptId: string, nodeId: string, updates: Partial<Omit<UInternalNode, 'id' | 'children'>>) => {
-    persist(departments.map(d =>
-      d.id === deptId
-        ? { ...d, internalNodes: updateNodeInTree(d.internalNodes, nodeId, updates) }
-        : d
-    ));
-  }, [departments, persist]);
+  updateNode: (deptId, nodeId, updates) => {
+    set((state) => {
+      const next = state.departments.map(d =>
+        d.id === deptId
+          ? { ...d, internalNodes: updateNodeInTree(d.internalNodes, nodeId, updates) }
+          : d
+      );
+      saveToStorage(next);
+      return { departments: next };
+    });
+  },
 
-  const deleteNode = useCallback((deptId: string, nodeId: string) => {
-    persist(departments.map(d =>
-      d.id === deptId
-        ? { ...d, internalNodes: deleteNodeFromTree(d.internalNodes, nodeId) }
-        : d
-    ));
-  }, [departments, persist]);
+  deleteNode: (deptId, nodeId) => {
+    set((state) => {
+      const next = state.departments.map(d =>
+        d.id === deptId
+          ? { ...d, internalNodes: deleteNodeFromTree(d.internalNodes, nodeId) }
+          : d
+      );
+      saveToStorage(next);
+      return { departments: next };
+    });
+  },
 
-  const resetToDefaults = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEYS[scope]);
-    setDepartments(DEFAULT_NODES);
-  }, [scope]);
+  resetToDefaults: () => {
+    localStorage.removeItem(SHARED_STORAGE_KEY);
+    set({ departments: DEFAULT_NODES });
+  },
+}));
 
-  return {
-    departments,
-    addDepartment,
-    updateDepartment,
-    deleteDepartment,
-    addNode,
-    updateNode,
-    deleteNode,
-    resetToDefaults,
-  };
+export function usePolytopeStore(scope?: PolytopeStoreScope) {
+  // We ignore `scope` now since everything is shared globally!
+  return useGlobalPolytopeStore();
 }

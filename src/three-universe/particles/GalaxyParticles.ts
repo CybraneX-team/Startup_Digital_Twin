@@ -355,6 +355,14 @@ export class GalaxyParticles {
     occluder.renderOrder = 998;
     group.add(occluder);
 
+    // Invisible click target for reliable raycasting (full sphere, larger than EH)
+    const clickTarget = new THREE.Mesh(
+      new THREE.SphereGeometry(EH_R * 1.5, 16, 16),
+      new THREE.MeshBasicMaterial({ visible: false })
+    );
+    clickTarget.userData.isBHClickTarget = true;
+    group.add(clickTarget);
+
     this._bhGroup = group;
     this.scene.add(group);
 

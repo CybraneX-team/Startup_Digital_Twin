@@ -618,6 +618,18 @@ export class UniverseController {
 
   // Public API
 
+  freezeSolarSystem() {
+    if (this.subdomainSolarSystem) {
+      this.subdomainSolarSystem.freeze();
+    }
+  }
+
+  unfreezeSolarSystem() {
+    if (this.subdomainSolarSystem) {
+      this.subdomainSolarSystem.unfreeze();
+    }
+  }
+
   updateData(data: UniverseData) {
     if (this._disposed) return;
     this._data = data;

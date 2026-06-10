@@ -17,11 +17,9 @@ export function computeInternalNodePosition(
   const up = new THREE.Vector3().crossVectors(right, dir).normalize();
   const depthStep = 3.0;
   const childCenter = deptPos.clone().add(dir.clone().multiplyScalar(depthStep));
-  const depthOffset = nodeIndex % 2 === 0 ? 0.8 : -0.8;
 
   return childCenter
     .clone()
-    .add(dir.clone().multiplyScalar(depthOffset))
     .add(right.clone().multiplyScalar(Math.cos(angle) * 1.8))
     .add(up.clone().multiplyScalar(Math.sin(angle) * 1.8));
 }
@@ -65,4 +63,35 @@ export function computeDraftChildNodePosition(
   return childCenter.clone()
     .add(right.clone().multiplyScalar(Math.cos(angle) * ringRadius))
     .add(up.clone().multiplyScalar(Math.sin(angle) * ringRadius));
+}
+
+export function computeCameraFraming(
+  targetPos: THREE.Vector3,
+  dir: THREE.Vector3,
+  childrenCount: number,
+  baseZoomDist: number
+): { camPos: THREE.Vector3; orbitTarget: THREE.Vector3 } {
+  let camPos = targetPos.clone().add(dir.clone().multiplyScalar(baseZoomDist));
+  let orbitTarget = targetPos.clone();
+
+  if (childrenCount === 2) {
+    let localUp = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
+    const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();
+    const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+
+    // Scale shifts based on baseZoomDist (e.g. 10 -> 7.5, -2.2, 1.0)
+    const ratio = baseZoomDist / 10.0;
+    const dist = baseZoomDist * 0.75;
+    const upShift = -2.2 * ratio;
+    const orbitUp = 1.0 * ratio;
+
+    camPos = targetPos.clone()
+      .add(dir.clone().multiplyScalar(dist))
+      .add(up.clone().multiplyScalar(upShift));
+    
+    orbitTarget = targetPos.clone().add(up.clone().multiplyScalar(orbitUp));
+  }
+
+  return { camPos, orbitTarget };
 }

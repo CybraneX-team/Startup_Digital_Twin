@@ -146,6 +146,16 @@ export default function Universe3DPage() {
     setPolytopeManagerOpen(true);
   }, []);
 
+  const handleEditMember = useCallback((dept: UExternalNode, node: UInternalNode, memberIndex: number) => {
+    setPolytopeManagerView({ type: 'editMember', dept, node, memberIndex });
+    setPolytopeManagerOpen(true);
+  }, []);
+
+  const handleDeleteMemberClick = useCallback((dept: UExternalNode, node: UInternalNode, memberIndex: number) => {
+    setPolytopeManagerView({ type: 'deleteMember', dept, node, memberIndex });
+    setPolytopeManagerOpen(true);
+  }, []);
+
   // Separate state so clicking sidebar triggers camera fly-in without looping
   const [polytopeRequestSelectDeptId, setPolytopeRequestSelectDeptId] = useState<string | null | undefined>(undefined);
   // Counter incremented by sidebar back button to go back one internal level
@@ -156,6 +166,8 @@ export default function Universe3DPage() {
   const polytopeDraftDeptScreenPosRef = useRef<{ x: number; y: number } | null>(null);
   const [polytopeDraftInternalNode, setPolytopeDraftInternalNode] = useState<{ deptId: string; node: UInternalNode } | null>(null);
   const polytopeDraftInternalNodeScreenPosRef = useRef<{ x: number; y: number } | null>(null);
+  const [polytopeDraftMember, setPolytopeDraftMember] = useState<{ deptId: string; nodeId: string; member: any } | null>(null);
+  const polytopeDraftMemberScreenPosRef = useRef<{ x: number; y: number } | null>(null);
   // Incremented on draft create/cancel to fly camera back to overview
   const [polytopeDraftResetTrigger, setPolytopeDraftResetTrigger] = useState(0);
 
@@ -192,6 +204,20 @@ export default function Universe3DPage() {
       setPolytopeRequestSelectDeptId(deptId);
     }
   }, [polytopeStore.departments, polytopeDeptId]);
+
+  const handlePolytopeAddMember = useCallback((deptId: string, nodeId: string) => {
+    const draftMemberData = {
+      name: 'New Member',
+      role: 'Member',
+      avatarUrl: '',
+      isDraft: true,
+    };
+    setPolytopeDraftMember({ deptId, nodeId, member: draftMemberData });
+    setPolytopeDeptId(deptId);
+    if (polytopeDeptId !== deptId) {
+      setPolytopeRequestSelectDeptId(deptId);
+    }
+  }, [polytopeDeptId]);
 
   // Called when the 3D scene selects a dept
   const handlePolytopeDeptChange = useCallback((id: string | null) => {
@@ -558,6 +584,7 @@ export default function Universe3DPage() {
     setRootPolytopeBackStep(0);
     setPolytopeDraftDept(null);
     setPolytopeDraftInternalNode(null);
+    setPolytopeDraftMember(null);
     setPolytopeDeptId(null);
     setPolytopeInternalPath([]);
     setPolytopeRequestSelectDeptId(null);
@@ -636,6 +663,14 @@ export default function Universe3DPage() {
       hoverTimeoutRef.current = null;
     }, 400);
   }, []);
+
+  useEffect(() => {
+    if (hoverTarget?.type === 'company') {
+      controllerRef.current?.freezeSolarSystem();
+    } else {
+      controllerRef.current?.unfreezeSolarSystem();
+    }
+  }, [hoverTarget]);
 
   /** The 3D sun button fires this callback via UniverseController */
   const handleCreateFromSun = useCallback((industry: any, subdomain: any) => {
@@ -790,6 +825,8 @@ export default function Universe3DPage() {
             draftNodeScreenPosRef={polytopeDraftDeptScreenPosRef}
             draftInternalNode={polytopeDraftInternalNode}
             draftInternalNodeScreenPosRef={polytopeDraftInternalNodeScreenPosRef}
+            draftMember={polytopeDraftMember}
+            draftMemberScreenPosRef={polytopeDraftMemberScreenPosRef}
             departments={polytopeStore.departments}
             selectedInternalPath={polytopeInternalPath}
           />
@@ -954,6 +991,9 @@ export default function Universe3DPage() {
               onEditNode={handleEditNode}
               onDeleteDepartmentClick={handleDeleteDepartmentClick}
               onDeleteNodeClick={handleDeleteNodeClick}
+              onAddMember={handlePolytopeAddMember}
+              onEditMember={handleEditMember}
+              onDeleteMemberClick={handleDeleteMemberClick}
             />
             </div>
           ) : twinWorkspacePhase === 'closed' || twinWorkspacePhase === 'zooming' ? (
@@ -1044,6 +1084,47 @@ export default function Universe3DPage() {
               const path = polytopeInternalPath;
               polytopeStore.addNode(deptId, data as Omit<UInternalNode, 'id' | 'children'>, path);
               setPolytopeDraftInternalNode(null);
+              setPolytopeDeptId(deptId);
+            }}
+          />
+        );
+      })()}
+
+      {/* Draft Member Creation Panel — BH/Company polytope */}
+      {insideBH && polytopeDraftMember && (() => {
+        const dept = polytopeStore.departments.find(d => d.id === polytopeDraftMember.deptId);
+        if (!dept) return null;
+        return (
+          <CreateDepartmentPanel
+            mode="member"
+            dept={dept}
+            draftNodeScreenPosRef={polytopeDraftMemberScreenPosRef}
+            onDraftUpdate={(patch) => setPolytopeDraftMember(prev => prev ? { ...prev, member: { ...prev.member, ...patch } } : prev)}
+            onClose={(isCancel) => {
+              if (isCancel) {
+                setPolytopeDraftMember(null);
+              }
+            }}
+            onCreated={(data) => {
+              const { deptId, nodeId } = polytopeDraftMember;
+              const deptToUpdate = polytopeStore.departments.find(d => d.id === deptId);
+              if (!deptToUpdate) return;
+              const findNode = (nodes: UInternalNode[], id: string): UInternalNode | undefined => {
+                for (const n of nodes) {
+                  if (n.id === id) return n;
+                  if (n.children) {
+                    const found = findNode(n.children, id);
+                    if (found) return found;
+                  }
+                }
+                return undefined;
+              };
+              const targetNode = findNode(deptToUpdate.internalNodes, nodeId);
+              if (targetNode && targetNode.type === 'team') {
+                const newMembers = [...(targetNode.members || []), data];
+                polytopeStore.updateNode(deptId, nodeId, { members: newMembers, memberCount: newMembers.length });
+              }
+              setPolytopeDraftMember(null);
               setPolytopeDeptId(deptId);
             }}
           />

@@ -7,7 +7,7 @@ import type { UExternalNode } from '../../lib/universalPolytopeData';
 import { U_DOMAIN_COLOR } from '../../lib/universalPolytopeData';
 import { PlasmaSphere, GlowRing } from '../PolytopeShared';
 import { InternalNode } from '../polytope/InternalNode';
-import { computeInternalNodePosition } from '../polytope/internalNodeLayout';
+import { computeInternalNodePosition, computeCameraFraming } from '../polytope/internalNodeLayout';
 import { useDragWorkspaceStore } from '../../lib/useDragWorkspaceStore';
 
 export interface RootInternalNodeSceneProps {
@@ -20,7 +20,6 @@ export interface RootInternalNodeSceneProps {
 }
 
 const ROOT_POS = new THREE.Vector3(0, 0, 8);
-const CAMERA_DIST = 26;
 const CAMERA_ZOOM_IN = 14;
 const NODES_REVEAL_DELAY_MS = 320;
 
@@ -65,15 +64,19 @@ export function RootInternalNodeScene({
       return;
     }
     
-    camera.position.set(0, 0, CAMERA_ZOOM_IN);
+    const dir = ROOT_POS.clone().normalize();
+    // Use 18 as the base distance (26 - 8 = 18)
+    const { camPos, orbitTarget } = computeCameraFraming(ROOT_POS, dir, root.internalNodes.length, 18);
+
+    camera.position.set(camPos.x, camPos.y, CAMERA_ZOOM_IN);
     if (orbitRef.current) {
-      orbitRef.current.target.set(ROOT_POS.x, ROOT_POS.y, ROOT_POS.z);
+      orbitRef.current.target.set(orbitTarget.x, orbitTarget.y, orbitTarget.z);
       orbitRef.current.update();
     }
 
     const revealDelay = NODES_REVEAL_DELAY_MS / 1000;
     const camTween = gsap.to(camera.position, {
-      x: 0, y: 0, z: CAMERA_DIST,
+      x: camPos.x, y: camPos.y, z: camPos.z,
       duration: 1.05,
       delay: revealDelay,
       ease: 'power2.out',
@@ -83,7 +86,7 @@ export function RootInternalNodeScene({
     let targetTween: gsap.core.Tween | undefined;
     if (orbitRef.current) {
       targetTween = gsap.to(orbitRef.current.target, {
-        x: ROOT_POS.x, y: ROOT_POS.y, z: ROOT_POS.z,
+        x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z,
         duration: 0.8,
         delay: revealDelay,
         ease: 'power2.out',
@@ -95,21 +98,24 @@ export function RootInternalNodeScene({
       camTween.kill();
       targetTween?.kill();
     };
-  }, [root.id, rootSwitchKey, camera]);
+  }, [root.id, root.internalNodes.length, rootSwitchKey, camera]);
 
   const flyToRootOverview = useCallback(() => {
+    const dir = ROOT_POS.clone().normalize();
+    const { camPos, orbitTarget } = computeCameraFraming(ROOT_POS, dir, root.internalNodes.length, 18);
+    
     if (orbitRef.current) {
-      gsap.to(orbitRef.current.target, { x: ROOT_POS.x, y: ROOT_POS.y, z: ROOT_POS.z, duration: 1.0, ease: 'power2.inOut' });
+      gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.0, ease: 'power2.inOut' });
     }
-    gsap.to(camera.position, { x: 0, y: 0, z: CAMERA_DIST, duration: 1.0, ease: 'power2.inOut' });
-  }, [camera]);
+    gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.0, ease: 'power2.inOut' });
+  }, [camera, root.internalNodes.length]);
 
-  const handleNodeFocus = useCallback((targetPos: THREE.Vector3) => {
+  const handleNodeFocus = useCallback((targetPos: THREE.Vector3, node?: any) => {
     if (orbitRef.current) {
-      gsap.to(orbitRef.current.target, { x: targetPos.x, y: targetPos.y, z: targetPos.z, duration: 1.0, ease: 'power2.inOut' });
       const dir = targetPos.clone().sub(ROOT_POS).normalize();
-      const targetCamPos = targetPos.clone().add(dir.multiplyScalar(10));
-      gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.0, ease: 'power2.inOut' });
+      const { camPos, orbitTarget } = computeCameraFraming(targetPos, dir, node?.children?.length ?? 0, 10);
+      gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.0, ease: 'power2.inOut' });
+      gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.0, ease: 'power2.inOut' });
     }
   }, [camera]);
 

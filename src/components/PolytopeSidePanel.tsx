@@ -179,7 +179,8 @@ export function PolytopeSidePanel({
 
   // A grouping node (like "Teams") holds other team nodes, so it shouldn't show the members UI.
   const isGroupingTeamNode = activeNode && activeNode.type === 'team' && activeNode.children?.some(c => c.type === 'team');
-  const isShowingMembers = activeNode && activeNode.type === 'team' && !isGroupingTeamNode;
+  const hasMembersArray = activeNode && activeNode.members !== undefined;
+  const isShowingMembers = activeNode && activeNode.type === 'team' && !isGroupingTeamNode && (hasMembersArray || (!activeNode.children || activeNode.children.length === 0));
 
   // Internal nodes at the current drill-down level
   const allVisibleNodes = effectiveDept ? getNodesAtPath(effectiveDept, selectedInternalPath) : [];

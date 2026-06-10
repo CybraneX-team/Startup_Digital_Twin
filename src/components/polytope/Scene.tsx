@@ -16,6 +16,7 @@ import {
   computeInternalNodePosition,
   findNodeAtPath,
   computeDraftChildNodePosition,
+  computeCameraFraming,
 } from './internalNodeLayout';
 import type { CoreWorkspacePhase } from '../../lib/coreWorkspaceTransition';
 import { CORE_DIVE_DURATION_S, CORE_SURFACE_DURATION_S } from '../../lib/coreWorkspaceTransition';
@@ -406,19 +407,19 @@ export function Scene({
     
     if (nextPath.length === 0) {
       if (orbitRef.current && deptPos) {
-        gsap.to(orbitRef.current.target, { x: deptPos.x, y: deptPos.y, z: deptPos.z, duration: 1.2, ease: 'power2.inOut' });
         const dir = deptPos.clone().normalize();
-        const targetCamPos = dir.multiplyScalar(24);
-        gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.2, ease: 'power2.inOut' });
+        const { camPos, orbitTarget } = computeCameraFraming(deptPos, dir, ACTIVE_NODES[deptIdx].internalNodes.length, 24);
+        gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.2, ease: 'power2.inOut' });
+        gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.2, ease: 'power2.inOut' });
       }
     } else {
       const targetPos = findNodePosition(deptPos, ACTIVE_NODES[deptIdx].internalNodes, nextPath);
+      const parentNode = findNodeAtPath(ACTIVE_NODES[deptIdx].internalNodes, nextPath);
       if (targetPos && orbitRef.current) {
-        gsap.to(orbitRef.current.target, { x: targetPos.x, y: targetPos.y, z: targetPos.z, duration: 1.0, ease: 'power2.inOut' });
         const dir = targetPos.clone().normalize();
-        const zoomDist = 10;
-        const targetCamPos = targetPos.clone().add(dir.multiplyScalar(zoomDist));
-        gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.0, ease: 'power2.inOut' });
+        const { camPos, orbitTarget } = computeCameraFraming(targetPos, dir, parentNode?.children?.length ?? 0, 10);
+        gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.0, ease: 'power2.inOut' });
+        gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.0, ease: 'power2.inOut' });
       }
     }
   }, [selectedInternalPathProps, selectedId, ACTIVE_NODES, ACTIVE_NODE_POSITIONS, camera, selectedInternalPath]);
@@ -450,10 +451,10 @@ export function Scene({
       const extNodeIdx = ACTIVE_NODES.findIndex(n => n.id === parentId);
       const extPos = EXTERNAL_NODE_POSITIONS[extNodeIdx];
       if (orbitRef.current && extPos) {
-        gsap.to(orbitRef.current.target, { x: extPos.x, y: extPos.y, z: extPos.z, duration: 1.2, ease: 'power2.inOut' });
         const dir = extPos.clone().normalize();
-        const targetCamPos = dir.multiplyScalar(24);
-        gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.2, ease: 'power2.inOut' });
+        const { camPos, orbitTarget } = computeCameraFraming(extPos, dir, ACTIVE_NODES[extNodeIdx].internalNodes.length, 24);
+        gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.2, ease: 'power2.inOut' });
+        gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.2, ease: 'power2.inOut' });
       }
     } else {
       if (orbitRef.current) {
@@ -466,11 +467,12 @@ export function Scene({
       setSelectedInternalPath(path);
       onPathChange(path);
       if (orbitRef.current) {
-        gsap.to(orbitRef.current.target, { x: pos.x, y: pos.y, z: pos.z, duration: 1.0, ease: 'power2.inOut' });
+        const extNodeIdx = ACTIVE_NODES.findIndex(n => n.id === parentId);
+        const parentNode = findNodeAtPath(ACTIVE_NODES[extNodeIdx].internalNodes, path);
         const dir = pos.clone().normalize();
-        const zoomDist = 10;
-        const targetCamPos = pos.clone().add(dir.multiplyScalar(zoomDist));
-        gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.0, ease: 'power2.inOut' });
+        const { camPos, orbitTarget } = computeCameraFraming(pos, dir, parentNode?.children?.length ?? 0, 10);
+        gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.0, ease: 'power2.inOut' });
+        gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.0, ease: 'power2.inOut' });
       }
     }
   };
@@ -503,11 +505,11 @@ export function Scene({
         const extIdx = ACTIVE_NODES.findIndex(n => n.id === selectedId);
         const extPos = ACTIVE_NODE_POSITIONS[extIdx];
         if (extPos) {
-          gsap.to(orbitRef.current.target, { x: extPos.x, y: extPos.y, z: extPos.z, duration: 1.2, ease: 'power2.inOut' });
           const dir = extPos.clone().normalize();
-          const targetCamPos = dir.multiplyScalar(24);
+          const { camPos, orbitTarget } = computeCameraFraming(extPos, dir, ACTIVE_NODES[extIdx].internalNodes.length, 24);
+          gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.2, ease: 'power2.inOut' });
           gsap.to(camera.position, {
-            x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z,
+            x: camPos.x, y: camPos.y, z: camPos.z,
             duration: 1.2, ease: 'power2.inOut',
           });
         }
@@ -654,10 +656,11 @@ export function Scene({
       setSelectedInternalPath([]);
       onPathChange([]);
       if (orbitRef.current) {
-        gsap.to(orbitRef.current.target, { x: pos.x, y: pos.y, z: pos.z, duration: 1.5, ease: 'power3.inOut' });
+        const nodeObj = ACTIVE_NODES.find(n => n.id === id);
         const dir = pos.clone().normalize();
-        const targetCamPos = dir.multiplyScalar(24);
-        gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.5, ease: 'power3.inOut' });
+        const { camPos, orbitTarget } = computeCameraFraming(pos, dir, nodeObj?.internalNodes.length ?? 0, 24);
+        gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.5, ease: 'power3.inOut' });
+        gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.5, ease: 'power3.inOut' });
       }
     }
   };
@@ -676,10 +679,11 @@ export function Scene({
     setSelectedInternalPath([]);
     onPathChange([]);
     if (orbitRef.current) {
-      gsap.to(orbitRef.current.target, { x: pos.x, y: pos.y, z: pos.z, duration: 1.5, ease: 'power3.inOut' });
+      const nodeObj = ACTIVE_NODES[idx];
       const dir = pos.clone().normalize();
-      const targetCamPos = dir.multiplyScalar(24);
-      gsap.to(camera.position, { x: targetCamPos.x, y: targetCamPos.y, z: targetCamPos.z, duration: 1.5, ease: 'power3.inOut' });
+      const { camPos, orbitTarget } = computeCameraFraming(pos, dir, nodeObj?.internalNodes.length ?? 0, 24);
+      gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.5, ease: 'power3.inOut' });
+      gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.5, ease: 'power3.inOut' });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestSelectDeptId]);

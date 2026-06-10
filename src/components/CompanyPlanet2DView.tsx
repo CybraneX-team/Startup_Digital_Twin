@@ -398,7 +398,7 @@ export default function CompanyPlanet2DView({
             />
           </g>
 
-          {/* Center company energy orb — no text overlay */}
+          {/* Center company energy orb — with company name label */}
           {depth === 0 && (
             <g
               transform={`translate(${CX}, ${CY})`}
@@ -416,32 +416,18 @@ export default function CompanyPlanet2DView({
                 intensity={1}
                 selected={false}
               />
+              <EnergyOrbLabel2D
+                title={context.companyName}
+                color={industryColor}
+                angle={Math.PI / 2}
+                orbR={CORE_ORB_R}
+              />
             </g>
           )}
 
           <g transform={`translate(${CX}, ${CY})`}>
             <g key={`orbit-${entranceKey}-${animKey}`}>
-              {isOrbiting && (
-                <animateTransform
-                  attributeName="transform"
-                  type="rotate"
-                  from="0"
-                  to="360"
-                  dur={`${ORBIT_PERIOD_S}s`}
-                  repeatCount="indefinite"
-                />
-              )}
               <g>
-                {isOrbiting && (
-                  <animateTransform
-                    attributeName="transform"
-                    type="rotate"
-                    from="0"
-                    to="-360"
-                    dur={`${ORBIT_PERIOD_S}s`}
-                    repeatCount="indefinite"
-                  />
-                )}
                 {layout.map((node) => {
                   const r = orbRadius(node.relevance, depth);
                   const isHovered = hoveredId === node.id && !isTransitioning;
@@ -681,6 +667,22 @@ export default function CompanyPlanet2DView({
         }
         .planet2d-orbit-ring-draw {
           animation: planet2dRingDraw ${ORBIT_FORM_MS}ms cubic-bezier(0.22, 0.85, 0.28, 1) forwards;
+        }
+        @keyframes planet2dOrbitSystem {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+        @keyframes planet2dOrbitCounter {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(-360deg); }
+        }
+        .planet2d-orbit-system {
+          transform-origin: 0px 0px;
+          animation: planet2dOrbitSystem ${ORBIT_PERIOD_S}s linear infinite;
+        }
+        .planet2d-orbit-counter {
+          transform-origin: 0px 0px;
+          animation: planet2dOrbitCounter ${ORBIT_PERIOD_S}s linear infinite;
         }
       `}</style>
     </div>

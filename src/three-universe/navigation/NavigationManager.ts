@@ -163,9 +163,22 @@ export class NavigationManager {
       if (this._iconParticles) {
         this._iconParticles.icons.forEach(({ points }) => clickMeshes.push(points));
       }
+      if (this.galaxyParticles._bhGroup && this.galaxyParticles._bhGroup.visible) {
+        clickMeshes.push(...this.galaxyParticles._bhGroup.children);
+      }
       const hits = this.raycaster.intersectObjects(clickMeshes, false);
       if (hits.length > 0) {
-        const id = hits[0].object.userData._industryId || hits[0].object.userData.industryId;
+        const obj = hits[0].object;
+        if (this.galaxyParticles._bhGroup && this.galaxyParticles._bhGroup.children.includes(obj)) {
+          if (this._hoveredIndustryId !== 'blackhole') {
+            this._hoveredIndustryId = 'blackhole';
+            this.canvas.style.cursor = 'pointer';
+            if (this.onHover) this.onHover(null);
+          }
+          return;
+        }
+
+        const id = obj.userData._industryId || obj.userData.industryId;
         const industry = (this._industries || []).find(i => i.id === id);
         if (industry) {
           if (this._hoveredIndustryId !== id) {
@@ -377,9 +390,18 @@ export class NavigationManager {
       if (this._iconParticles) {
         this._iconParticles.icons.forEach(({ points }) => clickMeshes.push(points));
       }
+      if (this.galaxyParticles._bhGroup && this.galaxyParticles._bhGroup.visible) {
+        clickMeshes.push(...this.galaxyParticles._bhGroup.children);
+      }
       const hits = this.raycaster.intersectObjects(clickMeshes, false);
       if (hits.length > 0) {
         const obj = hits[0].object;
+        
+        if (this.galaxyParticles._bhGroup && this.galaxyParticles._bhGroup.children.includes(obj)) {
+          this.cameraCtrl.flyTo(new THREE.Vector3(0, 0, 0), 1000, ZOOM_LEVELS.GALAXY);
+          return;
+        }
+
         const id = obj.userData._industryId || obj.userData.industryId;
         const idx = (this._industries || []).findIndex(i => i.id === id);
         if (idx >= 0) { this.navigateToIndustry(this._industries[idx], idx); return; }
