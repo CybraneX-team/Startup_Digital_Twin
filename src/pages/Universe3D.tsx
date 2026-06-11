@@ -48,7 +48,7 @@ import { CompanyTagDropdown } from '../components/planet/CompanyTagDropdown';
 export default function Universe3DPage() {
   const navigate = useNavigate();
   const { pathname, state } = useLocation();
-  const { user, profile, canRead } = useAuth();
+  const { user, profile, canRead, role: authRole } = useAuth();
   const { company } = useCompany(profile?.company_id);
   // Bypass users (VC/Incubator) have no company — pass null so the universe loads without waiting
   const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
@@ -306,9 +306,11 @@ export default function Universe3DPage() {
     setRootPolytopeDeptId(null);
     setRootPolytopeInternalPath([]);
     setRootPolytopeBackStep(0);
+    setActionWorkspace(null);
   }, []);
 
   // ── Company planet root systems (Industry OS) ──
+
   const [insidePlanetRoots, setInsidePlanetRoots] = useState(false);
   const [planetContext, setPlanetContext] = useState<CompanyPlanetContext | null>(null);
   const [planetSearchQuery, setPlanetSearchQuery] = useState('');
@@ -334,15 +336,19 @@ export default function Universe3DPage() {
     industry: UniverseIndustry;
     subdomain: UniverseSubdomain;
   }) => {
-    const defaultRole: UserPlanetRole = 'founder';
-    const pCtx = getPlanetRootsForCompany(ctx.company.id, ctx.company.name, defaultRole);
+    const planetRole: UserPlanetRole = 
+      (authRole === 'vc' || localStorage.getItem('active_role') === 'vc') ? 'vc' : 
+      (authRole === 'founder' || authRole === 'co_founder' || authRole === 'admin') ? 'founder' : 
+      'career';
+      
+    const pCtx = getPlanetRootsForCompany(ctx.company.id, ctx.company.name, planetRole);
     setPlanetContext(pCtx);
     setPlanetIndustryColor(ctx.industry.color);
     setInsidePlanetRoots(true);
     // Signal to TopBar that a company planet has been entered this session
     sessionStorage.setItem('company_entered_in_3d', '1');
     window.dispatchEvent(new Event('company_entered_in_3d'));
-  }, []);
+  }, [authRole]);
 
   const handleExitRootPolytope = useCallback(() => {
     setInsideRootPolytope(false);
@@ -355,7 +361,6 @@ export default function Universe3DPage() {
     if (!planetContext) return;
     const pCtx = getPlanetRootsForCompany(planetContext.companyId, planetContext.companyName, role);
     setPlanetContext(pCtx);
-    // Reset any open deep polytope drills so user starts at the roots list/map view of the new role
     handleExitRootPolytope();
   }, [planetContext, handleExitRootPolytope]);
 
@@ -477,6 +482,22 @@ export default function Universe3DPage() {
     rootPolytopeDeptId,
     rootPolytopeInternalPath,
   ]);
+
+  // Listen for workflows_updated to refresh planet roots if tag changes
+  useEffect(() => {
+    const handleWorkflowsUpdated = () => {
+      if (insidePlanetRoots && planetContext) {
+        const freshCtx = getPlanetRootsForCompany(
+          planetContext.companyId,
+          planetContext.companyName,
+          planetContext.role,
+        );
+        setPlanetContext(freshCtx);
+      }
+    };
+    window.addEventListener('workflows_updated', handleWorkflowsUpdated);
+    return () => window.removeEventListener('workflows_updated', handleWorkflowsUpdated);
+  }, [insidePlanetRoots, planetContext]);
 
   const handleActionNodeClick = useCallback((rootId: string, branchId: string, actionId: string) => {
     if (!planetContext) return;

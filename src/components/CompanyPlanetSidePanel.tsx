@@ -1,5 +1,6 @@
 import { useMemo, useRef, useEffect } from 'react';
-import { Search, Command, ArrowLeft, ChevronRight, Briefcase, Rocket, TrendingUp } from 'lucide-react';
+import { Search, Command, ArrowLeft, ChevronRight } from 'lucide-react';
+// import { Briefcase, Rocket, TrendingUp} from 'lucide-react';
 import type {
   CompanyPlanetContext,
   PlanetExploreLevel,
@@ -35,11 +36,11 @@ function findBranch(root: PlanetRootNode, branchId: string): PlanetBranchNode | 
   return root.branches.find(b => b.id === branchId);
 }
 
-const ROLES = [
-  { id: 'career', label: 'Career User', icon: Briefcase, color: '#60a5fa' },
-  { id: 'founder', label: 'Founder', icon: Rocket, color: '#f97316' },
-  { id: 'investor', label: 'Investor', icon: TrendingUp, color: '#22d3ee' },
-] as const;
+// const ROLES = [
+//   { id: 'career', label: 'Career User', icon: Briefcase, color: '#60a5fa' },
+//   { id: 'founder', label: 'Founder', icon: Rocket, color: '#f97316' },
+//   { id: 'investor', label: 'Investor', icon: TrendingUp, color: '#22d3ee' },
+// ] as const;
 
 export function CompanyPlanetSidePanel({
   context,
@@ -54,7 +55,7 @@ export function CompanyPlanetSidePanel({
   searchQuery,
   setSearchQuery,
   industryColor = '#C1AEFF',
-  onRoleChange,
+  // onRoleChange,
 }: CompanyPlanetSidePanelProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const level = getExploreLevel(depth);
@@ -227,7 +228,7 @@ export function CompanyPlanetSidePanel({
         onClick={onExitToSubdomain}
       />
 
-      {/* Role Switcher */}
+      {/* Role Switcher (Commented out per feedback)
       <div
         className="rounded-2xl p-2.5 flex flex-col gap-1.5"
         style={{
@@ -275,6 +276,7 @@ export function CompanyPlanetSidePanel({
           })}
         </div>
       </div>
+      */}
 
       {showCoreCard && (
         <PlanetCoreContextCard details={coreDetails} industryColor={industryColor} />

@@ -1,12 +1,13 @@
 /**
- * Industry OS — user-specific company planet root systems (mock).
+ * Industry OS — user-specific company planet root systems.
  * Galaxy → Star → Planet → Roots → Branches → Action nodes
  */
 
 import type { UDomain, UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
 import { resolvePolytopeNodeCount } from '../lib/universalPolytopeData';
+import type { CompanyTag } from '../lib/useSavedWorkflows';
 
-export type UserPlanetRole = 'career' | 'founder' | 'investor';
+export type UserPlanetRole = 'career' | 'founder' | 'vc' | 'investor';
 
 export interface PlanetActionNode {
   id: string;
@@ -20,7 +21,6 @@ export interface PlanetBranchNode {
   actions: PlanetActionNode[];
 }
 
-/** Template branch before IDs are assigned */
 interface PlanetBranchTemplate {
   label: string;
   actions: Omit<PlanetActionNode, 'id'>[];
@@ -43,7 +43,6 @@ export interface CompanyPlanetContext {
   roots: PlanetRootNode[];
 }
 
-/** Interior tree node (compatible with CompanyPlanetRootView) */
 export interface PlanetTreeNode {
   id: string;
   label: string;
@@ -55,6 +54,7 @@ export interface PlanetTreeNode {
 const ROLE_LABELS: Record<UserPlanetRole, string> = {
   career: 'Career User',
   founder: 'Founder',
+  vc: 'VC Partner',
   investor: 'Investor',
 };
 
@@ -62,153 +62,71 @@ type PlanetRootTemplate = Omit<PlanetRootNode, 'id' | 'branches'> & {
   branches: PlanetBranchTemplate[];
 };
 
-const FOUNDER_ROOTS_TEMPLATE: PlanetRootTemplate[] = [
+const FIXED_ROOTS_TEMPLATE: PlanetRootTemplate[] = [
   {
-    label: 'Competitors',
-    description: 'Direct, indirect, and substitute competition',
-    relevance: 92,
-    color: '#f97316',
-    branches: [
-      { label: 'Direct competitors', actions: [{ label: 'Compare pricing', hint: 'Find positioning gap' }, { label: 'Feature matrix', hint: 'Map overlap vs wedge' }] },
-      { label: 'Substitutes', actions: [{ label: 'Legacy workarounds', hint: 'Beat current behavior' }, { label: 'Open-source tools', hint: 'Monitor adoption' }] },
-    ],
-  },
-  {
-    label: 'Potential Customers',
-    description: 'Who buys, why, and how to reach them',
-    relevance: 88,
-    color: '#38bdf8',
-    branches: [
-      { label: 'SMB segment', actions: [{ label: 'Interview 10 operators', hint: 'Validate pain' }, { label: 'Pilot proposal', hint: 'Design offer' }] },
-      { label: 'Enterprise', actions: [{ label: 'Map buying committee', hint: 'Find economic buyer' }, { label: 'Procurement signals', hint: 'Time outreach' }] },
-    ],
-  },
-  {
-    label: 'People to Contact',
-    description: 'Decision makers, partners, and operators',
-    relevance: 85,
-    color: '#a78bfa',
-    branches: [
-      { label: 'Partnership leads', actions: [{ label: 'Request intro', hint: 'Warm path' }, { label: 'Integration pitch', hint: 'API / co-sell' }] },
-      { label: 'Product leaders', actions: [{ label: 'Discovery call', hint: 'Workflow pain' }, { label: 'Feedback loop', hint: 'Gap validation' }] },
-    ],
-  },
-  {
-    label: 'Market Gap',
-    description: 'Underserved segments and weak incumbent coverage',
-    relevance: 78,
-    color: '#34d399',
-    branches: [
-      { label: 'Vertical niches', actions: [{ label: 'Choose wedge', hint: 'Narrow MVP' }, { label: 'Landing test', hint: 'Collect signal' }] },
-    ],
-  },
-  {
-    label: 'GTM / Distribution',
-    description: 'Channels and motion to reach buyers',
-    relevance: 72,
-    color: '#fbbf24',
-    branches: [
-      { label: 'Community routes', actions: [{ label: 'Launch pilot', hint: 'One buyer persona' }, { label: 'Partner marketplace', hint: 'Distribution fit' }] },
-    ],
-  },
-];
-
-const INVESTOR_ROOTS_TEMPLATE: PlanetRootTemplate[] = [
-  {
-    label: 'Growth',
-    description: 'Revenue, adoption, and expansion signals',
-    relevance: 90,
-    color: '#22d3ee',
-    branches: [
-      { label: 'Enterprise adoption', actions: [{ label: 'Track quarterly logos', hint: 'Expansion revenue' }, { label: 'Cohort retention', hint: 'Request data' }] },
-    ],
-  },
-  {
-    label: 'Moat',
-    description: 'Defensibility and switching costs',
-    relevance: 86,
-    color: '#8b5cf6',
-    branches: [
-      { label: 'Data advantage', actions: [{ label: 'Compare platform risk', hint: 'Workflow data' }, { label: 'Distribution moat', hint: 'Channel lock-in' }] },
-    ],
-  },
-  {
-    label: 'Risk',
-    description: 'Regulatory, competitive, and execution risk',
-    relevance: 84,
-    color: '#f87171',
-    branches: [
-      { label: 'Platform dependency', actions: [{ label: 'Mitigation plan', hint: 'Fragile deps' }, { label: 'Incumbent response', hint: 'Threat watch' }] },
-    ],
-  },
-  {
-    label: 'Financial',
-    description: 'Unit economics, burn, and capital intensity',
-    relevance: 80,
-    color: '#fbbf24',
-    branches: [
-      { label: 'Revenue model', actions: [{ label: 'Benchmark margins', hint: 'Vs comparables' }, { label: 'Runway stress', hint: 'Burn scenarios' }] },
-    ],
-  },
-  {
-    label: 'Deal',
-    description: 'Valuation, terms, and round structure',
-    relevance: 75,
-    color: '#34d399',
-    branches: [
-      { label: 'Round terms', actions: [{ label: 'Request data room', hint: 'Diligence pack' }, { label: 'Co-investor map', hint: 'Syndicate fit' }] },
-    ],
-  },
-];
-
-const CAREER_ROOTS_TEMPLATE: PlanetRootTemplate[] = [
-  {
-    label: 'Roles',
-    description: 'Open and target role families',
-    relevance: 94,
+    label: 'Identity',
+    description: 'Name, stage, size, HQ, founding year, website',
+    relevance: 100,
     color: '#60a5fa',
-    branches: [
-      { label: 'Target roles', actions: [{ label: 'Shortlist 5 roles', hint: 'Seniority fit' }, { label: 'Application plan', hint: 'Timeline' }] },
-      { label: 'Role families', actions: [{ label: 'Compare ladders', hint: 'Growth path' }] },
-    ],
+    branches: [{ label: 'Overview', actions: [{ label: 'View Profile', hint: 'Basic details' }] }]
   },
   {
-    label: 'Skill Gap',
-    description: 'Required vs current skills and proof',
-    relevance: 88,
+    label: 'Product & Tech',
+    description: 'Core offering, differentiators, tech stack, APIs',
+    relevance: 95,
     color: '#a78bfa',
-    branches: [
-      { label: 'Missing skills', actions: [{ label: 'Learning plan', hint: '8-week sprint' }, { label: 'Portfolio project', hint: 'Show proof' }] },
-    ],
+    branches: [{ label: 'Core Offering', actions: [{ label: 'View Product', hint: 'Main features' }] }]
   },
   {
-    label: 'People / Network',
-    description: 'Recruiters, hiring managers, alumni',
-    relevance: 82,
+    label: 'Market Position',
+    description: 'ICP, GTM motion, pricing model, geography',
+    relevance: 90,
     color: '#34d399',
-    branches: [
-      { label: 'Warm paths', actions: [{ label: '10 outreach messages', hint: 'Personalized' }, { label: 'Referral ask', hint: 'Mutual contacts' }] },
-    ],
+    branches: [{ label: 'GTM Motion', actions: [{ label: 'View GTM', hint: 'Market approach' }] }]
   },
   {
-    label: 'Hiring Process',
-    description: 'Stages, assessments, and timelines',
-    relevance: 76,
+    label: 'Commercial Signals',
+    description: 'Funding, revenue range, hiring velocity',
+    relevance: 85,
     color: '#fbbf24',
-    branches: [
-      { label: 'Interview prep', actions: [{ label: 'Practice case', hint: 'Role-specific' }, { label: 'Culture fit notes', hint: 'Values alignment' }] },
-    ],
+    branches: [{ label: 'Funding', actions: [{ label: 'View Funding', hint: 'Capital raised' }] }]
   },
   {
-    label: 'Compensation',
-    description: 'Bands, equity, and negotiation range',
-    relevance: 70,
+    label: 'People & Access',
+    description: 'Founders, key contacts, warm intro paths',
+    relevance: 80,
     color: '#f472b6',
-    branches: [
-      { label: 'Salary bands', actions: [{ label: 'Prepare negotiation', hint: 'Market data' }] },
-    ],
+    branches: [{ label: 'Key Contacts', actions: [{ label: 'View People', hint: 'Decision makers' }] }]
   },
+  {
+    label: 'Engagement History',
+    description: 'Past interactions, deal stage, notes, next action',
+    relevance: 75,
+    color: '#22d3ee',
+    branches: [{ label: 'History', actions: [{ label: 'View History', hint: 'Past events' }] }]
+  }
 ];
+
+const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
+  'ICP Overlap': { label: 'ICP Overlap', description: 'How much of their ICP maps to yours / fit', relevance: 92, color: '#f97316', branches: [{ label: 'Analysis', actions: [{ label: 'View Overlap', hint: 'ICP match' }] }] },
+  'Product Delta': { label: 'Product Delta', description: 'Feature gaps between you and them', relevance: 88, color: '#38bdf8', branches: [{ label: 'Analysis', actions: [{ label: 'View Delta', hint: 'Gap analysis' }] }] },
+  'GTM & Win/Loss': { label: 'GTM & Win/Loss', description: 'Where you\'ve met in deals, who won, why', relevance: 85, color: '#a78bfa', branches: [{ label: 'Analysis', actions: [{ label: 'View GTM', hint: 'Win/Loss reasons' }] }] },
+  'Velocity & Threat': { label: 'Velocity & Threat', description: 'Headcount growth rate vs yours', relevance: 78, color: '#34d399', branches: [{ label: 'Analysis', actions: [{ label: 'View Velocity', hint: 'Growth rate' }] }] },
+  'Buyer Map': { label: 'Buyer Map', description: 'Economic buyer, champion, blocker', relevance: 88, color: '#38bdf8', branches: [{ label: 'Analysis', actions: [{ label: 'View Map', hint: 'Buyer roles' }] }] },
+  'Pain & Trigger': { label: 'Pain & Trigger', description: 'Specific pain, buying window trigger', relevance: 85, color: '#a78bfa', branches: [{ label: 'Analysis', actions: [{ label: 'View Pain', hint: 'Triggers' }] }] },
+  'Stack Intel / Deal Urgency': { label: 'Stack Intel / Deal Urgency', description: 'Current tooling, displacement / Compliance, fundraise', relevance: 78, color: '#34d399', branches: [{ label: 'Analysis', actions: [{ label: 'View Stack', hint: 'Urgency' }] }] },
+  'Integration Fit': { label: 'Integration Fit', description: 'API compatibility, data model overlap', relevance: 88, color: '#38bdf8', branches: [{ label: 'Analysis', actions: [{ label: 'View Fit', hint: 'Compatibility' }] }] },
+  'Value Split': { label: 'Value Split', description: 'Rev share, referral, white-label model', relevance: 85, color: '#a78bfa', branches: [{ label: 'Analysis', actions: [{ label: 'View Split', hint: 'Models' }] }] },
+  'Joint Champion / Conflict Risk': { label: 'Joint Champion / Conflict Risk', description: 'Internal sponsor / Roadmap overlap', relevance: 78, color: '#34d399', branches: [{ label: 'Analysis', actions: [{ label: 'View Champion', hint: 'Risks' }] }] },
+};
+
+const DYNAMIC_SETS: Record<CompanyTag, string[]> = {
+  competitor: ['ICP Overlap', 'Product Delta', 'GTM & Win/Loss', 'Velocity & Threat'],
+  potential_client: ['ICP Overlap', 'Buyer Map', 'Pain & Trigger', 'Stack Intel / Deal Urgency'],
+  partner: ['Product Delta', 'Integration Fit', 'Value Split', 'Joint Champion / Conflict Risk']
+};
+
+const ALL_DYNAMIC_KEYS = Object.keys(DYNAMIC_NODES);
 
 function expandTemplate(
   companyId: string,
@@ -233,7 +151,6 @@ export function getRoleLabel(role: UserPlanetRole): string {
   return ROLE_LABELS[role];
 }
 
-/** Role-specific copy for the center energy orb on the 2D planet map */
 export interface PlanetCoreDetails {
   companyId: string;
   companyName: string;
@@ -246,6 +163,38 @@ export interface PlanetCoreDetails {
   focusHint: string;
 }
 
+function getTagForCompany(companyId: string, role: string): CompanyTag | undefined {
+  try {
+    const raw = localStorage.getItem('industry_os_saved_workflows_v1');
+    if (!raw) return undefined;
+    const items = JSON.parse(raw);
+    const item = items.find((i: any) => i.level === 'planet' && i.companyId === companyId && i.role === role);
+    return item?.planetTag;
+  } catch {
+    return undefined;
+  }
+}
+
+// Simple seeded PRNG
+function seedRandom(seed: number) {
+  let s = seed % 2147483647;
+  if (s <= 0) s += 2147483646;
+  return () => {
+    s = s * 16807 % 2147483647;
+    return (s - 1) / 2147483646;
+  };
+}
+
+function hashString(str: string): number {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return hash;
+}
+
 export function getPlanetCoreDetails(ctx: CompanyPlanetContext): PlanetCoreDetails {
   const rootCount = ctx.roots.length;
   const sorted = [...ctx.roots].sort((a, b) => b.relevance - a.relevance);
@@ -254,7 +203,6 @@ export function getPlanetCoreDetails(ctx: CompanyPlanetContext): PlanetCoreDetai
     rootCount > 0
       ? Math.round(ctx.roots.reduce((s, r) => s + r.relevance, 0) / rootCount)
       : 0;
-  const branchTotal = ctx.roots.reduce((s, r) => s + r.branches.length, 0);
 
   const base = {
     companyId: ctx.companyId,
@@ -263,47 +211,23 @@ export function getPlanetCoreDetails(ctx: CompanyPlanetContext): PlanetCoreDetai
     roleLabel: ctx.roleLabel,
   };
 
-  if (ctx.role === 'investor') {
-    return {
-      ...base,
-      roleTag: 'Investor lens',
-      headline: ctx.companyName,
-      subline: ctx.roleLabel,
-      metrics: [
-        { label: 'Root systems', value: String(rootCount) },
-        { label: 'Top signal', value: topRoot?.label ?? '—' },
-        { label: 'Avg relevance', value: `${avgRel}%` },
-      ],
-      focusHint: 'Growth · Moat · Risk · Financial · Deal',
-    };
-  }
-
-  if (ctx.role === 'founder') {
-    return {
-      ...base,
-      roleTag: 'Founder lens',
-      headline: ctx.companyName,
-      subline: ctx.roleLabel,
-      metrics: [
-        { label: 'Root systems', value: String(rootCount) },
-        { label: 'Top priority', value: topRoot?.label ?? '—' },
-        { label: 'Branch paths', value: String(branchTotal) },
-      ],
-      focusHint: 'Competitors · Customers · Contacts · Gaps · GTM',
-    };
-  }
+  const tag = getTagForCompany(ctx.companyId, ctx.role);
+  const tagLabel = tag === 'competitor' ? 'Competitor' 
+                 : tag === 'potential_client' ? 'Client' 
+                 : tag === 'partner' ? 'Partner' 
+                 : 'Untagged';
 
   return {
     ...base,
-    roleTag: 'Career lens',
+    roleTag: `${tagLabel} lens`,
     headline: ctx.companyName,
-    subline: ctx.roleLabel,
+    subline: tagLabel,
     metrics: [
       { label: 'Root systems', value: String(rootCount) },
-      { label: 'Best fit', value: topRoot?.label ?? '—' },
+      { label: 'Top signal', value: topRoot?.label ?? '—' },
       { label: 'Avg relevance', value: `${avgRel}%` },
     ],
-    focusHint: 'Roles · Skills · Network · Hiring · Compensation',
+    focusHint: 'Identity · Product · Positioning · Commercial · People',
   };
 }
 
@@ -312,10 +236,25 @@ export function getPlanetRootsForCompany(
   companyName: string,
   role: UserPlanetRole,
 ): CompanyPlanetContext {
-  const template =
-    role === 'founder' ? FOUNDER_ROOTS_TEMPLATE
-    : role === 'investor' ? INVESTOR_ROOTS_TEMPLATE
-    : CAREER_ROOTS_TEMPLATE;
+  const tag = getTagForCompany(companyId, role);
+
+  let dynamicTemplates: PlanetRootTemplate[] = [];
+
+  if (tag && DYNAMIC_SETS[tag]) {
+    dynamicTemplates = DYNAMIC_SETS[tag].map(key => DYNAMIC_NODES[key]);
+  } else {
+    // 4 random nodes based on companyId
+    const rand = seedRandom(hashString(companyId));
+    // Provide a stable sort so that random shuffle is deterministic
+    const shuffled = [...ALL_DYNAMIC_KEYS].sort((a, b) => {
+      const cmp = a.localeCompare(b);
+      const val = rand() - 0.5;
+      return val === 0 ? cmp : val;
+    });
+    dynamicTemplates = shuffled.slice(0, 4).map(key => DYNAMIC_NODES[key]);
+  }
+
+  const template = [...FIXED_ROOTS_TEMPLATE, ...dynamicTemplates];
 
   const roots = expandTemplate(companyId, template, role);
   return {
@@ -327,7 +266,6 @@ export function getPlanetRootsForCompany(
   };
 }
 
-/** Convert planet hierarchy → tree for 3D interior view */
 export function planetRootsToTree(roots: PlanetRootNode[]): PlanetTreeNode[] {
   return roots.map(root => ({
     id: root.id,
@@ -430,7 +368,6 @@ function branchToInternalNode(branch: PlanetBranchNode, root: PlanetRootNode): U
   };
 }
 
-/** Map planet roots → UniversalPolytope external nodes (same shape as BDT departments). */
 export function rootsToPolytopeDepartments(roots: PlanetRootNode[]): UExternalNode[] {
   const active: UExternalNode[] = roots.map((root, i) => {
     const score = root.relevance;

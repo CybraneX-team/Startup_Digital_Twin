@@ -56,6 +56,7 @@ export function CompanyTagDropdown({
     const roleLabels: Record<UserPlanetRole, string> = {
       career: 'Career User',
       founder: 'Founder',
+      vc: 'VC Partner',
       investor: 'Investor'
     };
 

@@ -7,7 +7,7 @@ import type { UserRole } from '../lib/supabase';
 
 const ROLE_LABELS: Record<string, string> = {
   co_founder: 'Co-Founder', admin: 'Admin', analyst: 'Analyst',
-  engineer: 'Engineer', viewer: 'Viewer', investor: 'Investor',
+  engineer: 'Engineer', viewer: 'Viewer', vc: 'VC Partner',
   founder: 'Founder', super_admin: 'Super Admin',
 };
 

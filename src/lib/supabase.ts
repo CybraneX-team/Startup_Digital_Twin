@@ -29,7 +29,7 @@ export type CompanyStatus = 'onboarding' | 'active' | 'inactive' | 'suspended';
 export type BusinessModel  = 'B2B' | 'B2C' | 'B2B2C' | 'Marketplace' | 'SaaS' | 'D2C' | 'Other';
 export type UserRole =
   | 'super_admin' | 'founder' | 'co_founder' | 'admin'
-  | 'analyst' | 'engineer' | 'viewer' | 'investor';
+  | 'analyst' | 'engineer' | 'viewer' | 'vc' | 'investor';
 
 export interface DbIndustry {
   id: string;

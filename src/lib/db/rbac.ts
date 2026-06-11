@@ -86,6 +86,16 @@ const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
     ecosystem:  { read: false, write: false, delete: false },
     settings:   { read: false, write: false, delete: false },
   },
+  vc: {
+    twin:       { read: true,  write: false, delete: false },
+    strategy:   { read: false, write: false, delete: false },
+    analytics:  { read: true,  write: false, delete: false },
+    data:       { read: false, write: false, delete: false },
+    benchmarks: { read: true,  write: false, delete: false },
+    team:       { read: true,  write: false, delete: false },
+    ecosystem:  { read: false, write: false, delete: false },
+    settings:   { read: false, write: false, delete: false },
+  },
 };
 
 /* ──────────────────────────────────────────────────

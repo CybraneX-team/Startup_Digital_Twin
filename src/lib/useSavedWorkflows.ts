@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
-import { Swords, Target, Handshake, BarChart2, Share2, Briefcase } from 'lucide-react';
+import { Swords, Target, Handshake } from 'lucide-react';
 import type { UserPlanetRole } from '../data/companyPlanetRoots';
 
 const STORAGE_KEY = 'industry_os_saved_workflows_v1';
@@ -15,15 +15,12 @@ const STORAGE_KEY = 'industry_os_saved_workflows_v1';
 
 export type SavedItemLevel = 'planet' | 'root' | 'branch' | 'action';
 
-export type CompanyTag = 'competitor' | 'potential_client' | 'partner' | 'benchmark' | 'distribution_channel' | 'acquirer';
+export type CompanyTag = 'competitor' | 'potential_client' | 'partner';
 
 export const COMPANY_TAG_LABELS: Record<CompanyTag, string> = {
   competitor: 'Competitor',
-  potential_client: 'Potential Client',
+  potential_client: 'Client',
   partner: 'Partner',
-  benchmark: 'Benchmark',
-  distribution_channel: 'Distribution Channel',
-  acquirer: 'Potential Acquirer',
 };
 
 
@@ -32,18 +29,12 @@ export const COMPANY_TAG_ICONS: Record<CompanyTag, any> = {
   competitor: Swords,
   potential_client: Target,
   partner: Handshake,
-  benchmark: BarChart2,
-  distribution_channel: Share2,
-  acquirer: Briefcase,
 };
 
 export const COMPANY_TAG_COLORS: Record<CompanyTag, string> = {
   competitor: '#ef4444',
   potential_client: '#10b981',
   partner: '#3b82f6',
-  benchmark: '#f59e0b',
-  distribution_channel: '#8b5cf6',
-  acquirer: '#ec4899',
 };
 
 export interface SavedWorkflowItem {
@@ -140,10 +131,11 @@ export interface SavedWorkflowCompanyGroup {
 export const ROLE_COLORS: Record<UserPlanetRole, string> = {
   career: '#60a5fa',
   founder: '#f97316',
-  investor: '#22d3ee',
+  vc: '#22d3ee',
+  investor: '#34d399',
 };
 
-export const ROLE_ORDER: UserPlanetRole[] = ['career', 'founder', 'investor'];
+export const ROLE_ORDER: UserPlanetRole[] = ['career', 'founder', 'vc', 'investor'];
 
 export function groupSavedItems(items: SavedWorkflowItem[]): SavedWorkflowGroup[] {
   const byRole: Map<UserPlanetRole, Map<string, SavedWorkflowItem[]>> = new Map();

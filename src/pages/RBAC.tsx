@@ -25,10 +25,11 @@ const ROLE_META: Record<UserRole, { label: string; color: string; bg: string; bo
   analyst:     { label: 'Analyst',     color: 'text-cyan-400',   bg: 'bg-cyan-500/10',   border: 'border-cyan-500/20',   icon: UserCircle },
   engineer:    { label: 'Engineer',    color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/20', icon: UserCircle },
   viewer:      { label: 'Viewer',      color: 'text-gray-400',   bg: 'bg-gray-500/10',   border: 'border-gray-500/20',   icon: UserCircle },
-  investor:    { label: 'Investor',    color: 'text-emerald-400',bg: 'bg-emerald-500/10',border: 'border-emerald-500/20',icon: UserCircle },
+  vc:          { label: 'VC Partner',  color: 'text-emerald-400',bg: 'bg-emerald-500/10',border: 'border-emerald-500/20',icon: UserCircle },
+  investor:    { label: 'Investor',    color: 'text-teal-400',   bg: 'bg-teal-500/10',   border: 'border-teal-500/20',   icon: UserCircle },
 };
 
-const ASSIGNABLE_ROLES: UserRole[] = ['co_founder', 'admin', 'analyst', 'engineer', 'viewer', 'investor'];
+const ASSIGNABLE_ROLES: UserRole[] = ['co_founder', 'admin', 'analyst', 'engineer', 'viewer', 'vc', 'investor'];
 
 const MODULE_PERMS: Record<UserRole, Record<string, { read: boolean; write: boolean }>> = {
   super_admin: { twin: {read:true,write:true}, strategy:{read:true,write:true}, analytics:{read:true,write:true}, data:{read:true,write:true}, benchmarks:{read:true,write:true}, team:{read:true,write:true} },
@@ -38,6 +39,7 @@ const MODULE_PERMS: Record<UserRole, Record<string, { read: boolean; write: bool
   analyst:     { twin: {read:true,write:false},strategy:{read:true,write:true}, analytics:{read:true,write:true}, data:{read:true,write:false},benchmarks:{read:true,write:false}, team:{read:true,write:false} },
   engineer:    { twin: {read:true,write:false},strategy:{read:true,write:false},analytics:{read:true,write:false},data:{read:true,write:true}, benchmarks:{read:true,write:false}, team:{read:true,write:false} },
   viewer:      { twin: {read:true,write:false},strategy:{read:true,write:false},analytics:{read:true,write:false},data:{read:true,write:false},benchmarks:{read:true,write:false}, team:{read:true,write:false} },
+  vc:          { twin: {read:true,write:false},strategy:{read:false,write:false},analytics:{read:true,write:false},data:{read:false,write:false},benchmarks:{read:true,write:false},team:{read:true,write:false} },
   investor:    { twin: {read:true,write:false},strategy:{read:false,write:false},analytics:{read:true,write:false},data:{read:false,write:false},benchmarks:{read:true,write:false},team:{read:true,write:false} },
 };
 

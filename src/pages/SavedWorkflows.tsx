@@ -35,6 +35,7 @@ function timeAgo(iso: string): string {
 const ROLE_ICONS: Record<UserPlanetRole, any> = {
   career: GraduationCap,
   founder: Briefcase,
+  vc: TrendingUp, // Let's use TrendingUp for vc, or maybe some other icon. TrendingUp is fine.
   investor: TrendingUp,
 };
 
