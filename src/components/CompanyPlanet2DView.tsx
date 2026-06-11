@@ -312,7 +312,7 @@ export default function CompanyPlanet2DView({
       style={{
         background: `
           radial-gradient(ellipse 70% 55% at 50% 42%, ${industryColor}12 0%, transparent 55%),
-          radial-gradient(ellipse at 50% 50%, rgba(18,10,36,0.97) 0%, rgba(2,2,8,0.99) 72%)
+          radial-gradient(ellipse at 50% 50%, rgba(18,10,36,1.0) 0%, rgba(2,2,8,1.0) 72%)
         `,
       }}
     >

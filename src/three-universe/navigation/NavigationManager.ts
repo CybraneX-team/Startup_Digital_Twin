@@ -865,6 +865,8 @@ export class NavigationManager {
                 s.group.scale.setScalar(1.0);
               });
               if (sys2) {
+                sys2.orbitGroup.visible = true;
+                sys2.orbitGroup.scale.setScalar(1.0);
                 gsap.to(sys2.coreGroup.scale, { x: 1, y: 1, z: 1, duration: 1.2, ease: 'power2.out' });
                 gsap.to(sys2.coreGroup.position, { x: 0, y: 0, z: 0, duration: 1.2, ease: 'power2.out' });
                 sys2.subdomainContainers.forEach((sd, i) => {
@@ -1173,6 +1175,8 @@ export class NavigationManager {
         return;
       }
 
+      sys.orbitGroup.visible = true;
+      sys.orbitGroup.scale.setScalar(1);
       sys.coreGroup.scale.set(0.001, 0.001, 0.001);
       sys.subdomainContainers.forEach((sd, i) => {
         const mesh = sys.subdomainMeshes[i];

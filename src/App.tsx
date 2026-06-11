@@ -170,7 +170,13 @@ function AppRoutes() {
       )}
 
       {/* Normal app shell — removed from layout entirely when on /3d or /universal */}
-      <div style={{ display: (isFullyAuthed && (is3DUniverse || isUniversal)) ? 'none' : 'block' }}>
+      <div
+        style={{
+          display: (isFullyAuthed && (is3DUniverse || isUniversal)) ? 'none' : 'block',
+          position: 'relative',
+          zIndex: 45,
+        }}
+      >
         <div className="min-h-screen cosmos-bg">
           <TopBar />
           {isTwinGraph ? (
