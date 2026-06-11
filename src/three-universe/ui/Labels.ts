@@ -134,6 +134,14 @@ export class Labels {
     }
   }
 
+  /** Live-update a company label's text color (for tag changes) */
+  updateCompanyLabelColor(companyId, color) {
+    const entry = this.labels.get(`company-${companyId}`);
+    if (entry?.element) {
+      entry.element.style.color = color;
+    }
+  }
+
   createDepartmentLabels(company, getMoonMeshes) {
     const meshes = getMoonMeshes();
     meshes.forEach((mesh) => {

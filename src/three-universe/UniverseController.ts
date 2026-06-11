@@ -226,6 +226,10 @@ export class UniverseController {
       this._createIndustryLabels(industries);
       this._setupLabelNavigation(industries);
 
+      // 8a. Listen for company tag changes and update label colors live
+      this._onWorkflowsUpdated = () => this._refreshCompanyTagColors();
+      window.addEventListener('workflows_updated', this._onWorkflowsUpdated);
+
       // 8b. Icon Particles
       this.iconParticles = new IconParticles(this.engine.scene, this.engine.camera);
       await this.iconParticles.createAll(industries);
@@ -403,6 +407,44 @@ export class UniverseController {
     this.labels.setVisibility('dept-', true);
   }
 
+  private _refreshCompanyTagColors() {
+    if (!this.labels) return;
+    const STORAGE_KEY = 'industry_os_saved_workflows_v1';
+    const TAG_COLORS: Record<string, string> = {
+      competitor: '#ef4444',
+      potential_client: '#10b981',
+      partner: '#3b82f6',
+    };
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      const items: any[] = raw ? JSON.parse(raw) : [];
+      // Build a map: companyId -> tag color (for planet-level items only)
+      const tagColorMap = new Map<string, string>();
+      for (const item of items) {
+        if (item.level === 'planet' && item.planetTag && TAG_COLORS[item.planetTag]) {
+          tagColorMap.set(item.companyId, TAG_COLORS[item.planetTag]);
+        }
+      }
+      // Apply to all existing company labels
+      // We iterate the labels map via the known company mesh industry colors
+      this.labels.labels.forEach((label: any, id: string) => {
+        if (!id.startsWith('company-')) return;
+        const companyId = id.replace('company-', '');
+        const tagColor = tagColorMap.get(companyId);
+        if (tagColor) {
+          label.element.style.color = tagColor;
+        } else {
+          // Restore to industry color from mesh userData
+          const mesh = label.parent;
+          const industryColor = mesh?.userData?.industry?.color || '#ffffff';
+          label.element.style.color = industryColor;
+        }
+      });
+    } catch {
+      // ignore
+    }
+  }
+
   private _updateLabelsForLevel(path: any[], level: string, industries: any[]) {
     this.labels.setVisibility('subdomain-', false);
     this.labels.removeByPrefix('company-');
@@ -421,6 +463,7 @@ export class UniverseController {
       if (industry && subdomain) {
         this.labels.createCompanyLabels(subdomain, () => this.subdomainSolarSystem.companyMeshes);
         this.labels.setVisibility('company-', true);
+        this._refreshCompanyTagColors();
       }
     } else if (level === ZOOM_LEVELS.COMPANY) {
       this.labels.setVisibility('subdomain-', true);
@@ -431,6 +474,7 @@ export class UniverseController {
       if (industry && subdomain && company) {
         this.labels.createCompanyLabels(subdomain, () => this.subdomainSolarSystem.companyMeshes);
         this._refreshInteriorLabels(company);
+        this._refreshCompanyTagColors();
       }
     } else if (level === ZOOM_LEVELS.DEPARTMENT) {
       this.labels.setVisibility('subdomain-', true);
@@ -1150,6 +1194,11 @@ export class UniverseController {
   dispose(): void {
     if (this._disposed) return;
     this._disposed = true;
+
+    if (this._onWorkflowsUpdated) {
+      window.removeEventListener('workflows_updated', this._onWorkflowsUpdated);
+      this._onWorkflowsUpdated = null;
+    }
 
     gsap.globalTimeline.clear();
 
