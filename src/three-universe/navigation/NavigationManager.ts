@@ -656,6 +656,11 @@ export class NavigationManager {
     if (this.cameraCtrl.isTransitioning) return;
     this.selectedCompany = company;
 
+    // Immediately freeze the solar system so planets stop revolving
+    if (this._subdomainSolarSystem) {
+      this._subdomainSolarSystem.freeze();
+    }
+
     const earlyPath = [
       { level: ZOOM_LEVELS.INDUSTRY, id: industry.id, name: industry.name, data: industry },
       { level: ZOOM_LEVELS.SUBDOMAIN, id: subdomain.id, name: subdomain.name, data: subdomain },
@@ -667,8 +672,17 @@ export class NavigationManager {
       ? this._subdomainSolarSystem.getCompanyWorldPosition(company.id)
       : this.systemParticles.getCompanyPosition(industry.id, subdomain.id, company.id);
 
-    const zoomDist = 24;
+    // Zoom inside the planet (minimum radius is 8, so 1.5 is well inside the planet body)
+    const zoomDist = 1.5;
+
+    // Temporarily reduce minDistance so OrbitControls doesn't clamp the flyTo camera position to 3
+    const oldMinDist = this.cameraCtrl.controls.minDistance;
+    this.cameraCtrl.controls.minDistance = 0.1;
+
     this.cameraCtrl.flyTo(wp, zoomDist, ZOOM_LEVELS.COMPANY, () => {
+      // Restore the original minDistance
+      this.cameraCtrl.controls.minDistance = oldMinDist;
+
       this.currentLevel = ZOOM_LEVELS.COMPANY;
       this.navigationPath = earlyPath;
       this._onNavigateDone(this.navigationPath, this.currentLevel);
@@ -815,6 +829,9 @@ export class NavigationManager {
         this.currentLevel = ZOOM_LEVELS.SUBDOMAIN;
         this.navigationPath = this.navigationPath.slice(0, 2);
         this._onNavigateDone(this.navigationPath, this.currentLevel);
+        if (sss) {
+          sss.unfreeze();
+        }
       });
 
     } else if (this.currentLevel === ZOOM_LEVELS.SUBDOMAIN) {

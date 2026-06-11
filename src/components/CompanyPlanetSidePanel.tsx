@@ -1,10 +1,11 @@
 import { useMemo, useRef, useEffect } from 'react';
-import { Search, Command, ArrowLeft, ChevronRight } from 'lucide-react';
+import { Search, Command, ArrowLeft, ChevronRight, Briefcase, Rocket, TrendingUp } from 'lucide-react';
 import type {
   CompanyPlanetContext,
   PlanetExploreLevel,
   PlanetRootNode,
   PlanetBranchNode,
+  UserPlanetRole,
 } from '../data/companyPlanetRoots';
 import { getExploreLevel, getPlanetCoreDetails } from '../data/companyPlanetRoots';
 import { PlanetCoreContextCard } from './planet/PlanetCoreContextCard';
@@ -23,6 +24,7 @@ export interface CompanyPlanetSidePanelProps {
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   industryColor?: string;
+  onRoleChange?: (role: UserPlanetRole) => void;
 }
 
 function findRoot(ctx: CompanyPlanetContext, rootId: string): PlanetRootNode | undefined {
@@ -32,6 +34,12 @@ function findRoot(ctx: CompanyPlanetContext, rootId: string): PlanetRootNode | u
 function findBranch(root: PlanetRootNode, branchId: string): PlanetBranchNode | undefined {
   return root.branches.find(b => b.id === branchId);
 }
+
+const ROLES = [
+  { id: 'career', label: 'Career User', icon: Briefcase, color: '#60a5fa' },
+  { id: 'founder', label: 'Founder', icon: Rocket, color: '#f97316' },
+  { id: 'investor', label: 'Investor', icon: TrendingUp, color: '#22d3ee' },
+] as const;
 
 export function CompanyPlanetSidePanel({
   context,
@@ -46,6 +54,7 @@ export function CompanyPlanetSidePanel({
   searchQuery,
   setSearchQuery,
   industryColor = '#C1AEFF',
+  onRoleChange,
 }: CompanyPlanetSidePanelProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const level = getExploreLevel(depth);
@@ -217,6 +226,55 @@ export function CompanyPlanetSidePanel({
         label={`Back to ${exitToSubdomainLabel}`}
         onClick={onExitToSubdomain}
       />
+
+      {/* Role Switcher */}
+      <div
+        className="rounded-2xl p-2.5 flex flex-col gap-1.5"
+        style={{
+          width: '196px',
+          background: 'rgba(0, 0, 0, 0.72)',
+          backdropFilter: 'blur(12px)',
+          border: '1px solid rgba(255,255,255,0.07)',
+          boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+        }}
+      >
+        <span className="text-[10px] font-semibold tracking-widest px-1.5" style={{ color: '#5E5E5E' }}>
+          EXPLORE AS
+        </span>
+        <div className="flex flex-col gap-1">
+          {ROLES.map(r => {
+            const Icon = r.icon;
+            const isActive = context.role === r.id;
+            return (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => onRoleChange?.(r.id)}
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-all duration-200 ${
+                  isActive ? 'scale-[1.02]' : 'opacity-60 hover:opacity-100'
+                }`}
+                style={{
+                  background: isActive ? `${r.color}15` : 'transparent',
+                  border: isActive ? `1px solid ${r.color}40` : '1px solid transparent',
+                }}
+              >
+                <span
+                  className="flex items-center justify-center w-5 h-5 rounded-md"
+                  style={{
+                    background: isActive ? `${r.color}22` : 'rgba(255,255,255,0.03)',
+                    color: r.color,
+                  }}
+                >
+                  <Icon className="w-3.5 h-3.5" />
+                </span>
+                <span className="text-[11px] font-semibold text-white">
+                  {r.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {showCoreCard && (
         <PlanetCoreContextCard details={coreDetails} industryColor={industryColor} />

@@ -2,6 +2,7 @@ import { useRef, useMemo, useEffect, useState } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Text, Billboard, Html } from '@react-three/drei';
 import * as THREE from 'three';
+import { gsap } from 'gsap';
 import type { UInternalNode } from '../../lib/universalPolytopeData';
 import { PlasmaSphere } from '../PolytopeShared';
 import { useDragWorkspaceStore } from '../../lib/useDragWorkspaceStore';
@@ -99,6 +100,8 @@ interface InternalNodeProps {
   rootPos?: THREE.Vector3;
 }
 
+const NODES_REVEAL_DELAY_MS = 320;
+
 export function InternalNode({
   node,
   targetPos,
@@ -121,6 +124,7 @@ export function InternalNode({
 }: InternalNodeProps) {
   const groupRef = useRef<THREE.Group>(null);
   const currentPos = useRef(startPos.clone());
+  const [entryAnimDone, setEntryAnimDone] = useState(isDraft);
 
   const radii = [0.25, 0.20, 0.15, 0.12, 0.09];
   const radius = radii[depth] || 0.05;
@@ -197,16 +201,62 @@ export function InternalNode({
   }, [visibleChildIndices, childPositions, targetPos, isMeActiveCenter, draftChildNode]);
 
   useEffect(() => {
-    if (groupRef.current) {
-      if (isDraft) {
+    if (isDraft) {
+      setEntryAnimDone(true);
+      if (groupRef.current) {
         currentPos.current.copy(targetPos);
         groupRef.current.position.copy(targetPos);
         groupRef.current.scale.setScalar(1);
-      } else {
-        groupRef.current.position.copy(startPos);
-        groupRef.current.scale.setScalar(0);
       }
+      return;
     }
+
+    setEntryAnimDone(false);
+    if (groupRef.current) {
+      currentPos.current.copy(startPos);
+      groupRef.current.position.copy(startPos);
+      groupRef.current.scale.setScalar(0);
+    }
+
+    const revealDelay = NODES_REVEAL_DELAY_MS / 1000;
+
+    let targetScale = 0.0;
+    if (isHiddenParent) {
+      targetScale = 0.0;
+    } else if (isVisible) {
+      targetScale = isMeActiveCenter ? 1.5 : 1.0;
+    }
+
+    const posTween = gsap.to(groupRef.current!.position, {
+      x: targetPos.x,
+      y: targetPos.y,
+      z: targetPos.z,
+      duration: 1.1,
+      delay: revealDelay,
+      ease: 'power3.out',
+      onUpdate: () => {
+        if (groupRef.current) {
+          currentPos.current.copy(groupRef.current.position);
+        }
+      },
+    });
+
+    const scaleTween = gsap.to(groupRef.current!.scale, {
+      x: targetScale,
+      y: targetScale,
+      z: targetScale,
+      duration: 1.1,
+      delay: revealDelay,
+      ease: 'back.out(1.5)',
+      onComplete: () => {
+        setEntryAnimDone(true);
+      },
+    });
+
+    return () => {
+      posTween.kill();
+      scaleTween.kill();
+    };
   }, [startPos, targetPos, isDraft]);
 
   useEffect(() => {
@@ -224,22 +274,24 @@ export function InternalNode({
 
   useFrame(() => {
     if (groupRef.current) {
-      if (!isDraft) {
-        currentPos.current.lerp(targetPos, 0.06);
-        groupRef.current.position.copy(currentPos.current);
-      }
+      if (entryAnimDone) {
+        if (!isDraft) {
+          currentPos.current.lerp(targetPos, 0.06);
+          groupRef.current.position.copy(currentPos.current);
+        }
 
-      let targetScale = 0.0;
-      if (isHiddenParent) {
-        targetScale = 0.0;
-      } else if (isVisible) {
-        targetScale = isMeActiveCenter ? 1.5 : 1.0;
+        let targetScale = 0.0;
+        if (isHiddenParent) {
+          targetScale = 0.0;
+        } else if (isVisible) {
+          targetScale = isMeActiveCenter ? 1.5 : 1.0;
+        }
+        const lerpSpeed = isHiddenParent || isMeActiveCenter ? 0.14 : 0.08;
+        groupRef.current.scale.lerp(
+          new THREE.Vector3(targetScale, targetScale, targetScale),
+          lerpSpeed,
+        );
       }
-      const lerpSpeed = isHiddenParent || isMeActiveCenter ? 0.14 : 0.08;
-      groupRef.current.scale.lerp(
-        new THREE.Vector3(targetScale, targetScale, targetScale),
-        lerpSpeed,
-      );
     }
   });
 

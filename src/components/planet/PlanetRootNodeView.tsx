@@ -21,7 +21,7 @@ export default function PlanetRootNodeView({
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <Canvas
-        camera={{ position: [0, 0, 14], fov: 45, near: 0.1, far: 300 }}
+        camera={{ position: [0, 0, 9.5], fov: 45, near: 0.1, far: 300 }}
         dpr={[1, 1.5]}
         gl={{ antialias: true, alpha: true }}
         frameloop="always"

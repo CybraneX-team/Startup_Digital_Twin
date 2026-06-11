@@ -346,6 +346,14 @@ export default function CompanyPlanet2DView({
 
       <div
         className="relative w-full max-w-[min(92vw,820px)] aspect-square planet2d-zoom-stage"
+        style={{
+          transform: isZooming ? `scale(${zoomScale})` : 'scale(1)',
+          transformOrigin: focusNode ? `${zoomOriginX}% ${zoomOriginY}%` : '50% 50%',
+          transition: focusPhase === 'zoom' || focusPhase === 'handoff'
+            ? `transform ${ZOOM_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`
+            : 'transform 0.3s ease-out',
+          willChange: isTransitioning ? 'transform' : undefined,
+        }}
       >
         <svg
           viewBox="0 0 800 800"
@@ -353,16 +361,7 @@ export default function CompanyPlanet2DView({
           overflow="hidden"
           style={{ filter: isTransitioning ? 'none' : `drop-shadow(0 0 48px ${industryColor}22)` }}
         >
-          <g
-            style={{
-              transform: isZooming ? `scale(${zoomScale})` : 'scale(1)',
-              transformOrigin: focusNode ? `${focusNode.x}px ${focusNode.y}px` : '400px 400px',
-              transition: focusPhase === 'zoom' || focusPhase === 'handoff'
-                ? `transform ${ZOOM_MS}ms cubic-bezier(0.4, 0, 0.2, 1)`
-                : 'transform 0.3s ease-out',
-              willChange: isTransitioning ? 'transform' : undefined,
-            }}
-          >
+          <g>
           <defs>
             <radialGradient id="planetCoreGlow" cx="50%" cy="50%" r="50%">
               <stop offset="0%" stopColor={industryColor} stopOpacity="0.5" />

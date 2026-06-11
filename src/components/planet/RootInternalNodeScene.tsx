@@ -20,7 +20,7 @@ export interface RootInternalNodeSceneProps {
 }
 
 const ROOT_POS = new THREE.Vector3(0, 0, 8);
-const CAMERA_ZOOM_IN = 14;
+const CAMERA_ZOOM_IN = 9.5;
 const NODES_REVEAL_DELAY_MS = 320;
 
 export function RootInternalNodeScene({

@@ -14,7 +14,6 @@ import PlanetRootNodeView from '../components/planet/PlanetRootNodeView';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
 import { PolytopeManager } from '../components/PolytopeManager';
 import CreateDepartmentPanel from '../components/CreateDepartmentPanel';
-import CompanyRoleModal from '../components/CompanyRoleModal';
 import CompanyPlanet2DView, { ROOT_FOCUS_TOTAL_MS } from '../components/CompanyPlanet2DView';
 import { CompanyPlanetSidePanel } from '../components/CompanyPlanetSidePanel';
 import {
@@ -304,18 +303,12 @@ export default function Universe3DPage() {
     setInsideRootPolytope(false);
     setPlanetContext(null);
     setPlanetSearchQuery('');
-    setRoleModal(null);
     setRootPolytopeDeptId(null);
     setRootPolytopeInternalPath([]);
     setRootPolytopeBackStep(0);
   }, []);
 
   // ── Company planet root systems (Industry OS) ──
-  const [roleModal, setRoleModal] = useState<{
-    company: { id: string; name: string };
-    industry: UniverseIndustry;
-    subdomain: UniverseSubdomain;
-  } | null>(null);
   const [insidePlanetRoots, setInsidePlanetRoots] = useState(false);
   const [planetContext, setPlanetContext] = useState<CompanyPlanetContext | null>(null);
   const [planetSearchQuery, setPlanetSearchQuery] = useState('');
@@ -341,25 +334,30 @@ export default function Universe3DPage() {
     industry: UniverseIndustry;
     subdomain: UniverseSubdomain;
   }) => {
-    setRoleModal(ctx);
-  }, []);
-
-  const handleRoleSelect = useCallback((role: UserPlanetRole) => {
-    if (!roleModal) return;
-    const ctx = getPlanetRootsForCompany(roleModal.company.id, roleModal.company.name, role);
-    setPlanetContext(ctx);
-    setRoleModal(null);
-    setPlanetIndustryColor(roleModal.industry.color);
+    const defaultRole: UserPlanetRole = 'founder';
+    const pCtx = getPlanetRootsForCompany(ctx.company.id, ctx.company.name, defaultRole);
+    setPlanetContext(pCtx);
+    setPlanetIndustryColor(ctx.industry.color);
     setInsidePlanetRoots(true);
     // Signal to TopBar that a company planet has been entered this session
     sessionStorage.setItem('company_entered_in_3d', '1');
     window.dispatchEvent(new Event('company_entered_in_3d'));
-  }, [roleModal]);
-
-  const handleRoleModalClose = useCallback(() => {
-    setRoleModal(null);
-    controllerRef.current?.goBack();
   }, []);
+
+  const handleExitRootPolytope = useCallback(() => {
+    setInsideRootPolytope(false);
+    setRootPolytopeDeptId(null);
+    setRootPolytopeInternalPath([]);
+    setRootPolytopeBackStep(0);
+  }, []);
+
+  const handleRoleChange = useCallback((role: UserPlanetRole) => {
+    if (!planetContext) return;
+    const pCtx = getPlanetRootsForCompany(planetContext.companyId, planetContext.companyName, role);
+    setPlanetContext(pCtx);
+    // Reset any open deep polytope drills so user starts at the roots list/map view of the new role
+    handleExitRootPolytope();
+  }, [planetContext, handleExitRootPolytope]);
 
   const beginRootFocus = useCallback((rootId: string) => {
     if (!planetContext) return;
@@ -382,12 +380,7 @@ export default function Universe3DPage() {
     handleOpenRootPolytope(rootId);
   }, [handleOpenRootPolytope]);
 
-  const handleExitRootPolytope = useCallback(() => {
-    setInsideRootPolytope(false);
-    setRootPolytopeDeptId(null);
-    setRootPolytopeInternalPath([]);
-    setRootPolytopeBackStep(0);
-  }, []);
+
 
   const handleExitPlanetRoots = useCallback(() => {
     handleExitRootPolytope();
@@ -705,10 +698,6 @@ export default function Universe3DPage() {
           setActionWorkspace(null);
           return;
         }
-        if (roleModal) {
-          handleRoleModalClose();
-          return;
-        }
         if (isTwinWorkspaceActive(twinWorkspacePhase)) {
           e.preventDefault();
           handleCloseWorkspace();
@@ -740,8 +729,6 @@ export default function Universe3DPage() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
     createModal,
-    roleModal,
-    handleRoleModalClose,
     insideRootPolytope,
     insidePlanetRoots,
     planetContext,
@@ -849,13 +836,7 @@ export default function Universe3DPage() {
         )}
       </div>
 
-      {roleModal && (
-        <CompanyRoleModal
-          companyName={roleModal.company.name}
-          onSelect={handleRoleSelect}
-          onClose={handleRoleModalClose}
-        />
-      )}
+
 
       {/* ── Company Planet 2D root map (after role pick) ── */}
       <div
@@ -972,6 +953,7 @@ export default function Universe3DPage() {
                 searchQuery={planetSearchQuery}
                 setSearchQuery={setPlanetSearchQuery}
                 industryColor={planetIndustryColor}
+                onRoleChange={handleRoleChange}
               />
             </div>
           ) : (insideBH || insideCompanyInterior) ? (
