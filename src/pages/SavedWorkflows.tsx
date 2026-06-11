@@ -456,7 +456,6 @@ function RoleSection({
 
 export default function SavedWorkflows({ onClose }: { onClose?: () => void }) {
   const { items: _items, totalCount, remove, updateNote, clear, grouped } = useSavedWorkflows();
-  const navigate = useNavigate();
 
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserPlanetRole | 'all'>('all');
