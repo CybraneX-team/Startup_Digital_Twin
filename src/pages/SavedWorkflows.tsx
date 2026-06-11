@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Bookmark, BookmarkX, Search, X, ChevronRight, ChevronDown, ChevronUp,
   ExternalLink, Trash2, StickyNote, Clock, Briefcase, TrendingUp, GraduationCap,
-  Globe, Layers, ArrowLeft, Filter, Sparkles,
+  Globe, Layers, Filter, Sparkles,
 } from 'lucide-react';
 import {
   useSavedWorkflows,
@@ -41,7 +41,7 @@ const ROLE_ICONS: Record<UserPlanetRole, any> = {
 
 // ── Empty State ───────────────────────────────────────────────────────────────
 
-function EmptyState() {
+function EmptyState({ onClose }: { onClose?: () => void }) {
   const navigate = useNavigate();
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
@@ -62,7 +62,7 @@ function EmptyState() {
 
       <div className="flex items-center gap-2">
         <button
-          onClick={() => navigate('/3d')}
+          onClick={() => { onClose?.(); navigate('/3d'); }}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-white/10"
           style={{
             background: 'rgba(255,255,255,0.06)',
@@ -74,7 +74,7 @@ function EmptyState() {
           Open 3D Universe
         </button>
         <button
-          onClick={() => navigate('/overview')}
+          onClick={() => { onClose?.(); navigate('/overview'); }}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-white/[0.04]"
           style={{
             border: '1px solid rgba(255,255,255,0.06)',
@@ -454,7 +454,7 @@ function RoleSection({
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
-export default function SavedWorkflows() {
+export default function SavedWorkflows({ onClose }: { onClose?: () => void }) {
   const { items: _items, totalCount, remove, updateNote, clear, grouped } = useSavedWorkflows();
   const navigate = useNavigate();
 
@@ -498,106 +498,82 @@ export default function SavedWorkflows() {
   const filteredEmpty = !isEmpty && filteredGroups.length === 0;
 
   return (
-    <div
-      className="fixed inset-0 flex"
-      style={{ background: '#0a0a0f' }}
-    >
-      {/* ── Main content area ── */}
-      <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-[60] flex justify-end">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity"
+        onClick={onClose}
+      />
+
+      {/* Panel */}
+      <div
+        className="relative w-full max-w-[460px] h-full flex flex-col shadow-2xl transition-transform rounded-l-2xl overflow-hidden"
+        style={{
+          background: '#0a0a0f',
+          borderLeft: '1px solid rgba(255,255,255,0.08)',
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+        }}
+      >
+        {/* ── Main content area ── */}
+        <div className="relative z-10 flex-1 flex flex-col overflow-hidden">
 
         {/* ── Top bar ── */}
         <div
-          className="shrink-0 px-6 py-4"
+          className="shrink-0 px-5 pt-4 pb-3"
           style={{
             borderBottom: '1px solid rgba(255,255,255,0.06)',
-            background: 'rgba(10,10,15,0.9)',
+            background: 'rgba(10,10,15,0.95)',
           }}
         >
-          {/* Row 1: Nav + title + actions */}
+          {/* Row 1: Title + Close */}
           <div className="flex items-center gap-3 mb-3">
-            <button
-              onClick={() => navigate(-1)}
-              className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:bg-white/[0.06] shrink-0"
-              style={{ color: 'rgba(255,255,255,0.3)' }}
-              title="Go back"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-            </button>
-
-            <div className="flex-1">
-              <h1 className="text-[15px] font-semibold text-white/85 tracking-tight">
+            <div className="flex-1 min-w-0">
+              <h1 className="text-[14px] font-semibold text-white/85 tracking-tight">
                 {roleFilter === 'all' ? 'Saved Workflows' : `${roleFilter.charAt(0).toUpperCase() + roleFilter.slice(1)} Mode`}
               </h1>
-              <p className="text-[10px] text-white/20 mt-0.5">
+              <p className="text-[10px] text-white/20 mt-0.5 truncate">
                 Roots · Branches · Action nodes — grouped by company
               </p>
             </div>
 
-            {/* Search */}
-            <div
-              className="flex items-center gap-2 px-3 py-2 rounded-xl"
-              style={{
-                background: 'rgba(255,255,255,0.03)',
-                border: '1px solid rgba(255,255,255,0.07)',
-                width: 230,
-              }}
-            >
-              <Search className="w-3.5 h-3.5 text-white/20 shrink-0" />
-              <input
-                type="text"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search workflows…"
-                className="flex-1 bg-transparent text-[12px] outline-none"
-                style={{ color: 'rgba(255,255,255,0.65)', minWidth: 0 }}
-              />
-              {search && (
-                <button
-                  onClick={() => setSearch('')}
-                  className="w-4 h-4 rounded flex items-center justify-center hover:bg-white/10 transition-all shrink-0"
-                >
-                  <X className="w-3 h-3 text-white/30" />
-                </button>
-              )}
-            </div>
-
             {/* Export button */}
             <button
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-[11px] font-medium transition-all hover:bg-white/[0.06] shrink-0"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-medium transition-all hover:bg-white/[0.06] shrink-0"
               style={{
                 border: '1px solid rgba(255,255,255,0.08)',
-                color: 'rgba(255,255,255,0.45)',
+                color: 'rgba(255,255,255,0.4)',
               }}
             >
-              <ExternalLink className="w-3.5 h-3.5" />
-              Export To WorkOs
+              <ExternalLink className="w-3 h-3" />
+              Export
             </button>
 
             {/* Clear all */}
             {totalCount > 0 && (
-              <div>
+              <div className="shrink-0">
                 {showClearConfirm ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-[11px] text-white/30">Clear all?</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[10px] text-white/30">Clear?</span>
                     <button
                       onClick={() => { clear(); setShowClearConfirm(false); }}
-                      className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium transition-all hover:brightness-110"
+                      className="text-[10px] px-2 py-1 rounded-md font-medium transition-all hover:brightness-110"
                       style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.18)' }}
                     >
                       Yes
                     </button>
                     <button
                       onClick={() => setShowClearConfirm(false)}
-                      className="text-[11px] px-2.5 py-1.5 rounded-lg font-medium transition-all hover:bg-white/[0.05]"
+                      className="text-[10px] px-2 py-1 rounded-md font-medium transition-all hover:bg-white/[0.05]"
                       style={{ color: 'rgba(255,255,255,0.3)', border: '1px solid rgba(255,255,255,0.07)' }}
                     >
-                      Cancel
+                      No
                     </button>
                   </div>
                 ) : (
                   <button
                     onClick={() => setShowClearConfirm(true)}
-                    className="flex items-center gap-1.5 text-[11px] px-3 py-2 rounded-xl font-medium transition-all hover:bg-red-500/[0.07]"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:bg-red-500/[0.07]"
                     style={{
                       color: 'rgba(248,113,113,0.4)',
                       border: '1px solid rgba(248,113,113,0.08)',
@@ -608,12 +584,49 @@ export default function SavedWorkflows() {
                     onMouseLeave={e => {
                       (e.currentTarget as HTMLElement).style.color = 'rgba(248,113,113,0.4)';
                     }}
+                    title="Clear all"
                   >
                     <BookmarkX className="w-3.5 h-3.5" />
-                    Clear all
                   </button>
                 )}
               </div>
+            )}
+
+            {/* Close button */}
+            <button
+              onClick={onClose}
+              className="w-7 h-7 rounded-lg flex items-center justify-center transition-all hover:bg-white/10 shrink-0"
+              style={{ color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.07)' }}
+              title="Close"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
+          {/* Row 2: Search */}
+          <div
+            className="flex items-center gap-2 px-3 py-2 rounded-xl mb-3"
+            style={{
+              background: 'rgba(255,255,255,0.03)',
+              border: '1px solid rgba(255,255,255,0.07)',
+            }}
+          >
+            <Search className="w-3.5 h-3.5 text-white/20 shrink-0" />
+            <input
+              type="text"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search workflows…"
+              className="flex-1 bg-transparent text-[12px] outline-none"
+              style={{ color: 'rgba(255,255,255,0.65)', minWidth: 0 }}
+            />
+            {search && (
+              <button
+                onClick={() => setSearch('')}
+                className="w-4 h-4 rounded flex items-center justify-center hover:bg-white/10 transition-all shrink-0"
+              >
+                <X className="w-3 h-3 text-white/30" />
+              </button>
             )}
           </div>
 
@@ -696,7 +709,7 @@ export default function SavedWorkflows() {
           style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.06) transparent' }}
         >
           {isEmpty ? (
-            <EmptyState />
+            <EmptyState onClose={onClose} />
           ) : filteredEmpty ? (
             <div className="flex flex-col items-center py-24 text-center">
               <div
@@ -727,6 +740,7 @@ export default function SavedWorkflows() {
               ))}
             </div>
           )}
+        </div>
         </div>
       </div>
     </div>

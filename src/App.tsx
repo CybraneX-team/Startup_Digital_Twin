@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { Agentation } from 'agentation';
 import { AuthProvider, useAuth } from './lib/auth';
@@ -75,6 +76,13 @@ function AppRoutes() {
   const location = useLocation();
   const { user, profile } = useAuth();
 
+  const [savedOpen, setSavedOpen] = useState(false);
+  useEffect(() => {
+    const handler = (e: any) => setSavedOpen(e.detail);
+    window.addEventListener('saved_workflows_toggled', handler);
+    return () => window.removeEventListener('saved_workflows_toggled', handler);
+  }, []);
+
   // / — public landing (custom nav, no default TopBar)
   if (location.pathname === '/' || location.pathname === '/landing') {
     return (
@@ -139,6 +147,12 @@ function AppRoutes() {
 
   return (
     <>
+      {savedOpen && (
+        <AuthGuard>
+          <SavedWorkflows onClose={() => window.dispatchEvent(new CustomEvent('saved_workflows_toggled', { detail: false }))} />
+        </AuthGuard>
+      )}
+
       {/* Persistent 3D universe — always mounted for authed users, shown/hidden via CSS.
           Uses visibility instead of display so the canvas has correct viewport dimensions
           from the start (display:none causes 0×0 init, breaking ResizeObserver). */}
@@ -278,13 +292,6 @@ function AppRoutes() {
                 <Route path="/workspace" element={
                   <AuthGuard>
                     <WorkspacePage />
-                  </AuthGuard>
-                } />
-
-                {/* /saved — saved workflows library */}
-                <Route path="/saved" element={
-                  <AuthGuard>
-                    <SavedWorkflows />
                   </AuthGuard>
                 } />
 

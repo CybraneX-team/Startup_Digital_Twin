@@ -14,7 +14,13 @@ export default function TopBar() {
   const isTwin      = (location.pathname.startsWith('/twin') || location.pathname === '/3d') && !isData;
   const isOverview  = location.pathname.startsWith('/overview');
   const isUniversal = location.pathname === '/universal';
-  const isSaved     = location.pathname === '/saved';
+
+  const [isSaved, setIsSaved] = useState(false);
+  useEffect(() => {
+    const handler = (e: any) => setIsSaved(e.detail);
+    window.addEventListener('saved_workflows_toggled', handler);
+    return () => window.removeEventListener('saved_workflows_toggled', handler);
+  }, []);
 
   const isAuthed     = !!user;
   const hasCompany   = !!profile?.company_id;
@@ -51,8 +57,7 @@ export default function TopBar() {
     window.addEventListener('workspace_toggled', handler);
     return () => window.removeEventListener('workspace_toggled', handler);
   }, []);
-
-  if (workspaceOpen || isSaved) return null;
+  if (workspaceOpen) return null;
 
   // ── Tabs ─────────────────────────────────────────────────────────────────
   const tabs = isBypassUser
@@ -201,7 +206,7 @@ export default function TopBar() {
             {/* Saved Workflows bookmark button — hidden on /3d until a company is entered */}
             {showBookmark && (
               <button
-                onClick={() => navigate('/saved')}
+                onClick={() => window.dispatchEvent(new CustomEvent('saved_workflows_toggled', { detail: !isSaved }))}
                 className="relative w-8 h-8 rounded-lg flex items-center justify-center transition-all"
                 style={{
                   color: isSaved ? '#C1AEFF' : 'rgba(255,255,255,0.35)',
