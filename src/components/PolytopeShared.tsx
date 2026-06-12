@@ -10,7 +10,6 @@ export function OrgCore({
   dimmed,
   companyName,
   isDeepDrillDown = false,
-  onClick,
   showWorkspaceCta = false,
 }: {
   dimmed: boolean;
@@ -34,21 +33,7 @@ export function OrgCore({
     <group>
       {/* Plasma Sphere Core — click or zoom to open workspace (BDT) */}
       <group ref={meshRef}>
-        <mesh
-          onClick={e => {
-            e.stopPropagation();
-            onClick?.();
-          }}
-          onPointerOver={e => {
-            if (onClick) {
-              e.stopPropagation();
-              document.body.style.cursor = 'pointer';
-            }
-          }}
-          onPointerOut={() => {
-            document.body.style.cursor = 'auto';
-          }}
-        >
+        <mesh>
           <sphereGeometry args={[1.35, 32, 32]} />
           <meshBasicMaterial visible={false} />
         </mesh>
@@ -112,7 +97,7 @@ export function OrgCore({
               outlineColor="#0f172a"
               outlineOpacity={0.55}
             >
-              Click to enter your workspace
+              Double click to chat with AI Agent
             </Text>
           </group>
         </Billboard>
