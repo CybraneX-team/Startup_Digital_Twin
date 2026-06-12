@@ -14,7 +14,7 @@ import PlanetRootNodeView from '../components/planet/PlanetRootNodeView';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
 import { PolytopeManager } from '../components/PolytopeManager';
 import CreateDepartmentPanel from '../components/CreateDepartmentPanel';
-import CompanyPlanet2DView, { ROOT_FOCUS_TOTAL_MS } from '../components/CompanyPlanet2DView';
+import CompanyPlanet3DView, { ROOT_FOCUS_TOTAL_MS } from '../components/CompanyPlanet3DView';
 import { CompanyPlanetSidePanel } from '../components/CompanyPlanetSidePanel';
 import {
   getPlanetRootsForCompany,
@@ -325,6 +325,8 @@ export default function Universe3DPage() {
   const [rootPolytopeBackStep, setRootPolytopeBackStep] = useState(0);
   const [rootPolytopeSwitchKey, setRootPolytopeSwitchKey] = useState(0);
   const [requestFocusRootId, setRequestFocusRootId] = useState<string | null>(null);
+  const [zoomOutFromRootId, setZoomOutFromRootId] = useState<string | null>(null);
+  const [isZoomingOut, setIsZoomingOut] = useState(false);
 
   const activeRootDept = useMemo(
     () => rootPolytopeDepts.find(d => d.id === rootPolytopeDeptId && d.domain !== 'inactive') ?? null,
@@ -351,10 +353,21 @@ export default function Universe3DPage() {
   }, [authRole]);
 
   const handleExitRootPolytope = useCallback(() => {
+    // Start zoom-out animation: hide inner view, show outer view zoomed in, then animate out
+    const exitingRootId = rootPolytopeDeptId;
     setInsideRootPolytope(false);
-    setRootPolytopeDeptId(null);
     setRootPolytopeInternalPath([]);
     setRootPolytopeBackStep(0);
+    if (exitingRootId) {
+      setZoomOutFromRootId(exitingRootId);
+      setIsZoomingOut(true);
+    }
+    setRootPolytopeDeptId(null);
+  }, [rootPolytopeDeptId]);
+
+  const handleZoomOutComplete = useCallback(() => {
+    setZoomOutFromRootId(null);
+    setIsZoomingOut(false);
   }, []);
 
   const handleRoleChange = useCallback((role: UserPlanetRole) => {
@@ -859,20 +872,25 @@ export default function Universe3DPage() {
 
 
 
-      {/* ── Company Planet 2D root map (after role pick) ── */}
+      {/* ── Company Planet 3D root map (after role pick) ── */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
           zIndex: 6,
-          opacity: insidePlanetRoots && planetContext && !insideRootPolytope ? 1 : 0,
-          visibility: insidePlanetRoots && planetContext && !insideRootPolytope ? 'visible' : 'hidden',
-          pointerEvents: insidePlanetRoots && planetContext && !insideRootPolytope ? 'auto' : 'none',
-          transition: 'opacity 0.5s ease-in-out',
+          // Solid galaxy background on this container so it persists even when
+          // CompanyPlanet3DView unmounts, preventing universe planets from bleeding through.
+          background: 'radial-gradient(ellipse at 50% 40%, rgba(18,10,36,1) 0%, rgba(2,2,6,1) 65%)',
+          opacity: (insidePlanetRoots && planetContext) || isZoomingOut ? 1 : 0,
+          visibility: (insidePlanetRoots && planetContext) || isZoomingOut ? 'visible' : 'hidden',
+          pointerEvents: (insidePlanetRoots && planetContext && !insideRootPolytope && !isZoomingOut) ? 'auto' : 'none',
+          transition: (insidePlanetRoots && planetContext) || isZoomingOut
+            ? 'opacity 0.4s ease-in-out'
+            : 'opacity 0.4s ease-in-out, visibility 0s 0.4s',
         }}
       >
-        {planetContext && !insideRootPolytope && (
-          <CompanyPlanet2DView
+        {planetContext && (!insideRootPolytope || isZoomingOut) && (
+          <CompanyPlanet3DView
             context={planetContext}
             depth={0}
             path={[]}
@@ -882,6 +900,8 @@ export default function Universe3DPage() {
             onDrillBack={() => {}}
             onActionNodeClick={handleActionNodeClick}
             industryColor={planetIndustryColor}
+            zoomOutFromRootId={zoomOutFromRootId}
+            onZoomOutComplete={handleZoomOutComplete}
           />
         )}
       </div>
@@ -896,12 +916,10 @@ export default function Universe3DPage() {
           visibility: insideRootPolytope ? 'visible' : 'hidden',
           pointerEvents: insideRootPolytope ? 'auto' : 'none',
           transition: insideRootPolytope
-            ? 'opacity 0.85s ease-out, right 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
-            : 'opacity 0.45s ease-in, visibility 0s 0.45s, right 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+            ? 'opacity 0.6s 0.2s ease-out, right 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
+            : 'opacity 0.3s ease-in, visibility 0s 0.3s, right 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
           right: actionWorkspace ? '75vw' : '0',
-          background: insideRootPolytope
-            ? 'radial-gradient(ellipse at 50% 40%, rgba(18,10,36,0.98) 0%, rgba(2,2,6,0.99) 65%)'
-            : undefined,
+          background: 'radial-gradient(ellipse at 50% 40%, rgba(18,10,36,1) 0%, rgba(2,2,6,1) 65%)',
         }}
       >
         {insideRootPolytope && rootPolytopeMounted && activeRootDept && (
@@ -919,6 +937,7 @@ export default function Universe3DPage() {
             }}
             requestBackStep={rootPolytopeBackStep}
             rootSwitchKey={rootPolytopeSwitchKey}
+            onBack={handleExitRootPolytope}
           />
         )}
       </div>

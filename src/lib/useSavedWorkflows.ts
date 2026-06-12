@@ -205,41 +205,38 @@ export function useSavedWorkflows(): UseSavedWorkflowsReturn {
 
   const save = useCallback((item: Omit<SavedWorkflowItem, 'id' | 'savedAt'>): SavedWorkflowItem => {
     const lookupKey = buildKey(item);
-
-    setItems(prev => {
-      const idx = prev.findIndex(p => buildKey(p) === lookupKey);
-      if (idx >= 0) {
-        return prev; // already saved — no-op
-      }
-      const newItem: SavedWorkflowItem = {
-        ...item,
-        id: generateId(),
-        savedAt: new Date().toISOString(),
-      };
-      const newItems = [newItem, ...prev];
-      saveToStorage(newItems);
-      return newItems;
-    });
-
-    // Return from current storage (synchronous read after setState)
     const current = loadFromStorage();
-    return current.find(p => buildKey(p) === lookupKey) ?? { ...item, id: '', savedAt: '' };
+    
+    const existing = current.find(p => buildKey(p) === lookupKey);
+    if (existing) {
+      return existing;
+    }
+
+    const newItem: SavedWorkflowItem = {
+      ...item,
+      id: generateId(),
+      savedAt: new Date().toISOString(),
+    };
+    const newItems = [newItem, ...current];
+    
+    saveToStorage(newItems);
+    setItems(newItems);
+
+    return newItem;
   }, []);
 
   const remove = useCallback((id: string) => {
-    setItems(prev => {
-      const newItems = prev.filter(p => p.id !== id);
-      saveToStorage(newItems);
-      return newItems;
-    });
+    const current = loadFromStorage();
+    const newItems = current.filter(p => p.id !== id);
+    saveToStorage(newItems);
+    setItems(newItems);
   }, []);
 
   const updateNote = useCallback((id: string, note: string) => {
-    setItems(prev => {
-      const newItems = prev.map(p => (p.id === id ? { ...p, note } : p));
-      saveToStorage(newItems);
-      return newItems;
-    });
+    const current = loadFromStorage();
+    const newItems = current.map(p => (p.id === id ? { ...p, note } : p));
+    saveToStorage(newItems);
+    setItems(newItems);
   }, []);
 
   const has = useCallback((

@@ -337,7 +337,7 @@ export function PlasmaSphere({
     <group>
       {halo && (
         <mesh>
-          <sphereGeometry args={[radius * 2.6, 32, 32]} />
+          <sphereGeometry args={[radius * 1.6, 32, 32]} />
           <shaderMaterial
             ref={haloRef}
             vertexShader={glowVertexShader}

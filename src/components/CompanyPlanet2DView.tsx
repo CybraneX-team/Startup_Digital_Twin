@@ -245,6 +245,7 @@ export default function CompanyPlanet2DView({
           localY,
           x: CX + localX,
           y: CY + localY,
+          lineFrom: { x: CX, y: CY },
         };
       });
     }
@@ -399,6 +400,32 @@ export default function CompanyPlanet2DView({
             />
           </g>
 
+          <g
+            className="planet2d-edges"
+            style={{
+              opacity: isTransitioning ? 0 : 1,
+              transition: `opacity ${FADE_MS}ms ease-out`,
+            }}
+          >
+            {layout.map((node) => {
+              if (!node.lineFrom) return null;
+              const isOther = focusRootId != null && node.id !== focusRootId;
+              if (isOther) return null;
+              return (
+                <line
+                  key={`edge-${node.id}`}
+                  x1={node.lineFrom.x}
+                  y1={node.lineFrom.y}
+                  x2={node.x}
+                  y2={node.y}
+                  stroke={node.color || industryColor}
+                  strokeOpacity={0.25}
+                  strokeWidth="1.5"
+                />
+              );
+            })}
+          </g>
+
           {/* Center company energy orb — with company name label */}
           {depth === 0 && (
             <g
@@ -409,7 +436,6 @@ export default function CompanyPlanet2DView({
                 transition: `opacity ${FADE_MS}ms ease-out`,
               }}
             >
-              <circle r={CORE_ORB_R + 28} fill="url(#planetCoreGlow)" />
               <EnergyOrb2D
                 color={industryColor}
                 radius={CORE_ORB_R}

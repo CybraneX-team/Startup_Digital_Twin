@@ -17,6 +17,7 @@ export interface RootInternalNodeSceneProps {
   requestBackStep?: number;
   /** Increment when switching roots — resets camera */
   rootSwitchKey?: number;
+  onBack?: () => void;
 }
 
 const ROOT_POS = new THREE.Vector3(0, 0, 8);
@@ -29,6 +30,7 @@ export function RootInternalNodeScene({
   onPathChange,
   requestBackStep = 0,
   rootSwitchKey = 0,
+  onBack,
 }: RootInternalNodeSceneProps) {
   const color = U_DOMAIN_COLOR[root.domain] ?? '#8b5cf6';
   const isDragging = useDragWorkspaceStore(s => s.isDragging);
@@ -181,6 +183,28 @@ export function RootInternalNodeScene({
             depthWrite={true}
             speed={1.2}
           />
+          {/* Invisible click target on center orb */}
+          <mesh
+            onClick={(e) => {
+              e.stopPropagation();
+              if (selectedInternalPath.length > 0) {
+                // Go back one level in internal nodes
+                const nextPath = selectedInternalPath.slice(0, -1);
+                onPathChange(nextPath);
+                if (nextPath.length === 0) {
+                  flyToRootOverview();
+                }
+              } else if (onBack) {
+                // At root level — exit back to planet roots
+                onBack();
+              }
+            }}
+            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+          >
+            <sphereGeometry args={[0.7, 16, 16]} />
+            <meshBasicMaterial transparent opacity={0} />
+          </mesh>
           {!isDeepDrillDown && (
             <Html position={[0, -1.4, 0]} center zIndexRange={[-10, -100]} prepend>
               <div style={{

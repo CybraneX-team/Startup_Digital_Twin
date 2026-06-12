@@ -18,53 +18,66 @@ export function EnergyOrb2D({
   idSuffix = 'orb',
 }: EnergyOrb2DProps) {
   const uid = idSuffix.replace(/[^a-zA-Z0-9_-]/g, '');
-  const outerR = radius * (selected ? 1.45 : hovered ? 1.28 : 1.15);
-  const coreR = radius * 0.38;
-  const glowOp = selected ? 0.95 : hovered ? 0.8 : intensity;
+  const isCenter = intensity >= 1 || idSuffix === 'planet-core';
+  
+  // Outer radius for the halo. Center gets a bigger halo.
+  const outerR = radius * (selected ? 1.6 : hovered ? 1.4 : isCenter ? 1.8 : 1.35);
+  const glowOp = selected ? 1 : hovered ? 0.9 : intensity;
 
   return (
     <g className="energy-orb-2d">
       <defs>
         <radialGradient id={`${uid}-halo`} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor={color} stopOpacity={0.55 * glowOp} />
-          <stop offset="55%" stopColor={color} stopOpacity={0.12 * glowOp} />
+          <stop offset="0%" stopColor={color} stopOpacity={0.65 * glowOp} />
+          <stop offset="40%" stopColor={color} stopOpacity={0.25 * glowOp} />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </radialGradient>
-        <radialGradient id={`${uid}-body`} cx="38%" cy="32%" r="65%">
-          <stop offset="0%" stopColor="#ffffff" stopOpacity="0.95" />
-          <stop offset="35%" stopColor={color} stopOpacity="0.75" />
-          <stop offset="100%" stopColor={color} stopOpacity="0.15" />
+        
+        {/* Bright white core fading to color at the edges */}
+        <radialGradient id={`${uid}-body`} cx="35%" cy="30%" r="65%">
+          <stop offset="0%" stopColor="#ffffff" stopOpacity="1" />
+          <stop offset="55%" stopColor="#ffffff" stopOpacity="0.95" />
+          <stop offset="85%" stopColor={color} stopOpacity="0.75" />
+          <stop offset="100%" stopColor={color} stopOpacity="0.3" />
         </radialGradient>
-        <filter id={`${uid}-blur`} x="-80%" y="-80%" width="260%" height="260%">
-          <feGaussianBlur stdDeviation={selected ? 5 : 3.5} result="b" />
+        
+        <filter id={`${uid}-glow`} x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation={isCenter ? 5 : selected ? 4 : 2.5} result="blur" />
           <feMerge>
-            <feMergeNode in="b" />
+            {isCenter && <feMergeNode in="blur" />}
+            <feMergeNode in="blur" />
             <feMergeNode in="SourceGraphic" />
           </feMerge>
         </filter>
       </defs>
 
+      {/* Halo */}
       <circle r={outerR} fill={`url(#${uid}-halo)`} className="energy-orb-halo" />
+      
+      {/* Extra glow for the center orb */}
+      {isCenter && (
+        <circle r={radius * 1.4} fill={`url(#${uid}-halo)`} opacity={0.7} className="energy-orb-halo" />
+      )}
+
+      {/* Main body */}
       <circle
         r={radius}
         fill={`url(#${uid}-body)`}
         stroke={color}
-        strokeWidth={selected ? 2.5 : hovered ? 2 : 1.25}
-        strokeOpacity={0.85}
-        filter={`url(#${uid}-blur)`}
+        strokeWidth={selected ? 2 : hovered ? 1.5 : 1}
+        strokeOpacity={0.8}
+        filter={`url(#${uid}-glow)`}
         className="energy-orb-core"
       />
-      <circle r={coreR} fill="#ffffff" opacity={selected ? 0.92 : 0.72} />
-      <circle r={coreR * 0.55} fill={color} opacity={0.35} />
 
       {selected && (
         <circle
-          r={radius + 4}
+          r={radius + 6}
           fill="none"
           stroke={color}
-          strokeWidth={1}
-          strokeOpacity={0.5}
-          strokeDasharray="3 6"
+          strokeWidth={1.5}
+          strokeOpacity={0.6}
+          strokeDasharray="4 6"
           className="energy-orb-ring-spin"
         />
       )}
