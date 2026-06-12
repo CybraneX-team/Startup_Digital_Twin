@@ -1144,22 +1144,21 @@ function WorkspaceChatCopilot() {
               className="flex-1 bg-transparent text-xs text-white placeholder-white/35 focus:outline-none min-w-0"
             />
 
-            {/* Toolbar controls inside the input wrapper on the right */}
+            {/* Toolbar controls inside the input wrapper on the right (Commented out)
             <div className="flex items-center gap-1.5 shrink-0 ml-2">
-              {/* Model Custom Select */}
               <CustomDropdown
                 value={selectedModel}
                 onChange={setSelectedModel}
                 options={modelOptions}
               />
 
-              {/* Reasoning Level Custom Select */}
               <CustomDropdown
                 value={reasoningLevel}
                 onChange={setReasoningLevel}
                 options={reasoningOptions}
               />
             </div>
+            */}
           </div>
 
           {/* Attach Button (outside) */}
