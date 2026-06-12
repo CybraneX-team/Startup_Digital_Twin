@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useLayoutEffect } from 'react';
+import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
 
 import UniversalPolytope from '../components/UniversalPolytope';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
@@ -10,11 +10,13 @@ import type { UExternalNode, UInternalNode } from '../lib/usePolytopeStore';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/db/companies';
 import type { CoreWorkspacePhase } from '../lib/coreWorkspaceTransition';
+import { useVoice } from '../context/VoiceContext';
 
 export default function UniversalPage() {
   const { profile } = useAuth();
   const { company } = useCompany(profile?.company_id);
   const store = usePolytopeStore('bdt');
+  const { sendContextUpdate } = useVoice();
 
   /** New session id */
   const [bdtSessionId] = useState(() => Date.now());
@@ -103,6 +105,15 @@ export default function UniversalPage() {
   const companyName = company?.name || (profile?.company_id
     ? profile?.first_name ? `${profile.first_name}'s workspace` : 'My workspace'
     : 'Universal Polytope');
+
+  useEffect(() => {
+    const deptSummary = store.departments.length
+      ? store.departments.map(d => `${d.label} (score: ${d.score})`).join(', ')
+      : 'No departments yet';
+    sendContextUpdate(
+      `[Navigation] User is on the Business Digital Twin page. Company: ${companyName}. Departments: ${deptSummary}.`
+    );
+  }, [store.departments, companyName]);
 
   // ── Add Department: spawn draft node + show panel ─────────────────────────
   // Camera fly is handled internally by Scene via useEffect on draftNodePos.

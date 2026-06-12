@@ -42,6 +42,7 @@ import type { UExternalNode, UInternalNode } from '../lib/usePolytopeStore';
 import { ActionNodeWorkspace } from '../components/workspace/ActionNodeWorkspace';
 import { DragWorkspaceOverlay } from '../components/workspace/DragWorkspaceOverlay';
 import { CompanyTagDropdown } from '../components/planet/CompanyTagDropdown';
+import { useVoice } from '../context/VoiceContext';
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,8 @@ export default function Universe3DPage() {
   const bhCompanyName = company?.name || (profile?.company_id
     ? profile?.first_name ? `${profile.first_name}'s workspace` : 'My workspace'
     : 'My Organisation');
+
+  const { sendContextUpdate } = useVoice();
 
   const controllerRef = useRef<UniverseController | null>(null);
   const [navPath, setNavPath] = useState<NavPathEntry[]>([]);
@@ -83,6 +86,13 @@ export default function Universe3DPage() {
       twinWorkspaceTimerRef.current = null;
     }
   }, []);
+
+  useEffect(() => {
+    const path = navPath.map(e => e.label).join(' → ') || 'Galaxy overview';
+    sendContextUpdate(
+      `[Navigation] User is on the 3D Startup Universe. Viewing: ${path}. Company: ${bhCompanyName}.`
+    );
+  }, [navPath, currentLevel, bhCompanyName]);
 
   const beginTwinWorkspacePanels = useCallback(() => {
     clearTwinWorkspaceTimers();

@@ -29,6 +29,8 @@ import PolytopePage from './pages/PolytopePage';
 import UniversalPage from './pages/UniversalPage';
 import WorkspacePage from './pages/WorkspacePage';
 import SavedWorkflows from './pages/SavedWorkflows';
+import { VoiceProvider } from './context/VoiceContext';
+import VoiceOrb from './components/VoiceOrb';
 
 function FullPageLoader() {
   return (
@@ -146,7 +148,8 @@ function AppRoutes() {
   const isFullyAuthed = (!!user && !!profile?.onboarding_completed && !!profile?.company_id) || isBypassUser;
 
   return (
-    <>
+    <VoiceProvider>
+      <>
       {savedOpen && (
         <AuthGuard>
           <SavedWorkflows onClose={() => window.dispatchEvent(new CustomEvent('saved_workflows_toggled', { detail: false }))} />
@@ -300,7 +303,11 @@ function AppRoutes() {
           )}
         </div>
       </div>
-    </>
+
+      {/* Global voice orb — floats above all layers (z-55) on all authenticated pages */}
+      {isFullyAuthed && <VoiceOrb />}
+      </>
+    </VoiceProvider>
   );
 }
 
