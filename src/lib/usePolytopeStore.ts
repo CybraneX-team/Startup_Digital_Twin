@@ -20,11 +20,51 @@ function loadFromStorage(): UExternalNode[] | null {
     if (!raw) raw = localStorage.getItem(FALLBACK_TWIN_KEY);
     if (!raw) raw = localStorage.getItem(LEGACY_STORAGE_KEY);
     
-    if (!raw) return null;
-    return JSON.parse(raw) as UExternalNode[];
-  } catch {
-    return null;
+    if (raw) {
+      return JSON.parse(raw) as UExternalNode[];
+    }
+
+    // Check onboarding departments
+    const onboardingRaw = localStorage.getItem('onboarding_departments');
+    if (onboardingRaw) {
+      const selectedNames = JSON.parse(onboardingRaw);
+      if (Array.isArray(selectedNames) && selectedNames.length > 0) {
+        const mappedNodes: UExternalNode[] = [];
+        selectedNames.forEach((name, index) => {
+          // Find matching default node in DEFAULT_NODES (case-insensitive substring match)
+          const matched = DEFAULT_NODES.find(n => 
+            n.label.toLowerCase() === name.toLowerCase() || 
+            n.label.toLowerCase().includes(name.toLowerCase()) ||
+            name.toLowerCase().includes(n.label.toLowerCase())
+          );
+          if (matched) {
+            mappedNodes.push(matched);
+          } else {
+            // Create a dynamic UExternalNode for custom departments
+            const domains: UDomain[] = ['build', 'delivery', 'market', 'control', 'people', 'direction'];
+            const domain = domains[index % domains.length];
+            mappedNodes.push({
+              id: `dept_custom_${Date.now()}_${index}`,
+              label: name,
+              domain: domain,
+              cluster: domain.charAt(0).toUpperCase() + domain.slice(1),
+              score: 80,
+              metrics: { performance: 80, efficiency: 80, capacity: 80, alignment: 80, risk: 20 },
+              internalNodes: [],
+            });
+          }
+        });
+        if (mappedNodes.length > 0) {
+          // Save to storage immediately so they persist as BDT nodes
+          saveToStorage(mappedNodes);
+          return mappedNodes;
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load from storage or parse onboarding_departments', err);
   }
+  return null;
 }
 
 function saveToStorage(nodes: UExternalNode[]) {
@@ -170,7 +210,10 @@ const useGlobalPolytopeStore = create<PolytopeStoreState>((set) => ({
 
   resetToDefaults: () => {
     localStorage.removeItem(SHARED_STORAGE_KEY);
-    set({ departments: DEFAULT_NODES });
+    localStorage.removeItem(FALLBACK_TWIN_KEY);
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    const next = loadFromStorage() ?? DEFAULT_NODES;
+    set({ departments: next });
   },
 }));
 

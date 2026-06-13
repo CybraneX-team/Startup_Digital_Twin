@@ -34,7 +34,9 @@ export default function AuthGuard({ children, requireOnboarding = false, require
     return <Navigate to="/auth" state={{ from: location.pathname }} replace />;
   }
 
-  if (requireOnboarding) {
+  const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
+
+  if (requireOnboarding && !isBypassUser) {
     // Onboarding completed but no company = waiting for workspace approval
     if (onboardingCompleted && !hasCompany) {
       return <Navigate to="/pending" replace />;

@@ -201,7 +201,7 @@ function AppRoutes() {
               <Route
                 path="/twin"
                 element={
-                  <AuthGuard>
+                  <AuthGuard requireOnboarding>
                     <Twin />
                   </AuthGuard>
                 }
@@ -279,7 +279,7 @@ function AppRoutes() {
                 } />
 
                 {/* /3d — redirect unauthenticated users to /auth via AuthGuard */}
-                <Route path="/3d" element={<AuthGuard><></></AuthGuard>} />
+                <Route path="/3d" element={<AuthGuard requireOnboarding><></></AuthGuard>} />
 
                 {/* /polytope — standalone polytope viewer */}
                 <Route path="/polytope" element={

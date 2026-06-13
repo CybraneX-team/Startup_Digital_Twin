@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ChevronRight, ChevronLeft, Hexagon, Check, Search, Users, Building2, Clock, CheckCircle } from 'lucide-react';
+import { ChevronRight, ChevronLeft, Hexagon, Check, Search, Users, Building2, Clock, CheckCircle, Plus, Sparkles } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 import { createCompany } from '../lib/db/companies';
@@ -18,8 +18,9 @@ const STEPS = [
   { id: 1, label: 'Company' },
   { id: 2, label: 'Story' },
   { id: 3, label: 'Metrics' },
-  { id: 4, label: 'Profile' },
-  { id: 5, label: 'Launch' },
+  { id: 4, label: 'Departments' },
+  { id: 5, label: 'Profile' },
+  { id: 6, label: 'Launch' },
 ];
 
 const STAGES: CompanyStage[] = [
@@ -147,7 +148,7 @@ export default function Onboarding() {
           { onConflict: 'id' },
         );
         await refreshProfile();
-        navigate('/twin', { replace: true });
+        navigate('/twin/data', { replace: true });
       }
     })();
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -159,6 +160,78 @@ export default function Onboarding() {
   const [form, setForm] = useState<FormData>(INITIAL);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Departments State
+  const [suggestedDepartments, setSuggestedDepartments] = useState<string[]>([]);
+  const [selectedDepartments, setSelectedDepartments] = useState<string[]>([]);
+  const [departmentsLoading, setDepartmentsLoading] = useState(false);
+  const [customDeptInput, setCustomDeptInput] = useState('');
+
+  function toggleDepartment(dept: string) {
+    setSelectedDepartments(prev =>
+      prev.includes(dept) ? prev.filter(d => d !== dept) : [...prev, dept]
+    );
+  }
+
+  function addCustomDepartment() {
+    const trimmed = customDeptInput.trim();
+    if (!trimmed) return;
+    if (!suggestedDepartments.includes(trimmed)) {
+      setSuggestedDepartments(prev => [...prev, trimmed]);
+    }
+    if (!selectedDepartments.includes(trimmed)) {
+      setSelectedDepartments(prev => [...prev, trimmed]);
+    }
+    setCustomDeptInput('');
+  }
+
+  function getFallbackDepartments(industryId: string, businessModel: string): string[] {
+    const defaults = ['Engineering', 'Product Management', 'Marketing', 'Operations', 'Finance & HR'];
+    if (businessModel === 'SaaS') {
+      return [...defaults, 'Customer Success', 'Sales'];
+    }
+    if (businessModel === 'Marketplace' || businessModel === 'B2C') {
+      return [...defaults, 'Customer Support', 'Growth'];
+    }
+    if (industryId === 'fintech') {
+      return [...defaults, 'Risk & Compliance', 'Customer Operations'];
+    }
+    if (industryId === 'healthcare') {
+      return [...defaults, 'Clinical Operations', 'Regulatory Affairs'];
+    }
+    return defaults;
+  }
+
+  async function fetchSuggestedDepartments() {
+    setDepartmentsLoading(true);
+    setError(null);
+    
+    try {
+      const industryName = INDUSTRIES.find(i => i.id === form.industry_id)?.label ?? 'Tech';
+      const response = await api.post<{ departments: string[] }>('/api/metrics-onboarding/generate-departments', {
+        name: form.name.trim(),
+        industryName: industryName,
+        description: form.description.trim(),
+        businessModel: form.business_model,
+        problemSolved: form.problem_solved.trim(),
+        usp: form.usp.trim(),
+      });
+
+      if (response && Array.isArray(response.departments)) {
+        setSuggestedDepartments(response.departments);
+        setSelectedDepartments(response.departments);
+      } else {
+        throw new Error('Invalid response structure from backend generate-departments');
+      }
+    } catch (err) {
+      console.error('[onboarding] secure department fetch failed', err);
+      const fallback = getFallbackDepartments(form.industry_id, form.business_model);
+      setSuggestedDepartments(fallback);
+      setSelectedDepartments(fallback);
+    } finally {
+      setDepartmentsLoading(false);
+    }
+  }
 
   // Join workspace state
   const [joinSearch, setJoinSearch] = useState('');
@@ -203,7 +276,11 @@ export default function Onboarding() {
 
   function nextStep() {
     if (!validateStep()) return;
-    setStep(s => Math.min(s + 1, 5));
+    const next = step + 1;
+    if (next === 4 && suggestedDepartments.length === 0) {
+      void fetchSuggestedDepartments();
+    }
+    setStep(s => Math.min(s + 1, 6));
   }
 
   function prevStep() { setStep(s => Math.max(s - 1, 1)); }
@@ -216,7 +293,7 @@ export default function Onboarding() {
     if (step === 2) {
       if (!form.description.trim()) { setError('A short description is required'); return false; }
     }
-    if (step === 4) {
+    if (step === 5) {
       if (!form.first_name.trim()) { setError('First name is required'); return false; }
     }
     return true;
@@ -294,8 +371,11 @@ export default function Onboarding() {
       }
     }
 
+    // Save generated and selected departments to localStorage so they can be referenced/sent later
+    localStorage.setItem('onboarding_departments', JSON.stringify(selectedDepartments));
+
     await refreshProfile();
-    navigate('/twin', { replace: true });
+    navigate('/twin/data', { replace: true });
   }
 
   const selectedIndustry = INDUSTRIES.find(i => i.id === form.industry_id);
@@ -742,8 +822,76 @@ export default function Onboarding() {
             </div>
           )}
 
-          {/* Step 4 — Founder Profile */}
+          {/* Step 4 — Departments Setup */}
           {step === 4 && (
+            <div className="flex flex-col gap-6">
+              <div>
+                <h2 className="text-white font-semibold text-base flex items-center gap-2">
+                  <Sparkles size={18} className="text-violet-400 animate-pulse" />
+                  AI Generated Departments
+                </h2>
+                <p className="text-xs mt-1.5" style={{ color: '#5E5E5E' }}>
+                  Based on your company details, we suggested these departments. Click to select/deselect them.
+                </p>
+              </div>
+
+              {departmentsLoading ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-3">
+                  <div className="w-6 h-6 rounded-full animate-spin"
+                    style={{ border: '2px solid #C1AEFF', borderTopColor: 'transparent' }} />
+                  <span className="text-xs" style={{ color: '#5E5E5E' }}>Generating structure using AI...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-5">
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedDepartments.map(dept => {
+                      const isSelected = selectedDepartments.includes(dept);
+                      return (
+                        <button
+                          key={dept}
+                          type="button"
+                          onClick={() => toggleDepartment(dept)}
+                          className="rounded-xl px-4 py-2.5 text-sm font-medium transition-all flex items-center gap-2"
+                          style={{
+                            background: isSelected ? 'rgba(193,174,255,0.12)' : '#161618',
+                            color: isSelected ? '#C1AEFF' : '#5E5E5E',
+                            border: isSelected ? '1px solid rgba(193,174,255,0.35)' : '1px solid rgba(255,255,255,0.03)',
+                          }}
+                        >
+                          {isSelected ? <Check size={14} /> : <div className="w-3.5 h-3.5 rounded-full border border-gray-700" />}
+                          {dept}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div className="flex gap-2 items-center mt-2">
+                    <input
+                      type="text"
+                      placeholder="Add a custom department..."
+                      value={customDeptInput}
+                      onChange={e => setCustomDeptInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addCustomDepartment(); } }}
+                      className="flex-1 rounded-xl px-4 py-2.5 text-xs outline-none text-white border border-transparent"
+                      style={{ background: '#161618' }}
+                    />
+                    <button
+                      type="button"
+                      onClick={addCustomDepartment}
+                      className="px-4 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-opacity hover:opacity-90"
+                      style={{ background: '#C1AEFF', color: '#161618' }}
+                    >
+                      <Plus size={14} />
+                      Add
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 5 — Founder Profile */}
+          {step === 5 && (
             <div className="flex flex-col gap-5">
               <h2 className="text-white font-semibold text-base">Founder profile</h2>
               <div className="grid grid-cols-2 gap-4">
@@ -772,8 +920,8 @@ export default function Onboarding() {
             </div>
           )}
 
-          {/* Step 5 — Review & Launch */}
-          {step === 5 && (
+          {/* Step 6 — Review & Launch */}
+          {step === 6 && (
             <div className="flex flex-col gap-6">
               <h2 className="text-white font-semibold text-base">Ready to launch</h2>
 
@@ -847,7 +995,7 @@ export default function Onboarding() {
               Back
             </button>
 
-            {step < 5 ? (
+            {step < 6 ? (
               <button
                 type="button"
                 onClick={nextStep}
