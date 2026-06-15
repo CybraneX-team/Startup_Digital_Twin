@@ -56,6 +56,18 @@ export interface WorkspaceInvite {
   created_at: string;
 }
 
+export interface JoinableCompany {
+  id: string;
+  name: string;
+  slug: string;
+  stage: string | null;
+  industry_id: string | null;
+  country: string | null;
+  employees: number | null;
+  description: string | null;
+  created_at: string;
+}
+
 /* ──────────────────────────────────────────────────
    useTeamMembers — live subscription to company members
 ────────────────────────────────────────────────── */
@@ -409,6 +421,64 @@ export async function submitJoinRequest(
     return { success: false, error: error.message };
   }
   return { success: true };
+}
+
+/* ──────────────────────────────────────────────────
+   joinCompanyAsViewer — immediate read-only workspace access
+────────────────────────────────────────────────── */
+
+export async function joinCompanyAsViewer(
+  companyId: string,
+  userId: string,
+): Promise<{ success: boolean; companyId?: string; role?: UserRole; error?: string }> {
+  const { data, error } = await supabase.rpc('join_company_as_viewer', {
+    p_company_id: companyId,
+    p_user_id: userId,
+  });
+
+  if (error) return { success: false, error: error.message };
+  return data as { success: boolean; companyId?: string; role?: UserRole; error?: string };
+}
+
+/* ──────────────────────────────────────────────────
+   listJoinableCompanies — all active companies for onboarding join flow
+────────────────────────────────────────────────── */
+
+export async function listJoinableCompanies(options?: {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}): Promise<{ companies: JoinableCompany[]; total: number }> {
+  const page = Math.max(1, options?.page ?? 1);
+  const pageSize = Math.max(1, options?.pageSize ?? 4);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+  const search = options?.search?.trim().replace(/[(),]/g, ' ') ?? '';
+
+  let query = supabase
+    .from('companies')
+    .select('id, name, slug, stage, industry_id, country, employees, description, created_at', { count: 'exact' })
+    .eq('status', 'active')
+    .order('created_at', { ascending: false })
+    .range(from, to);
+
+  if (search) {
+    query = query.or([
+      `name.ilike.%${search}%`,
+      `slug.ilike.%${search}%`,
+      `industry_id.ilike.%${search}%`,
+      `country.ilike.%${search}%`,
+      `description.ilike.%${search}%`,
+    ].join(','));
+  }
+
+  const { data, error, count } = await query;
+
+  if (error) {
+    console.error('[team] listJoinableCompanies', error);
+    return { companies: [], total: 0 };
+  }
+  return { companies: data ?? [], total: count ?? 0 };
 }
 
 /* ──────────────────────────────────────────────────

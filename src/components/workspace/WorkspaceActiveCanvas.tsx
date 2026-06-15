@@ -20,13 +20,8 @@ import {
   Paperclip,
   ChevronDown,
   ChevronUp,
-  Cpu,
-  Bot,
-  Zap,
-  Brain,
   Database,
   Mic,
-  MicOff,
   Volume2,
 } from 'lucide-react';
 import {
@@ -531,77 +526,6 @@ function ThinkingBlock({ content }: { content: string }) {
   );
 }
 
-interface DropdownOption {
-  value: string;
-  label: string;
-  icon?: React.ReactNode;
-}
-
-interface CustomDropdownProps {
-  value: string;
-  onChange: (value: string) => void;
-  options: DropdownOption[];
-}
-
-function CustomDropdown({ value, onChange, options }: CustomDropdownProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const selectedOption = options.find(opt => opt.value === value) || options[0];
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <button
-        type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 bg-white/[0.03] border border-white/10 hover:border-white/20 text-white/80 hover:text-white text-[11px] font-medium rounded-lg px-2.5 py-1.5 transition-colors cursor-pointer select-none"
-      >
-        {selectedOption.icon}
-        <span>{selectedOption.label}</span>
-        <ChevronDown className={`w-3 h-3 text-white/40 transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {isOpen && (
-        <div className="absolute bottom-full mb-1.5 left-0 z-50 min-w-[165px] bg-[#121215]/95 border border-white/10 rounded-xl p-1 shadow-2xl backdrop-blur-xl animate-slide-up-fade">
-          {options.map(option => {
-            const isSelected = option.value === value;
-            return (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => {
-                  onChange(option.value);
-                  setIsOpen(false);
-                }}
-                className={`w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all text-left cursor-pointer ${isSelected
-                  ? 'bg-indigo-500/15 text-indigo-300'
-                  : 'text-white/70 hover:text-white hover:bg-white/[0.04]'
-                  }`}
-              >
-                <div className="flex items-center gap-1.5">
-                  {option.icon}
-                  <span>{option.label}</span>
-                </div>
-                {isSelected && <Check className="w-3 h-3 text-indigo-400" />}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function WorkspaceChatCopilot() {
   const {
     goals,
@@ -635,19 +559,8 @@ function WorkspaceChatCopilot() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stagedFile, setStagedFile] = useState<File | null>(null);
-  const [selectedModel, setSelectedModel] = useState('gemini-3.5-flash');
-  const [reasoningLevel, setReasoningLevel] = useState('standard');
-
-  const modelOptions: DropdownOption[] = [
-    { value: 'gemini-3.5-flash', label: 'Gemini 3.5 Flash', icon: <Zap className="w-3.5 h-3.5 text-amber-400" /> },
-    { value: 'gemini-3.5-pro', label: 'Gemini 3.5 Pro', icon: <Cpu className="w-3.5 h-3.5 text-indigo-400" /> },
-    { value: 'founder-copilot', label: 'FounderOS Copilot v2', icon: <Bot className="w-3.5 h-3.5 text-purple-400" /> },
-  ];
-
-  const reasoningOptions: DropdownOption[] = [
-    { value: 'standard', label: 'Standard Reasoning', icon: <SlidersHorizontal className="w-3.5 h-3.5 text-white/50" /> },
-    { value: 'deep-thought', label: 'Deep Thought', icon: <Brain className="w-3.5 h-3.5 text-purple-400 animate-pulse" /> },
-  ];
+  const [selectedModel] = useState('gemini-3.5-flash');
+  const [reasoningLevel] = useState('standard');
 
   const [activeView, setActiveView] = useState<'upload' | 'nodes'>('upload');
   const [showNodesDrawer, setShowNodesDrawer] = useState(false);

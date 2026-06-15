@@ -29,6 +29,7 @@ export interface PolytopeSidePanelProps {
   onDeleteNodeClick?: (dept: UExternalNode, node: UInternalNode) => void;
   onEditMember?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
   onDeleteMemberClick?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
+  canEdit?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -106,6 +107,7 @@ export function PolytopeSidePanel({
   onAddMember,
   onEditMember,
   onDeleteMemberClick,
+  canEdit = true,
 }: PolytopeSidePanelProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'departments' | 'information'>('departments');
@@ -531,6 +533,7 @@ export function PolytopeSidePanel({
 
                     {/* Action buttons (pencil, trash) on hover / Chevron otherwise */}
                     <div className="flex items-center gap-0.5 shrink-0">
+                      {canEdit && (
                       <div className="hidden group-hover/row:flex items-center gap-0.5">
                         <button
                           onClick={(e) => {
@@ -560,6 +563,7 @@ export function PolytopeSidePanel({
                           <Trash2 className="w-3 h-3" />
                         </button>
                       </div>
+                      )}
                       <ChevronRight
                         className="w-3 h-3 shrink-0 transition-all group-hover/row:hidden"
                         style={{ color: isActiveDept ? color : '#6b7280', opacity: isActiveDept ? 0.9 : 0 }}
@@ -595,6 +599,7 @@ export function PolytopeSidePanel({
                     </span>
                   </div>
                   {/* Action buttons (pencil, trash) on hover */}
+                  {canEdit && (
                   <div className="hidden group-hover/row:flex items-center gap-0.5 shrink-0">
                     <button
                       onClick={(e) => {
@@ -622,6 +627,7 @@ export function PolytopeSidePanel({
                       <Trash2 className="w-3 h-3" />
                     </button>
                   </div>
+                  )}
                 </div>
               ))
             )
@@ -666,6 +672,7 @@ export function PolytopeSidePanel({
                     </div>
 
                     {/* Action buttons (pencil, trash) on hover */}
+                    {canEdit && (
                     <div className="hidden group-hover/row:flex items-center gap-0.5 shrink-0">
                       <button
                         onClick={(e) => {
@@ -694,6 +701,7 @@ export function PolytopeSidePanel({
                         <Trash2 className="w-3 h-3" />
                       </button>
                     </div>
+                    )}
                   </div>
                 );
               })
@@ -702,7 +710,7 @@ export function PolytopeSidePanel({
         </div>
 
         {/* ── Add button — always pinned at bottom ── */}
-        {activeTab === 'departments' && (
+        {canEdit && activeTab === 'departments' && (
         <div
           className="px-3 pb-3 pt-2 shrink-0"
           style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}

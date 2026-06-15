@@ -47,6 +47,7 @@ export interface UniversalPolytopeProps {
   onCoreSurfaceComplete?: () => void;
   /** Which persisted graph to use when `departments` is not passed (default: twin /3d) */
   storeScope?: PolytopeStoreScope;
+  readOnly?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -74,6 +75,7 @@ export default function UniversalPolytope({
   onCoreDiveComplete,
   onCoreSurfaceComplete,
   storeScope = 'twin',
+  readOnly = false,
 }: UniversalPolytopeProps) {
   const [selectedId, setSelectedIdRaw] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -119,7 +121,7 @@ export default function UniversalPolytope({
           draftMember={draftMember}
           draftMemberScreenPosRef={draftMemberScreenPosRef}
           selectedInternalPathProps={selectedInternalPath}
-          enableCoreWorkspace={enableCoreWorkspace}
+          enableCoreWorkspace={enableCoreWorkspace && !readOnly}
           coreWorkspacePhase={coreWorkspacePhase}
           onCoreClickIntent={onCoreClickIntent}
           onCoreDiveComplete={onCoreDiveComplete}
@@ -129,7 +131,7 @@ export default function UniversalPolytope({
 
       <AnalyticHoverCard hoveredId={hoveredId} departments={displayDepartments} />
 
-      {!transparent && (
+      {!transparent && !readOnly && (
         <PolytopeManager
           departments={displayDepartments}
           onAddDepartment={store.addDepartment}

@@ -7,7 +7,7 @@ import { useSavedWorkflows } from '../lib/useSavedWorkflows';
 export default function TopBar() {
   const location = useLocation();
   const navigate  = useNavigate();
-  const { user, profile, signOut, loading, canRead } = useAuth();
+  const { user, profile, signOut, loading, canRead, canWrite } = useAuth();
 
   const isData      = location.pathname === '/twin/data';
   const is3D        = location.pathname === '/3d';
@@ -71,7 +71,7 @@ export default function TopBar() {
         { path: '/overview',  label: 'Home',     active: isOverview },
         { path: '/3d',        label: '3D Twin',  active: is3D },
         { path: '/universal', label: 'BDT',      active: location.pathname === '/universal' },
-        ...(canRead('data')     ? [{ path: '/twin/data' as const, label: 'Data' as const,     active: isData }] : []),
+        ...(canWrite('data')    ? [{ path: '/twin/data' as const, label: 'Data' as const,     active: isData }] : []),
         ...(canRead('settings') ? [{ path: '/settings' as const,  label: 'Settings' as const, active: location.pathname === '/settings' }] : []),
       ];
 

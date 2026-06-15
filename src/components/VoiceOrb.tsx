@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Mic, MicOff, Loader2, AlertCircle } from 'lucide-react';
+import { Mic, Loader2, AlertCircle } from 'lucide-react';
 import { useVoice } from '../context/VoiceContext';
 import type { VoiceState } from '../hooks/useGeminiLive';
 

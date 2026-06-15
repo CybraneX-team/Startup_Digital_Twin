@@ -222,7 +222,7 @@ function AppRoutes() {
                   </AuthGuard>
                 } />
                 <Route path="/twin/data" element={
-                  <AuthGuard requireOnboarding requiredModule="data">
+                  <AuthGuard requireOnboarding requiredModule="data" requiredAction="write">
                     <DataIngestion />
                   </AuthGuard>
                 } />

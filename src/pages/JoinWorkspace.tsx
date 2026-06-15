@@ -11,12 +11,12 @@ const ROLE_LABELS: Record<string, string> = {
   founder: 'Founder', super_admin: 'Super Admin',
 };
 
-type PageState = 'loading' | 'valid' | 'invalid' | 'accepting' | 'success' | 'error' | 'need_auth';
+type PageState = 'loading' | 'valid' | 'invalid' | 'accepting' | 'success' | 'error' | 'need_auth' | 'already_company';
 
 export default function JoinWorkspace() {
   const [params] = useSearchParams();
   const navigate = useNavigate();
-  const { user, loading: authLoading, refreshProfile } = useAuth();
+  const { user, profile, loading: authLoading, refreshProfile } = useAuth();
 
   const token = params.get('token') ?? '';
 
@@ -39,23 +39,39 @@ export default function JoinWorkspace() {
         return;
       }
       setInviteInfo(info);
-      setState(authLoading ? 'loading' : user ? 'valid' : 'need_auth');
+      setState(authLoading ? 'loading' : profile?.company_id ? 'already_company' : user ? 'valid' : 'need_auth');
     });
-  }, [token]);
+  }, [token, authLoading, user, profile?.company_id]);
 
   /* ── Once auth resolves, update state ── */
   useEffect(() => {
     if (authLoading) return;
+    if (profile?.company_id) {
+      setState('already_company');
+      return;
+    }
     if (state === 'loading' && inviteInfo) {
       setState(user ? 'valid' : 'need_auth');
     }
     if (state === 'need_auth' && user && inviteInfo) {
       setState('valid');
     }
-  }, [authLoading, user]);
+  }, [authLoading, user, profile?.company_id]);
+
+  useEffect(() => {
+    if (state !== 'already_company') return;
+    const timer = window.setTimeout(() => {
+      navigate('/overview', { replace: true });
+    }, 2400);
+    return () => window.clearTimeout(timer);
+  }, [state, navigate]);
 
   async function handleAccept() {
     if (!user || !inviteInfo) return;
+    if (profile?.company_id) {
+      setState('already_company');
+      return;
+    }
     setState('accepting');
 
     const result = await acceptInviteToken(token, user.id);
@@ -118,6 +134,25 @@ export default function JoinWorkspace() {
           style={{ background: 'linear-gradient(135deg, #C1AEFF, #F9C6FF)' }}
         >
           Go to Sign In
+        </button>
+      </Card>
+    );
+  }
+
+  if (state === 'already_company') {
+    return (
+      <Card>
+        <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
+        <h2 className="text-white text-lg font-semibold mb-2">Company account already exists</h2>
+        <p className="text-gray-500 text-sm mb-6">
+          You are already a company account, so you cannot join another workspace.
+        </p>
+        <button
+          onClick={() => navigate('/overview', { replace: true })}
+          className="w-full py-3 rounded-xl text-sm font-semibold text-gray-900 transition-all hover:opacity-90"
+          style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)' }}
+        >
+          Open Dashboard
         </button>
       </Card>
     );

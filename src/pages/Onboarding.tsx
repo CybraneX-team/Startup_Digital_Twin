@@ -8,7 +8,8 @@ import type { CreateCompanyInput } from '../lib/db/companies';
 import { INDUSTRIES } from '../db/industries';
 import { useSubdomainsByIndustry } from '../lib/db/subdomains';
 import type { BusinessModel, CompanyStage } from '../lib/supabase';
-import { searchCompanyBySlug, submitJoinRequest } from '../lib/db/team';
+import { joinCompanyAsViewer, listJoinableCompanies } from '../lib/db/team';
+import type { JoinableCompany } from '../lib/db/team';
 import { api } from '../lib/api';
 
 /* ──────────────────────────────────────────────────
@@ -34,6 +35,8 @@ const COUNTRIES = [
   'India', 'USA', 'UK', 'Singapore', 'UAE', 'Germany', 'Canada',
   'Australia', 'Japan', 'Brazil', 'Indonesia', 'Nigeria', 'Other',
 ];
+
+const JOIN_PAGE_SIZE = 4;
 
 /* ──────────────────────────────────────────────────
    Form state
@@ -127,7 +130,7 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 ────────────────────────────────────────────────── */
 export default function Onboarding() {
   const navigate = useNavigate();
-  const { user, refreshProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
 
   // Auto-recovery: if the profile loaded without a company_id but a membership
   // row exists (e.g. previous profile-update failed), look up the membership
@@ -148,7 +151,7 @@ export default function Onboarding() {
           { onConflict: 'id' },
         );
         await refreshProfile();
-        navigate('/twin/data', { replace: true });
+        navigate('/overview', { replace: true });
       }
     })();
   }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -235,38 +238,65 @@ export default function Onboarding() {
 
   // Join workspace state
   const [joinSearch, setJoinSearch] = useState('');
-  const [joinResults, setJoinResults] = useState<{ id: string; name: string; slug: string; stage: string }[]>([]);
-  const [joinSelected, setJoinSelected] = useState<{ id: string; name: string } | null>(null);
-  const [joinMessage, setJoinMessage] = useState('');
-  const [joinSubmitted, setJoinSubmitted] = useState(false);
+  const [joinCompanies, setJoinCompanies] = useState<JoinableCompany[]>([]);
+  const [joinSelected, setJoinSelected] = useState<JoinableCompany | null>(null);
+  const [joinJoined, setJoinJoined] = useState(false);
   const [joinSearching, setJoinSearching] = useState(false);
+  const [joinHasLoaded, setJoinHasLoaded] = useState(false);
+  const [joinPage, setJoinPage] = useState(1);
+  const [joinTotal, setJoinTotal] = useState(0);
 
-  async function handleJoinSearch() {
-    if (!joinSearch.trim()) return;
+  async function loadJoinCompanies(page = joinPage, search = joinSearch) {
     setJoinSearching(true);
-    const results = await searchCompanyBySlug(joinSearch.trim());
-    setJoinResults(results);
+    const { companies, total } = await listJoinableCompanies({
+      page,
+      pageSize: JOIN_PAGE_SIZE,
+      search,
+    });
+    setJoinCompanies(companies);
+    setJoinTotal(total);
+    setJoinPage(page);
+    if (joinSelected && !companies.some(c => c.id === joinSelected.id)) {
+      setJoinSelected(null);
+    }
+    setJoinHasLoaded(true);
     setJoinSearching(false);
   }
 
+  useEffect(() => {
+    if (mode !== 'join') return;
+    const timer = window.setTimeout(() => {
+      void loadJoinCompanies(1, joinSearch);
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [mode, joinSearch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!profile?.company_id) return;
+    const timer = window.setTimeout(() => {
+      navigate('/overview', { replace: true });
+    }, 2400);
+    return () => window.clearTimeout(timer);
+  }, [profile?.company_id, navigate]);
+
   async function handleJoinSubmit() {
     if (!joinSelected || !user) return;
+    if (profile?.company_id) {
+      setError('You are already a company account, so you cannot join another workspace.');
+      return;
+    }
     setLoading(true);
     setError(null);
-    const result = await submitJoinRequest(joinSelected.id, user.id, 'viewer', joinMessage || undefined);
+    const result = await joinCompanyAsViewer(joinSelected.id, user.id);
     if (!result.success) {
-      setError(result.error ?? 'Failed to submit request');
+      setError(result.error ?? 'Failed to join workspace');
       setLoading(false);
       return;
     }
-    // Mark onboarding_completed so user doesn't loop back here
-    await supabase
-      .from('user_profiles')
-      .update({ onboarding_completed: true })
-      .eq('id', user.id);
     await refreshProfile();
     setLoading(false);
-    setJoinSubmitted(true);
+    setJoinJoined(true);
+    setTimeout(() => navigate('/overview', { replace: true }), 700);
   }
 
   function update(field: keyof FormData, value: string) {
@@ -301,6 +331,11 @@ export default function Onboarding() {
 
   async function handleLaunch() {
     if (!user) return;
+    if (profile?.company_id) {
+      setError('You already have a company account.');
+      navigate('/overview', { replace: true });
+      return;
+    }
     setLoading(true);
     setError(null);
 
@@ -381,6 +416,33 @@ export default function Onboarding() {
   const selectedIndustry = INDUSTRIES.find(i => i.id === form.industry_id);
   const { subdomains: industrySubdomains } = useSubdomainsByIndustry(form.industry_id || null);
 
+  if (profile?.company_id) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: '#161618' }}>
+        <div className="w-full max-w-md text-center">
+          <div className="w-12 h-12 rounded-2xl flex items-center justify-center mx-auto mb-6"
+            style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)' }}>
+            <Hexagon size={22} color="#161618" fill="#161618" strokeWidth={1.5} />
+          </div>
+          <div className="rounded-2xl p-8" style={{ background: '#1B1B1D' }}>
+            <CheckCircle className="w-12 h-12 text-emerald-400 mx-auto mb-4" />
+            <h2 className="text-white text-xl font-semibold mb-2">Company account already exists</h2>
+            <p className="text-sm mb-6" style={{ color: '#5E5E5E' }}>
+              You are already a company account, so you cannot create a new company or join another workspace.
+            </p>
+            <button
+              onClick={() => navigate('/overview', { replace: true })}
+              className="w-full py-3 rounded-xl text-sm font-semibold transition-all"
+              style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)', color: '#161618' }}
+            >
+              Open Dashboard
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   /* ── Mode chooser screen ── */
   if (mode === 'choose') {
     return (
@@ -407,14 +469,17 @@ export default function Onboarding() {
               </p>
             </button>
             <button
-              onClick={() => setMode('join')}
+              onClick={() => {
+                setMode('join');
+                if (joinCompanies.length === 0) void loadJoinCompanies(1, joinSearch);
+              }}
               className="rounded-2xl p-6 text-left border border-gray-800 hover:border-sky-500/40 transition-all group"
               style={{ background: '#1B1B1D' }}
             >
               <Users className="w-7 h-7 text-sky-400 mb-4 group-hover:scale-110 transition-transform" />
               <h3 className="text-white font-semibold mb-1">Join a Workspace</h3>
               <p className="text-xs" style={{ color: '#5E5E5E' }}>
-                Your team already uses FounderOS. Search for the company and request to join.
+                Your team already uses FounderOS. Choose the company and enter as read-only.
               </p>
             </button>
           </div>
@@ -431,23 +496,24 @@ export default function Onboarding() {
 
   /* ── Join workspace screen ── */
   if (mode === 'join') {
-    if (joinSubmitted) {
+    const joinTotalPages = Math.max(1, Math.ceil(joinTotal / JOIN_PAGE_SIZE));
+    const joinStart = joinTotal === 0 ? 0 : (joinPage - 1) * JOIN_PAGE_SIZE + 1;
+    const joinEnd = Math.min(joinPage * JOIN_PAGE_SIZE, joinTotal);
+
+    if (joinJoined) {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: '#161618' }}>
           <div className="w-full max-w-md text-center">
             <CheckCircle className="w-14 h-14 text-emerald-400 mx-auto mb-5" />
-            <h2 className="text-white text-xl font-semibold mb-2">Request Sent!</h2>
+            <h2 className="text-white text-xl font-semibold mb-2">Workspace Joined</h2>
             <p className="text-sm mb-1" style={{ color: '#5E5E5E' }}>
-              Your request to join <span className="text-white font-medium">{joinSelected?.name}</span> has been sent.
-            </p>
-            <p className="text-sm mb-8" style={{ color: '#5E5E5E' }}>
-              The founder or admin will review it and you'll get access once approved.
+              You now have read-only access to <span className="text-white font-medium">{joinSelected?.name}</span>.
             </p>
             <button
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/overview', { replace: true })}
               className="px-6 py-2.5 rounded-xl text-sm font-medium text-white bg-gray-800 hover:bg-gray-700 transition-all"
             >
-              Back to Home
+              Open Dashboard
             </button>
           </div>
         </div>
@@ -461,21 +527,23 @@ export default function Onboarding() {
             <ChevronLeft className="w-4 h-4" /> Back
           </button>
           <h2 className="text-white text-xl font-semibold mb-1">Find your workspace</h2>
-          <p className="text-sm mb-6" style={{ color: '#5E5E5E' }}>Search by company name and request to join.</p>
+          <p className="text-sm mb-6" style={{ color: '#5E5E5E' }}>Select your company to join with read-only access.</p>
 
           <div className="rounded-2xl p-6 space-y-4" style={{ background: '#1B1B1D' }}>
             {/* Search */}
             <div className="flex gap-2">
               <input
                 value={joinSearch}
-                onChange={e => setJoinSearch(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleJoinSearch()}
-                placeholder="Company name or slug..."
+                onChange={e => {
+                  setJoinSearch(e.target.value);
+                  setJoinPage(1);
+                }}
+                placeholder="Search all companies..."
                 className="flex-1 px-4 py-2.5 rounded-xl text-sm text-white outline-none"
                 style={{ background: '#161618' }}
               />
               <button
-                onClick={handleJoinSearch}
+                onClick={() => loadJoinCompanies(1, joinSearch)}
                 disabled={joinSearching}
                 className="px-4 py-2.5 rounded-xl text-sm font-medium text-white flex items-center gap-2 transition-all"
                 style={{ background: 'linear-gradient(135deg, #C1AEFF, #F9C6FF)', color: '#161618' }}
@@ -485,12 +553,24 @@ export default function Onboarding() {
             </div>
 
             {/* Results */}
-            {joinResults.length > 0 && (
-              <div className="space-y-2">
-                {joinResults.map(r => (
+            {joinSearching && !joinHasLoaded ? (
+              <div className="py-10 flex flex-col items-center gap-3 text-sm" style={{ color: '#5E5E5E' }}>
+                <div className="w-5 h-5 border-2 border-violet-300/30 border-t-violet-300 rounded-full animate-spin" />
+                Loading workspaces...
+              </div>
+            ) : joinCompanies.length > 0 ? (
+              <div
+                className="space-y-2 min-h-[392px] transition-opacity duration-150"
+                style={{ opacity: joinSearching ? 0.55 : 1 }}
+              >
+                {joinCompanies.map(r => {
+                  const industryLabel = r.industry_id
+                    ? INDUSTRIES.find(i => i.id === r.industry_id)?.label ?? r.industry_id
+                    : 'Industry not set';
+                  return (
                   <button
                     key={r.id}
-                    onClick={() => setJoinSelected({ id: r.id, name: r.name })}
+                    onClick={() => setJoinSelected(r)}
                     className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
                       joinSelected?.id === r.id
                         ? 'border-sky-500/40 bg-sky-500/10'
@@ -501,28 +581,61 @@ export default function Onboarding() {
                       <span className="text-sm text-white font-medium">{r.name}</span>
                       {joinSelected?.id === r.id && <Check className="w-4 h-4 text-sky-400" />}
                     </div>
-                    <span className="text-[10px]" style={{ color: '#5E5E5E' }}>{r.stage} · {r.slug}</span>
+                    <span className="text-[10px]" style={{ color: '#5E5E5E' }}>
+                      {r.stage ?? 'Stage not set'} · {industryLabel}{r.country ? ` · ${r.country}` : ''}
+                    </span>
+                    {r.description && (
+                      <p className="text-[11px] mt-1 line-clamp-2" style={{ color: '#4E4E4E' }}>
+                        {r.description}
+                      </p>
+                    )}
                   </button>
-                ))}
+                )})}
+              </div>
+            ) : (
+              <div className="text-center py-8 min-h-[220px] flex flex-col items-center justify-center">
+                <p className="text-sm" style={{ color: '#5E5E5E' }}>
+                  {joinSearch ? 'No workspaces match this filter.' : 'No active workspaces are available yet.'}
+                </p>
+                <button
+                  onClick={() => loadJoinCompanies(1, joinSearch)}
+                  className="text-xs text-violet-400 underline mt-2"
+                >
+                  Refresh list
+                </button>
               </div>
             )}
 
-            {joinResults.length === 0 && joinSearch && !joinSearching && (
-              <p className="text-sm text-center py-2" style={{ color: '#5E5E5E' }}>No workspaces found. Try a different name.</p>
-            )}
-
-            {/* Message */}
-            {joinSelected && (
-              <div>
-                <label className="text-xs mb-1.5 block" style={{ color: '#5E5E5E' }}>Note to the founder (optional)</label>
-                <textarea
-                  value={joinMessage}
-                  onChange={e => setJoinMessage(e.target.value)}
-                  placeholder="e.g. I'm the new growth hire starting Monday..."
-                  rows={3}
-                  className="w-full px-4 py-3 rounded-xl text-sm text-white outline-none resize-none"
-                  style={{ background: '#161618' }}
-                />
+            {joinTotal > 0 && (
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-[10px] truncate" style={{ color: '#5E5E5E' }}>
+                    Showing {joinStart}-{joinEnd} of {joinTotal} · Page {joinPage} of {joinTotalPages}
+                  </span>
+                  {joinSearching && (
+                    <span className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0" style={{ background: '#C1AEFF' }} />
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => loadJoinCompanies(Math.max(1, joinPage - 1), joinSearch)}
+                    disabled={joinSearching || joinPage <= 1}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-35 transition-all"
+                    style={{ background: '#161618', color: '#C1AEFF', border: '1px solid rgba(193,174,255,0.18)' }}
+                  >
+                    Prev
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => loadJoinCompanies(Math.min(joinTotalPages, joinPage + 1), joinSearch)}
+                    disabled={joinSearching || joinPage >= joinTotalPages}
+                    className="px-3 py-1.5 rounded-lg text-xs font-medium disabled:opacity-35 transition-all"
+                    style={{ background: '#161618', color: '#C1AEFF', border: '1px solid rgba(193,174,255,0.18)' }}
+                  >
+                    Next
+                  </button>
+                </div>
               </div>
             )}
 
@@ -534,12 +647,12 @@ export default function Onboarding() {
               className="w-full py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
               style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)', color: '#161618' }}
             >
-              {loading ? 'Sending...' : `Request to Join ${joinSelected?.name ?? 'Workspace'}`}
+              {loading ? 'Joining...' : `Join ${joinSelected?.name ?? 'Workspace'} as Viewer`}
             </button>
 
             <div className="flex items-center gap-2 text-[10px]" style={{ color: '#3E3E3E' }}>
               <Clock className="w-3 h-3" />
-              The founder or admin will approve your request. You'll be notified once done.
+              Viewer access lets you open the dashboard and 3D twin without edit controls.
             </div>
           </div>
         </div>

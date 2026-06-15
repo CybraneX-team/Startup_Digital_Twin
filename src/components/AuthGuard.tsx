@@ -8,6 +8,8 @@ interface AuthGuardProps {
   requireOnboarding?: boolean;
   /** If set, user must have read access to this module */
   requiredModule?: Module;
+  /** Permission action required for the module. Defaults to read. */
+  requiredAction?: 'read' | 'write' | 'delete';
 }
 
 /**
@@ -17,8 +19,8 @@ interface AuthGuardProps {
  * - Missing module permission → /overview with denied notice
  * - Otherwise → renders children
  */
-export default function AuthGuard({ children, requireOnboarding = false, requiredModule }: AuthGuardProps) {
-  const { user, loading, hasCompany, onboardingCompleted, canRead } = useAuth();
+export default function AuthGuard({ children, requireOnboarding = false, requiredModule, requiredAction = 'read' }: AuthGuardProps) {
+  const { user, loading, hasCompany, onboardingCompleted, can: canAccess } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -48,7 +50,7 @@ export default function AuthGuard({ children, requireOnboarding = false, require
   }
 
   // Role-based module gating
-  if (requiredModule && !canRead(requiredModule)) {
+  if (requiredModule && !canAccess(requiredModule, requiredAction)) {
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: '#161618' }}>
         <div className="text-center px-6">

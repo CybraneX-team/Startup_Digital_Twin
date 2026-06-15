@@ -13,10 +13,11 @@ import type { CoreWorkspacePhase } from '../lib/coreWorkspaceTransition';
 import { useVoice } from '../context/VoiceContext';
 
 export default function UniversalPage() {
-  const { profile } = useAuth();
+  const { profile, canWrite } = useAuth();
   const { company } = useCompany(profile?.company_id);
   const store = usePolytopeStore('bdt');
   const { sendContextUpdate } = useVoice();
+  const canEditTwin = canWrite('twin');
 
   /** New session id */
   const [bdtSessionId] = useState(() => Date.now());
@@ -57,31 +58,37 @@ export default function UniversalPage() {
   const [managerView, setManagerView] = useState<any>({ type: 'home' });
 
   const handleEditDepartment = (dept: UExternalNode) => {
+    if (!canEditTwin) return;
     setManagerView({ type: 'editDept', dept });
     setManagerOpen(true);
   };
 
   const handleEditNode = (dept: UExternalNode, node: UInternalNode) => {
+    if (!canEditTwin) return;
     setManagerView({ type: 'editNode', dept, node });
     setManagerOpen(true);
   };
 
   const handleDeleteDepartmentClick = (dept: UExternalNode) => {
+    if (!canEditTwin) return;
     setManagerView({ type: 'deleteDept', dept });
     setManagerOpen(true);
   };
 
   const handleDeleteNodeClick = (dept: UExternalNode, node: UInternalNode) => {
+    if (!canEditTwin) return;
     setManagerView({ type: 'deleteNode', dept, node });
     setManagerOpen(true);
   };
 
   const handleEditMember = (dept: UExternalNode, node: UInternalNode, memberIndex: number) => {
+    if (!canEditTwin) return;
     setManagerView({ type: 'editMember', dept, node, memberIndex });
     setManagerOpen(true);
   };
 
   const handleDeleteMemberClick = (dept: UExternalNode, node: UInternalNode, memberIndex: number) => {
+    if (!canEditTwin) return;
     setManagerView({ type: 'deleteMember', dept, node, memberIndex });
     setManagerOpen(true);
   };
@@ -118,6 +125,7 @@ export default function UniversalPage() {
   // ── Add Department: spawn draft node + show panel ─────────────────────────
   // Camera fly is handled internally by Scene via useEffect on draftNodePos.
   const handleAddDepartment = () => {
+    if (!canEditTwin) return;
     const draftId = `draft_dept_${Date.now()}`;
     const draft: UExternalNode = {
       id: draftId,
@@ -157,6 +165,7 @@ export default function UniversalPage() {
 
   // ── Add Node: spawn draft internal node + show panel ─────────────────────
   const handleAddNode = (deptId: string) => {
+    if (!canEditTwin) return;
     const dept = store.departments.find(d => d.id === deptId);
     if (!dept) return;
     const draftNode: UInternalNode = {
@@ -193,6 +202,7 @@ export default function UniversalPage() {
 
   // ── Add Member: spawn draft member + show panel ─────────────────────
   const handleAddMember = (deptId: string, nodeId: string) => {
+    if (!canEditTwin) return;
     const draftMemberData = {
       name: 'New Member',
       role: 'Member',
@@ -330,7 +340,8 @@ export default function UniversalPage() {
           cameraResetTrigger={polytopeResetTrigger}
           departments={store.departments}
           selectedInternalPath={internalPath}
-          enableCoreWorkspace
+          enableCoreWorkspace={canEditTwin}
+          readOnly={!canEditTwin}
           coreWorkspacePhase={corePhase}
           onCoreClickIntent={handleCoreClickIntent}
           onCoreDiveComplete={handleCoreDiveComplete}
@@ -399,12 +410,13 @@ export default function UniversalPage() {
             onDeleteNodeClick={handleDeleteNodeClick}
             onEditMember={handleEditMember}
             onDeleteMemberClick={handleDeleteMemberClick}
+            canEdit={canEditTwin}
           />
         </div>
       )}
 
       {/* ── Draft Dept Creation Panel ── */}
-      {draftDept && (
+      {canEditTwin && draftDept && (
         <CreateDepartmentPanel
           mode="department"
           draftNodeScreenPosRef={draftDeptScreenPosRef}
@@ -415,7 +427,7 @@ export default function UniversalPage() {
       )}
 
       {/* ── Draft Internal Node Creation Panel ── */}
-      {draftInternalNode && (() => {
+      {canEditTwin && draftInternalNode && (() => {
         const dept = store.departments.find(d => d.id === draftInternalNode.deptId);
         if (!dept) return null;
         return (
@@ -431,7 +443,7 @@ export default function UniversalPage() {
       })()}
 
       {/* ── Draft Member Creation Panel ── */}
-      {draftMember && (() => {
+      {canEditTwin && draftMember && (() => {
         const dept = store.departments.find(d => d.id === draftMember.deptId);
         if (!dept) return null;
         return (
@@ -447,7 +459,7 @@ export default function UniversalPage() {
       })()}
 
       {/* ── CRUD modal — only for edit/delete flows now ── */}
-      <PolytopeManager
+      {canEditTwin && <PolytopeManager
         departments={store.departments}
         onAddDepartment={store.addDepartment}
         onUpdateDepartment={store.updateDepartment}
@@ -465,7 +477,7 @@ export default function UniversalPage() {
         forceOpen={managerOpen}
         forcedView={managerView}
         onForcedClose={() => setManagerOpen(false)}
-      />
+      />}
     </div>
   );
 }
