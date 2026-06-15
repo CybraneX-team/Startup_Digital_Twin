@@ -189,14 +189,47 @@ export function Scene({
   // ── Exit intent (universe BH overlay only — not used for BDT workspace) ───
   const onExitIntentRef = useRef(onExitIntent);
   onExitIntentRef.current = onExitIntent;
+  const scrollAccumulatorRef = useRef(0);
+
+  useEffect(() => {
+    scrollAccumulatorRef.current = 0;
+  }, [selectedId]);
+
   useEffect(() => {
     if (!onExitIntentRef.current) return;
     const handleWheel = (e: WheelEvent) => {
-      if (e.deltaY > 0) onExitIntentRef.current?.();
+      if (e.deltaY <= 0) {
+        scrollAccumulatorRef.current = 0;
+        return;
+      }
+      if (selectedId !== null) return; // Only allow exit from overview
+
+      if (orbitRef.current) {
+        const dist = camera.position.distanceTo(orbitRef.current.target);
+        const maxDist = orbitRef.current.maxDistance || 65;
+        if (dist >= maxDist - 2.5) {
+          scrollAccumulatorRef.current += e.deltaY;
+          if (scrollAccumulatorRef.current >= 300) {
+            onExitIntentRef.current?.();
+          }
+        } else {
+          scrollAccumulatorRef.current = 0;
+        }
+      } else {
+        const currentDist = camera.position.length();
+        if (currentDist >= INITIAL_CAMERA_DISTANCE - 2.5) {
+          scrollAccumulatorRef.current += e.deltaY;
+          if (scrollAccumulatorRef.current >= 300) {
+            onExitIntentRef.current?.();
+          }
+        } else {
+          scrollAccumulatorRef.current = 0;
+        }
+      }
     };
     gl.domElement.addEventListener('wheel', handleWheel, { passive: true });
     return () => gl.domElement.removeEventListener('wheel', handleWheel);
-  }, [gl.domElement]);
+  }, [gl.domElement, camera, selectedId, INITIAL_CAMERA_DISTANCE]);
 
   // ── Camera fly to draft dept node when a new draft is spawned ─────────────
   const prevDraftIdRef = useRef<string | null>(null);
@@ -831,7 +864,7 @@ export function Scene({
         ref={orbitRef}
         makeDefault
         minDistance={5}
-        maxDistance={40}
+        maxDistance={65}
         enablePan={false}
         enabled={coreWorkspacePhase === 'idle' && !isDragging}
       />

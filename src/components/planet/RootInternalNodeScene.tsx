@@ -199,8 +199,14 @@ export function RootInternalNodeScene({
                 onBack();
               }
             }}
-            onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-            onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+            onPointerOver={(e) => {
+              e.stopPropagation();
+              document.body.style.cursor = 'pointer';
+            }}
+            onPointerOut={(e) => {
+              e.stopPropagation();
+              document.body.style.cursor = 'auto';
+            }}
           >
             <sphereGeometry args={[0.7, 16, 16]} />
             <meshBasicMaterial transparent opacity={0} />

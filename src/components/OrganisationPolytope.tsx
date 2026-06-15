@@ -1459,7 +1459,18 @@ function Scene({ onEscNoSelection, companyName, selectedIdx, onSelect }: { onEsc
       <group>
         <OrgCore dimmed={selectedIdx !== null} companyName={companyName} />
         {/* invisible solid sphere used purely as occluder for dept name labels */}
-        <mesh ref={coreRef}>
+        <mesh
+          ref={coreRef}
+          onPointerOver={(e) => {
+            e.stopPropagation();
+          }}
+          onPointerOut={(e) => {
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+        >
           <sphereGeometry args={[1.75, 16, 16]} />
           <meshBasicMaterial color="#000" transparent opacity={0} depthWrite />
         </mesh>

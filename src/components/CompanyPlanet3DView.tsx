@@ -8,6 +8,7 @@ import { gsap } from 'gsap';
 import type { CompanyPlanetContext } from '../data/companyPlanetRoots';
 import { getPlanetNodesAtPath, canDrillInto } from '../data/companyPlanetRoots';
 import { PlasmaSphere } from './PolytopeShared';
+import { useSavedWorkflows, COMPANY_TAG_COLORS } from '../lib/useSavedWorkflows';
 
 
 export interface CompanyPlanet3DViewProps {
@@ -24,6 +25,7 @@ export interface CompanyPlanet3DViewProps {
   zoomOutFromRootId?: string | null;
   /** Called when zoom-out animation finishes */
   onZoomOutComplete?: () => void;
+  coreColor?: string;
 }
 
 const RING_RADIUS = 7.5;
@@ -49,12 +51,14 @@ function SceneContent({
   industryColor = '#C1AEFF',
   zoomOutFromRootId,
   onZoomOutComplete,
+  coreColor = '#C1AEFF',
 }: CompanyPlanet3DViewProps) {
   const { camera } = useThree();
   const orbitRef = useRef<any>(null);
   
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [focusRootId, setFocusRootId] = useState<string | null>(null);
+  
   // Animated values for smooth fade of non-focused nodes
   const fadeProgress = useRef(0); // 0 = all visible, 1 = only focused visible
   const scaleProgress = useRef(1); // scale of the focused node (grows as we zoom in)
@@ -246,14 +250,14 @@ function SceneContent({
 
         {/* Center Orb */}
         <group ref={coreRef}>
-          <PlasmaSphere color={industryColor} radius={CORE_RADIUS} opacity={0.65} glowIntensity={0.7} />
+          <PlasmaSphere color={coreColor} radius={CORE_RADIUS} opacity={0.65} glowIntensity={0.7} />
           
           <Html position={[0, -CORE_RADIUS - 0.5, 0]} center zIndexRange={[100, 0]}>
             <div
               className="px-3 py-1 rounded-full text-white font-bold text-sm text-center"
               style={{
                 background: 'rgba(4,4,12,0.85)',
-                border: `1px solid ${industryColor}80`,
+                border: `1px solid ${coreColor}80`,
                 backdropFilter: 'blur(9px)',
                 pointerEvents: 'none',
                 minWidth: 'max-content',
@@ -345,6 +349,13 @@ function SceneContent({
 }
 
 export default function CompanyPlanet3DView(props: CompanyPlanet3DViewProps) {
+  const { items } = useSavedWorkflows();
+  const savedItem = items.find(
+    i => i.level === 'planet' && i.companyId === props.context.companyId && i.role === props.context.role
+  );
+  const activeTag = savedItem?.planetTag;
+  const coreColor = activeTag ? COMPANY_TAG_COLORS[activeTag] : props.industryColor || '#C1AEFF';
+
   return (
     <div 
       className="absolute inset-0 z-30"
@@ -356,7 +367,7 @@ export default function CompanyPlanet3DView(props: CompanyPlanet3DViewProps) {
         gl={{ antialias: true, alpha: true }}
         style={{ background: 'transparent' }}
       >
-        <SceneContent {...props} />
+        <SceneContent {...props} coreColor={coreColor} />
       </Canvas>
       {props.depth > 0 && (
         <button

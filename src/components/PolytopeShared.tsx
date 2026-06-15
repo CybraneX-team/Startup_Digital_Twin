@@ -58,7 +58,17 @@ export function OrgCore({
     >
       {/* Plasma Sphere Core — click or zoom to open workspace (BDT) */}
       <group ref={meshRef}>
-        <mesh>
+        <mesh
+          onPointerOver={(e) => {
+            e.stopPropagation();
+          }}
+          onPointerOut={(e) => {
+            e.stopPropagation();
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+          }}
+        >
           <sphereGeometry args={[1.35, 32, 32]} />
           <meshBasicMaterial visible={false} />
         </mesh>
