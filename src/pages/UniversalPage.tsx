@@ -15,6 +15,7 @@ import { useVoice } from '../context/VoiceContext';
 
 export default function UniversalPage() {
   const { profile, canWrite } = useAuth();
+  const canEditTwin = canWrite('twin');
   const { company } = useCompany(profile?.company_id);
   const store = usePolytopeStore('bdt');
   const { sendContextUpdate, voiceState, toggle, intensityRef } = useVoice();

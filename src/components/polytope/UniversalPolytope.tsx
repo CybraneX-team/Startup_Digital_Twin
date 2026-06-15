@@ -50,6 +50,7 @@ export interface UniversalPolytopeProps {
   /** Which persisted graph to use when `departments` is not passed (default: twin /3d) */
   storeScope?: PolytopeStoreScope;
   voiceIntensityRef?: MutableRefObject<number>;
+  readOnly?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -80,6 +81,7 @@ export default function UniversalPolytope({
   onCoreSurfaceComplete,
   storeScope = 'twin',
   voiceIntensityRef,
+  readOnly = false,
 }: UniversalPolytopeProps) {
   const [selectedId, setSelectedIdRaw] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
