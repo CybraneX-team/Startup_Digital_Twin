@@ -526,6 +526,8 @@ function ThinkingBlock({ content }: { content: string }) {
   );
 }
 
+
+
 function WorkspaceChatCopilot() {
   const {
     goals,
@@ -559,8 +561,8 @@ function WorkspaceChatCopilot() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stagedFile, setStagedFile] = useState<File | null>(null);
-  const [selectedModel] = useState('gemini-3.5-flash');
-  const [reasoningLevel] = useState('standard');
+  const selectedModel: string = 'gemini-3.5-flash';
+  const reasoningLevel: string = 'standard';
 
   const [activeView, setActiveView] = useState<'upload' | 'nodes'>('upload');
   const [showNodesDrawer, setShowNodesDrawer] = useState(false);
@@ -627,14 +629,14 @@ function WorkspaceChatCopilot() {
 
     if (voiceDriverId.current) cancelAnimationFrame(voiceDriverId.current);
     const listenStartTime = performance.now();
-    
+
     const driveListening = () => {
       const elapsed = (performance.now() - listenStartTime) / 1000;
       if (elapsed > 3.5) {
         setVoiceState('thinking');
         setVoiceText('Analyzing audio query...');
         const thinkStartTime = performance.now();
-        
+
         const driveThinking = () => {
           const thinkElapsed = (performance.now() - thinkStartTime) / 1000;
           if (thinkElapsed > 1.5) {
@@ -699,7 +701,7 @@ function WorkspaceChatCopilot() {
         voiceDriverId.current = requestAnimationFrame(driveThinking);
         return;
       }
-      
+
       voiceIntensityRef.current = 0.2 + 0.55 * Math.abs(Math.sin(elapsed * 7.5)) * (0.6 + 0.4 * Math.cos(elapsed * 2.8));
       voiceDriverId.current = requestAnimationFrame(driveListening);
     };
@@ -920,11 +922,10 @@ function WorkspaceChatCopilot() {
           <button
             type="button"
             onClick={() => setIsVoiceChat(!isVoiceChat)}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer border ${
-              isVoiceChat
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-semibold transition-all cursor-pointer border ${isVoiceChat
                 ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300 hover:bg-indigo-500/20 hover:text-white'
                 : 'bg-white/[0.03] border-white/10 hover:border-white/20 text-white/70 hover:text-white'
-            }`}
+              }`}
           >
             {isVoiceChat ? (
               <>
@@ -1001,13 +1002,12 @@ function WorkspaceChatCopilot() {
       {/* Main Content Area */}
       <div className="flex-1 min-h-0 relative">
         {/* Voice Chat View (Always mounted to prevent glitched WebGL re-initializations) */}
-        <div 
-          className={`absolute inset-0 flex flex-col items-center justify-center p-6 select-none bg-[#09090b]/40 transition-all duration-300 ${
-            isVoiceChat ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'
-          }`}
+        <div
+          className={`absolute inset-0 flex flex-col items-center justify-center p-6 select-none bg-[#09090b]/40 transition-all duration-300 ${isVoiceChat ? 'opacity-100 z-10 pointer-events-auto' : 'opacity-0 z-0 pointer-events-none'
+            }`}
         >
           <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-500/5 via-transparent to-transparent pointer-events-none" />
-          
+
           <div className="w-64 h-64 relative flex items-center justify-center">
             <Orb
               hoverIntensity={0}
@@ -1020,16 +1020,15 @@ function WorkspaceChatCopilot() {
           </div>
 
           <div className="mt-8 flex flex-col items-center gap-2 z-10 max-w-sm">
-            <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${
-              voiceState === 'listening' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20 animate-pulse' :
-              voiceState === 'thinking' ? 'text-purple-400 bg-purple-500/10 border-purple-500/20 animate-pulse' :
-              voiceState === 'speaking' ? 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20' :
-              'text-white/40 bg-white/5 border-white/10'
-            }`}>
+            <span className={`text-[10px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-full border transition-colors ${voiceState === 'listening' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20 animate-pulse' :
+                voiceState === 'thinking' ? 'text-purple-400 bg-purple-500/10 border-purple-500/20 animate-pulse' :
+                  voiceState === 'speaking' ? 'text-indigo-400 bg-indigo-500/10 border-indigo-500/20' :
+                    'text-white/40 bg-white/5 border-white/10'
+              }`}>
               {voiceState === 'listening' ? 'Listening' :
-               voiceState === 'thinking' ? 'Analyzing' :
-               voiceState === 'speaking' ? 'Speaking' :
-               'Ready'}
+                voiceState === 'thinking' ? 'Analyzing' :
+                  voiceState === 'speaking' ? 'Speaking' :
+                    'Ready'}
             </span>
             <p className="text-xs text-white/90 font-medium text-center h-12 leading-relaxed px-4 transition-all duration-300">
               {voiceText}
@@ -1041,13 +1040,12 @@ function WorkspaceChatCopilot() {
             <button
               type="button"
               onClick={startVoiceInteraction}
-              className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-300 cursor-pointer shadow-lg shadow-black/40 ${
-                voiceState === 'listening'
+              className={`w-14 h-14 rounded-full flex items-center justify-center border transition-all duration-300 cursor-pointer shadow-lg shadow-black/40 ${voiceState === 'listening'
                   ? 'bg-rose-500 text-white border-rose-400 hover:bg-rose-600 scale-105 animate-pulse'
                   : voiceState === 'speaking'
-                  ? 'bg-indigo-500 text-white border-indigo-400 hover:bg-indigo-600'
-                  : 'bg-white/5 text-white/80 border-white/10 hover:bg-white/10 hover:text-white hover:scale-105'
-              }`}
+                    ? 'bg-indigo-500 text-white border-indigo-400 hover:bg-indigo-600'
+                    : 'bg-white/5 text-white/80 border-white/10 hover:bg-white/10 hover:text-white hover:scale-105'
+                }`}
               title={voiceState === 'idle' ? 'Start voice query' : 'Stop voice query'}
             >
               {voiceState === 'listening' ? (
@@ -1062,10 +1060,9 @@ function WorkspaceChatCopilot() {
         </div>
 
         {/* Original Text Chat View (Always mounted to keep scroll position & state) */}
-        <div 
-          className={`absolute inset-0 flex flex-col min-h-0 transition-all duration-300 ${
-            isVoiceChat ? 'opacity-0 z-0 pointer-events-none' : 'opacity-100 z-10 pointer-events-auto'
-          }`}
+        <div
+          className={`absolute inset-0 flex flex-col min-h-0 transition-all duration-300 ${isVoiceChat ? 'opacity-0 z-0 pointer-events-none' : 'opacity-100 z-10 pointer-events-auto'
+            }`}
         >
           {/* Messages list */}
           <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0 ws-chat-messages-container">
@@ -1218,8 +1215,8 @@ function WorkspaceChatCopilot() {
                   type="button"
                   onClick={() => setActiveView('upload')}
                   className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${activeView === 'upload'
-                      ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300 shadow-lg shadow-indigo-500/5'
-                      : 'bg-white/[0.02] border-white/5 text-white/45 hover:text-white/80 hover:bg-white/[0.04]'
+                    ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300 shadow-lg shadow-indigo-500/5'
+                    : 'bg-white/[0.02] border-white/5 text-white/45 hover:text-white/80 hover:bg-white/[0.04]'
                     }`}
                 >
                   File Upload
@@ -1228,8 +1225,8 @@ function WorkspaceChatCopilot() {
                   type="button"
                   onClick={() => setActiveView('nodes')}
                   className={`px-3 py-1.5 rounded-full text-[10px] font-bold border transition-all cursor-pointer ${activeView === 'nodes'
-                      ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300 shadow-lg shadow-indigo-500/5'
-                      : 'bg-white/[0.02] border-white/5 text-white/45 hover:text-white/80 hover:bg-white/[0.04]'
+                    ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-300 shadow-lg shadow-indigo-500/5'
+                    : 'bg-white/[0.02] border-white/5 text-white/45 hover:text-white/80 hover:bg-white/[0.04]'
                     }`}
                 >
                   Saved Nodes
@@ -1301,21 +1298,7 @@ function WorkspaceChatCopilot() {
                   className="flex-1 bg-transparent text-xs text-white placeholder-white/35 focus:outline-none min-w-0"
                 />
 
-                {/* Toolbar controls inside the input wrapper on the right (Commented out)
-                <div className="flex items-center gap-1.5 shrink-0 ml-2">
-                  <CustomDropdown
-                    value={selectedModel}
-                    onChange={setSelectedModel}
-                    options={modelOptions}
-                  />
 
-                  <CustomDropdown
-                    value={reasoningLevel}
-                    onChange={setReasoningLevel}
-                    options={reasoningOptions}
-                  />
-                </div>
-                */}
               </div>
 
               {/* Attach Button (outside) */}

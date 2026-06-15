@@ -32,6 +32,8 @@ export interface SceneProps {
   onPathChange: (path: string[]) => void;
   setBackInfo: (info: { label: string; onClick: () => void } | null) => void;
   companyName: string;
+  industryName?: string;
+  subdomainName?: string;
   hoveredId: string | null;
   setHoveredId: (id: string | null) => void;
   departments: UExternalNode[];
@@ -58,6 +60,7 @@ export interface SceneProps {
   onCoreClickIntent?: () => void;
   onCoreDiveComplete?: () => void;
   onCoreSurfaceComplete?: () => void;
+  voiceIntensityRef?: MutableRefObject<number>;
 }
 
 function findNodePosition(
@@ -123,6 +126,8 @@ export function Scene({
   onPathChange,
   setBackInfo,
   companyName,
+  industryName,
+  subdomainName,
   hoveredId,
   setHoveredId,
   departments,
@@ -142,6 +147,7 @@ export function Scene({
   onCoreClickIntent,
   onCoreDiveComplete,
   onCoreSurfaceComplete,
+  voiceIntensityRef,
 }: SceneProps) {
   const isDragging = useDragWorkspaceStore(s => s.isDragging);
   const diveBlendRef = useRef({ value: 0 });
@@ -302,7 +308,7 @@ export function Scene({
     }
     tl.to(
       camera.position,
-      { x: 0, y: 0, z: 2.15, duration: CORE_DIVE_DURATION_S, ease: 'power4.inOut' },
+      { x: 0, y: 0, z: 4.3, duration: CORE_DIVE_DURATION_S, ease: 'power4.inOut' },
       0,
     );
   };
@@ -548,6 +554,9 @@ export function Scene({
 
   // ── Per-frame updates ─────────────────────────────────────────────────────
   useFrame(() => {
+    if (coreWorkspacePhase !== 'idle' && orbitRef.current) {
+      orbitRef.current.update();
+    }
     camera.getWorldPosition(cameraPosRef.current);
     const dive = diveBlendRef.current.value;
     if (facesMatRef.current) {
@@ -563,7 +572,7 @@ export function Scene({
     }
     if (coreGroupRef.current) {
       const deepScale = selectedId !== null ? 0.0 : 1.0;
-      const diveScale = 1 + dive * 2.8;
+      const diveScale = 1.0;
       const targetScale = deepScale * diveScale;
       coreGroupRef.current.scale.lerp(
         new THREE.Vector3(targetScale, targetScale, targetScale),
@@ -711,6 +720,8 @@ export function Scene({
           <OrgCore
             dimmed={selectedId !== null && coreWorkspacePhase === 'idle'}
             companyName={companyName}
+            industryName={industryName}
+            subdomainName={subdomainName}
             isDeepDrillDown={isDeepDrillDown}
             showWorkspaceCta={
               enableCoreWorkspace &&
@@ -720,6 +731,9 @@ export function Scene({
               !draftDept
             }
             onClick={enableCoreWorkspace ? handleCoreClick : undefined}
+            voiceIntensityRef={voiceIntensityRef}
+            hideCompanyName={coreWorkspacePhase !== 'idle'}
+            coreWorkspacePhase={coreWorkspacePhase}
           />
         </group>
 

@@ -21,6 +21,7 @@ export interface UniverseGalaxySidebarProps {
   searchInputRef: RefObject<HTMLInputElement | null>;
   canReadEcosystem: boolean;
   onNavigateEcosystem: (path: '/ecosystem/vc-connect' | '/ecosystem/network') => void;
+  onBackClick?: () => void;
   className?: string;
 }
 
@@ -36,6 +37,7 @@ export function UniverseGalaxySidebar({
   searchInputRef,
   canReadEcosystem,
   onNavigateEcosystem,
+  onBackClick,
   className = '',
 }: UniverseGalaxySidebarProps) {
   const backTarget = searchQuery.trim() ? null : getUniverseBackLabel(currentLevel, navPath);
@@ -71,7 +73,13 @@ export function UniverseGalaxySidebar({
       {backTarget && (
         <UniverseNavBackButton
           label={`Back to ${backTarget}`}
-          onClick={() => controllerRef.current?.goBack()}
+          onClick={() => {
+            if (onBackClick) {
+              onBackClick();
+            } else {
+              controllerRef.current?.goBack();
+            }
+          }}
         />
       )}
 

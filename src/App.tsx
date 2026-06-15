@@ -30,7 +30,7 @@ import UniversalPage from './pages/UniversalPage';
 import WorkspacePage from './pages/WorkspacePage';
 import SavedWorkflows from './pages/SavedWorkflows';
 import { VoiceProvider } from './context/VoiceContext';
-import VoiceOrb from './components/VoiceOrb';
+
 
 function FullPageLoader() {
   return (
@@ -304,8 +304,6 @@ function AppRoutes() {
         </div>
       </div>
 
-      {/* Global voice orb — floats above all layers (z-55) on all authenticated pages */}
-      {isFullyAuthed && <VoiceOrb />}
       </>
     </VoiceProvider>
   );

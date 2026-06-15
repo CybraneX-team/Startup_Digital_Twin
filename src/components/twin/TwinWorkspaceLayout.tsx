@@ -68,9 +68,13 @@ export function TwinWorkspaceLayout({ phase, onClose }: TwinWorkspaceLayoutProps
           <span className="twin-workspace-close__label">Close Workspace</span>
         </button>
 
+        <div className="twin-workspace-fullscreen-hover-zone" />
+
         <div className={`twin-workspace-panel twin-workspace-panel--left ${panelMotionClass}`}>
           <WorkspaceLeftPanel className="h-full" />
         </div>
+
+        <div className="twin-workspace-fullscreen-hover-zone-right" />
 
         <div className={`twin-workspace-panel twin-workspace-panel--right ${panelMotionClass}`}>
           <WorkspaceRightPanel className="h-full max-h-full" />

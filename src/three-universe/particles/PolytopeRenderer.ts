@@ -1,6 +1,8 @@
 // @ts-nocheck
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three/addons/geometries/ConvexGeometry.js';
+import starVertexShader from '../shaders/star/vertex.glsl';
+import starFragmentShader from '../shaders/star/fragment.glsl';
 
 export class PolytopeRenderer {
   constructor(scene) {
@@ -28,9 +30,21 @@ export class PolytopeRenderer {
     const centerCol = new THREE.Color(baseColor).lerp(new THREE.Color(0xffffff), 0.5);
 
     // 1. Organisation Core
-    const coreGeo = new THREE.SphereGeometry(15, 32, 32);
-    const coreMat = new THREE.MeshBasicMaterial({ color: centerCol, transparent: true, opacity: 0.8 });
-    const core = new THREE.Mesh(coreGeo, coreMat);
+    this.coreMat = new THREE.ShaderMaterial({
+      vertexShader: starVertexShader,
+      fragmentShader: starFragmentShader,
+      uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: centerCol },
+        uIntensity: { value: 0.65 },
+        uAudio: { value: 0 },
+      },
+      transparent: true,
+    });
+    const coreGeo = new THREE.IcosahedronGeometry(15, 6);
+    const core = new THREE.Mesh(coreGeo, this.coreMat);
+    core.userData = { type: 'polytope_core' };
+    this.coreMesh = core;
     this.group.add(core);
     this.currentMeshes.push(core);
 
@@ -160,6 +174,9 @@ export class PolytopeRenderer {
       // Gentle floating rotation
       this.group.rotation.y = elapsed * 0.05;
       this.group.rotation.x = Math.sin(elapsed * 0.1) * 0.1;
+      if (this.coreMat) {
+        this.coreMat.uniforms.uTime.value = elapsed;
+      }
   }
 
   _clear() {

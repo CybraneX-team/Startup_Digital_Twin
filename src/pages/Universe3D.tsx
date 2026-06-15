@@ -62,7 +62,27 @@ export default function Universe3DPage() {
     ? profile?.first_name ? `${profile.first_name}'s workspace` : 'My workspace'
     : 'My Organisation');
 
-  const { sendContextUpdate } = useVoice();
+  const bhIndustryName = useMemo(() => {
+    if (!company?.industry_id || !data?.industries) return '';
+    const ind = data.industries.find(i => i.id === company.industry_id);
+    return ind?.name || '';
+  }, [company?.industry_id, data?.industries]);
+
+  const bhSubdomainName = useMemo(() => {
+    if (!company?.industry_id || !company?.subdomain_id || !data?.industries) return '';
+    const ind = data.industries.find(i => i.id === company.industry_id);
+    const sub = ind?.subdomains.find(s => s.id === company.subdomain_id);
+    return sub?.name || '';
+  }, [company?.industry_id, company?.subdomain_id, data?.industries]);
+
+  const { sendContextUpdate, voiceState, intensityRef, toggle } = useVoice();
+
+  const handleIndustryCoreVoiceToggle = useCallback((_industry: any, active: boolean) => {
+    const isVoiceRunning = voiceState !== 'idle';
+    if (active !== isVoiceRunning) {
+      toggle();
+    }
+  }, [voiceState, toggle]);
 
   const controllerRef = useRef<UniverseController | null>(null);
   const [navPath, setNavPath] = useState<NavPathEntry[]>([]);
@@ -78,6 +98,55 @@ export default function Universe3DPage() {
   const [bhEntryCount, setBhEntryCount] = useState(0);
 
   const [twinWorkspacePhase, setTwinWorkspacePhase] = useState<TwinWorkspacePhase>('closed');
+
+  const [coreTooltip, setCoreTooltip] = useState({ visible: false, x: 0, y: 0, color: '#a855f7', level: 'industry' });
+
+  const [polytopeWorkspacePhase, setPolytopeWorkspacePhase] = useState<any>('idle');
+
+  useEffect(() => {
+    if (insideBH && bhMounted) {
+      if (voiceState === 'idle' && polytopeWorkspacePhase === 'workspace') {
+        setPolytopeWorkspacePhase('surfacing');
+      } else if (voiceState !== 'idle' && polytopeWorkspacePhase === 'idle') {
+        setPolytopeWorkspacePhase('diving-in');
+      }
+    }
+  }, [insideBH, bhMounted, voiceState, polytopeWorkspacePhase]);
+
+  const handlePolytopeCoreClick = useCallback(() => {
+    if (voiceState === 'idle') {
+      handleIndustryCoreVoiceToggle(null, true);
+    } else {
+      handleIndustryCoreVoiceToggle(null, false);
+    }
+  }, [voiceState, handleIndustryCoreVoiceToggle]);
+
+  const handlePolytopeDiveComplete = useCallback(() => {
+    if (polytopeWorkspacePhase === 'diving-in') {
+      setPolytopeWorkspacePhase('workspace');
+    }
+  }, [polytopeWorkspacePhase]);
+
+  const handlePolytopeSurfaceComplete = useCallback(() => {
+    if (polytopeWorkspacePhase === 'surfacing') {
+      setPolytopeWorkspacePhase('idle');
+    }
+  }, [polytopeWorkspacePhase]);
+
+  useEffect(() => {
+    const isVoiceRunning = voiceState !== 'idle';
+    if (hoverTarget?.type === 'core' && hoverTarget.screenX != null && hoverTarget.screenY != null && !isVoiceRunning) {
+      setCoreTooltip({
+        visible: true,
+        x: hoverTarget.screenX,
+        y: hoverTarget.screenY,
+        color: hoverTarget.industry?.color || '#a855f7',
+        level: hoverTarget.level || 'industry'
+      });
+    } else {
+      setCoreTooltip(prev => ({ ...prev, visible: false }));
+    }
+  }, [hoverTarget, voiceState]);
   const openWorkspacePendingRef = useRef(false);
   const twinWorkspaceTimerRef = useRef<number | null>(null);
 
@@ -278,7 +347,7 @@ export default function Universe3DPage() {
     setInsideBH(true);
     setBhTransitioning(true);
     setBhEntryCount(c => c + 1);
-    
+
     // Disable pointer events during the 1.4s fade-in transition
     // to prevent scroll momentum from zooming inside the polytope camera
     setTimeout(() => {
@@ -358,11 +427,11 @@ export default function Universe3DPage() {
     industry: UniverseIndustry;
     subdomain: UniverseSubdomain;
   }) => {
-    const planetRole: UserPlanetRole = 
-      (authRole === 'vc' || localStorage.getItem('active_role') === 'vc') ? 'vc' : 
-      (authRole === 'founder' || authRole === 'co_founder' || authRole === 'admin') ? 'founder' : 
-      'career';
-      
+    const planetRole: UserPlanetRole =
+      (authRole === 'vc' || localStorage.getItem('active_role') === 'vc') ? 'vc' :
+        (authRole === 'founder' || authRole === 'co_founder' || authRole === 'admin') ? 'founder' :
+          'career';
+
     const pCtx = getPlanetRootsForCompany(ctx.company.id, ctx.company.name, planetRole);
     setPlanetContext(pCtx);
     setPlanetIndustryColor(ctx.industry.color);
@@ -439,7 +508,7 @@ export default function Universe3DPage() {
 
   // ── Action Node Workspace ──────────────────────────────────────────────────
   const [actionWorkspace, setActionWorkspace] = useState<{
-      rootId: string;
+    rootId: string;
     branchId: string;
     actionId: string;
   } | null>(null);
@@ -459,16 +528,16 @@ export default function Universe3DPage() {
     if (pathname === '/3d' && state?.actionWorkspaceContext) {
       const item = state.actionWorkspaceContext;
       const ctx = getPlanetRootsForCompany(item.companyId, item.companyName, item.role);
-      
+
       setPlanetContext(ctx);
       setInsidePlanetRoots(true);
-      
+
       setRootPolytopeMounted(true);
       setRootPolytopeDepts(rootsToPolytopeDepartments(ctx.roots));
       setRootPolytopeDeptId(item.rootId);
       setRootPolytopeInternalPath([item.branchId, item.actionId]);
       setInsideRootPolytope(true);
-      
+
       setActionWorkspace({
         rootId: item.rootId,
         branchId: item.branchId,
@@ -838,6 +907,8 @@ export default function Universe3DPage() {
             onExitCompanyPolytope={handleExitCompanyPolytope}
             onCompanyAwaitingRole={handleCompanyAwaitingRole}
             controllerRef={controllerRef}
+            voiceIntensityRef={intensityRef}
+            onIndustryCoreVoiceToggle={handleIndustryCoreVoiceToggle}
           />
         </div>
       )}
@@ -870,6 +941,8 @@ export default function Universe3DPage() {
         {bhMounted && (
           <UniversalPolytope
             companyName={bhCompanyName}
+            industryName={bhIndustryName}
+            subdomainName={bhSubdomainName}
             storeScope="twin"
             onExitIntent={handleBHExitIntent}
             transparent={true}
@@ -886,6 +959,12 @@ export default function Universe3DPage() {
             draftMemberScreenPosRef={polytopeDraftMemberScreenPosRef}
             departments={polytopeStore.departments}
             selectedInternalPath={polytopeInternalPath}
+            enableCoreWorkspace={true}
+            coreWorkspacePhase={polytopeWorkspacePhase}
+            onCoreClickIntent={handlePolytopeCoreClick}
+            onCoreDiveComplete={handlePolytopeDiveComplete}
+            onCoreSurfaceComplete={handlePolytopeSurfaceComplete}
+            voiceIntensityRef={intensityRef}
           />
         )}
       </div>
@@ -916,8 +995,8 @@ export default function Universe3DPage() {
             path={[]}
             requestFocusRootId={requestFocusRootId}
             onFocusTransitionComplete={handleRootFocusTransitionComplete}
-            onDrillInto={() => {}}
-            onDrillBack={() => {}}
+            onDrillInto={() => { }}
+            onDrillBack={() => { }}
             onActionNodeClick={handleActionNodeClick}
             industryColor={planetIndustryColor}
             zoomOutFromRootId={zoomOutFromRootId}
@@ -1007,7 +1086,7 @@ export default function Universe3DPage() {
                 onRootSelect={handlePlanetRootSelect}
                 onBranchSelect={handlePlanetBranchSelect}
                 onActionSelect={handleActionNodeClick}
-                onDrillBack={() => {}}
+                onDrillBack={() => { }}
                 onExitToSubdomain={handleExitPlanetRoots}
                 exitToSubdomainLabel={navPath.find(p => p.level === 'subdomain')?.name ?? 'Subdomain'}
                 searchQuery={planetSearchQuery}
@@ -1016,48 +1095,47 @@ export default function Universe3DPage() {
                 onRoleChange={handleRoleChange}
               />
             </div>
-          ) : (insideBH || insideCompanyInterior) ? (
+          ) : (insideBH || insideCompanyInterior) && voiceState === 'idle' ? (
             <div className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3">
               <PolytopeSidePanel
-              departments={polytopeStore.departments}
-              selectedDeptId={insideBH ? polytopeDeptId : (companyInteriorPath[0] ?? null)}
-              onDeptSelect={insideBH ? handlePolytopeSidebarDeptSelect : (id) => {
-                if (id === null) {
-                  controllerRef.current?.drillInteriorBack?.();
+                departments={polytopeStore.departments}
+                selectedDeptId={insideBH ? polytopeDeptId : (companyInteriorPath[0] ?? null)}
+                onDeptSelect={insideBH ? handlePolytopeSidebarDeptSelect : (id) => {
+                  if (id === null) {
+                    controllerRef.current?.drillInteriorBack?.();
+                  }
+                }}
+                selectedInternalPath={insideBH ? polytopeInternalPath : companyInteriorPath.slice(1)}
+                onAddDepartment={handlePolytopeAddDepartment}
+                onAddNode={handlePolytopeAddNode}
+                onInternalBack={insideBH
+                  ? () => setPolytopeInternalBackStep(c => c + 1)
+                  : () => controllerRef.current?.drillInteriorBack?.()
                 }
-              }}
-              selectedInternalPath={insideBH ? polytopeInternalPath : companyInteriorPath.slice(1)}
-              onAddDepartment={handlePolytopeAddDepartment}
-              onAddNode={handlePolytopeAddNode}
-              onInternalBack={insideBH
-                ? () => setPolytopeInternalBackStep(c => c + 1)
-                : () => controllerRef.current?.drillInteriorBack?.()
-              }
-              onExitToSubdomain={insideCompanyInterior ? handleExitCompanyInterior : handleBHExitIntent}
-              exitToSubdomainLabel={
-                insideCompanyInterior
-                  ? (navPath.find(p => p.level === 'subdomain')?.name ?? 'Subdomain')
-                  : 'Galaxy'
-              }
-              onUpdateDepartment={polytopeStore.updateDepartment}
-              onDeleteDepartment={polytopeStore.deleteDepartment}
-              onUpdateNode={polytopeStore.updateNode}
-              onDeleteNode={polytopeStore.deleteNode}
-              onNodeSelect={insideBH ? setPolytopeInternalPath : () => {}}
-              onEditDepartment={handleEditDepartment}
-              onEditNode={handleEditNode}
-              onDeleteDepartmentClick={handleDeleteDepartmentClick}
-              onDeleteNodeClick={handleDeleteNodeClick}
-              onAddMember={handlePolytopeAddMember}
-              onEditMember={handleEditMember}
-              onDeleteMemberClick={handleDeleteMemberClick}
-            />
+                onExitToSubdomain={insideCompanyInterior ? handleExitCompanyInterior : handleBHExitIntent}
+                exitToSubdomainLabel={
+                  insideCompanyInterior
+                    ? (navPath.find(p => p.level === 'subdomain')?.name ?? 'Subdomain')
+                    : 'Galaxy'
+                }
+                onUpdateDepartment={polytopeStore.updateDepartment}
+                onDeleteDepartment={polytopeStore.deleteDepartment}
+                onUpdateNode={polytopeStore.updateNode}
+                onDeleteNode={polytopeStore.deleteNode}
+                onNodeSelect={insideBH ? setPolytopeInternalPath : () => { }}
+                onEditDepartment={handleEditDepartment}
+                onEditNode={handleEditNode}
+                onDeleteDepartmentClick={handleDeleteDepartmentClick}
+                onDeleteNodeClick={handleDeleteNodeClick}
+                onAddMember={handlePolytopeAddMember}
+                onEditMember={handleEditMember}
+                onDeleteMemberClick={handleDeleteMemberClick}
+              />
             </div>
           ) : twinWorkspacePhase === 'closed' || twinWorkspacePhase === 'zooming' ? (
             <div
-              className={`universe-galaxy-sidebar-host universe-galaxy-sidebar-host--float ${
-                twinWorkspacePhase === 'zooming' ? 'universe-galaxy-sidebar-host--exit' : ''
-              }`}
+              className={`universe-galaxy-sidebar-host universe-galaxy-sidebar-host--float ${twinWorkspacePhase === 'zooming' ? 'universe-galaxy-sidebar-host--exit' : ''
+                }`}
             >
               <UniverseGalaxySidebar
                 data={data}
@@ -1070,6 +1148,13 @@ export default function Universe3DPage() {
                 searchInputRef={searchInputRef}
                 canReadEcosystem={canRead('ecosystem')}
                 onNavigateEcosystem={path => navigate(path)}
+                onBackClick={() => {
+                  if (voiceState !== 'idle') {
+                    toggle();
+                  } else {
+                    controllerRef.current?.goBack();
+                  }
+                }}
               />
             </div>
           ) : null}
@@ -1188,8 +1273,24 @@ export default function Universe3DPage() {
         );
       })()}
 
+      {/* Floating tooltip above industry core — "Click to interact with WorkOS AI" */}
+      <div
+        className={`absolute z-30 pointer-events-none transition duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)]`}
+        style={{
+          left: coreTooltip.x,
+          top: coreTooltip.y - (coreTooltip.level === 'subdomain' ? 50 : 90),
+          transform: `translateX(-50%) scale(${coreTooltip.visible ? 1 : 0.5}) translateY(${coreTooltip.visible ? 0 : 20}px)`,
+          transformOrigin: 'bottom center',
+          opacity: coreTooltip.visible ? 1 : 0,
+          visibility: (coreTooltip.x === 0 && coreTooltip.y === 0) ? 'hidden' : 'visible'
+        }}
+      >
+        <div className="whitespace-nowrap">
+          <p className="text-[11px] font-medium text-center" style={{ color: coreTooltip.color, textShadow: `0px 2px 4px rgba(0,0,0,0.8), 0px 0px 2px ${coreTooltip.color}` }}>Click to interact with WorkOS AI</p>
+        </div>
+      </div>
       {/* Hover detail panel — right side */}
-      {hoverTarget && hoverTarget.type && hoverTarget.type !== 'company' && (
+      {hoverTarget && hoverTarget.type && hoverTarget.type !== 'company' && hoverTarget.type !== 'core' && (
         <div
           className="absolute top-[4.5rem] right-6 w-60 p-4 z-20 rounded-xl border border-slate-700/40 backdrop-blur-xl"
           style={{ background: 'rgba(0, 0, 0, 0.75)' }}
@@ -1244,7 +1345,7 @@ export default function Universe3DPage() {
             <h3 className="text-xs font-bold text-white mb-1.5 px-1 truncate text-center">
               {hoverTarget.company?.name}
             </h3>
-            <CompanyTagDropdown 
+            <CompanyTagDropdown
               companyId={hoverTarget.company?.id}
               companyName={hoverTarget.company?.name}
               industryColor={hoverTarget.industry?.color}
@@ -1289,6 +1390,17 @@ export default function Universe3DPage() {
         activeRootDept={activeRootDept}
         internalPath={rootPolytopeInternalPath}
       />
+
+      {/* Back button when Voice AI is active inside BH */}
+      {insideBH && voiceState !== 'idle' && (
+        <button
+          onClick={() => toggle()}
+          className="fixed top-20 left-6 z-[60] flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-purple-500/30"
+          style={{ background: 'rgba(0,0,0,0.55)', borderColor: 'rgba(148,163,184,0.1)' }}
+        >
+          &larr; Back to Polytope
+        </button>
+      )}
     </div>
   );
 }

@@ -2,6 +2,9 @@ import { useRef, useMemo } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Text, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
+import starVertexShader from '../three-universe/shaders/star/vertex.glsl';
+import starFragmentShader from '../three-universe/shaders/star/fragment.glsl';
+import { VoicePlasmaWeb } from './polytope/VoicePlasmaWeb';
 
 /* ─────────────────────────────────
    ORG CORE — large luminous nucleus with company name
@@ -9,15 +12,26 @@ import * as THREE from 'three';
 export function OrgCore({
   dimmed,
   companyName,
+  subdomainName: _subdomainName,
+  industryName: _industryName,
   isDeepDrillDown = false,
   showWorkspaceCta = false,
+  voiceIntensityRef,
+  onClick,
+  hideCompanyName = false,
+  coreWorkspacePhase = 'idle',
 }: {
   dimmed: boolean;
   companyName: string;
+  subdomainName?: string;
+  industryName?: string;
   isDeepDrillDown?: boolean;
   onClick?: () => void;
   /** BDT: static CTA on core — click to dive into workspace */
   showWorkspaceCta?: boolean;
+  voiceIntensityRef?: React.MutableRefObject<number> | undefined;
+  hideCompanyName?: boolean;
+  coreWorkspacePhase?: string;
 }) {
   const meshRef  = useRef<THREE.Group>(null);
   const ringMat  = useRef<THREE.MeshBasicMaterial>(null);
@@ -30,54 +44,77 @@ export function OrgCore({
 
 
   return (
-    <group>
+    <group 
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+        onClick?.();
+      }}
+      onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
+      onPointerOut={() => { document.body.style.cursor = 'auto'; }}
+    >
       {/* Plasma Sphere Core — click or zoom to open workspace (BDT) */}
       <group ref={meshRef}>
         <mesh>
           <sphereGeometry args={[1.35, 32, 32]} />
           <meshBasicMaterial visible={false} />
         </mesh>
-        <PlasmaSphere 
-           radius={1.2} 
-           color="#1e3a8a" // Navy blue core
-           opacity={dimmed ? 0.08 : 0.85} 
-           glowIntensity={0.8}
+        <group visible={coreWorkspacePhase !== 'workspace'}>
+          <StarSphere 
+             radius={1.2} 
+             color="#1e3a8a" // Navy blue core
+             opacity={dimmed ? 0.08 : 0.85} 
+             glowIntensity={0.8}
+             uAudio={voiceIntensityRef?.current ?? 0}
+             coreWorkspacePhase={coreWorkspacePhase}
+          />
+        </group>
+        <VoicePlasmaWeb
+          coreWorkspacePhase={coreWorkspacePhase}
+          voiceIntensityRef={voiceIntensityRef}
+          radius={1.2}
+          count={8000}
         />
       </group>
       
       {/* 3D Text floating on top of the core */}
-      <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
-        <group position={[0, 1.6, 0]}>
-          <Text
-            color="#ffffff"
-            fontSize={0.32}
-            maxWidth={3.2}
-            lineHeight={1.1}
-            letterSpacing={0.12}
-            textAlign="center"
-            anchorX="center"
-            anchorY="middle"
-            fillOpacity={isDeepDrillDown ? 0 : dimmed ? 0.65 : 0.92}
-            outlineWidth={0.01}
-            outlineColor="#0f172a"
-            outlineOpacity={isDeepDrillDown ? 0 : dimmed ? 0.35 : 0.6}
-          >
-            {companyName}
-          </Text>
-          <Text
-            position={[0, -0.35, 0]}
-            color="#94a3b8"
-            fontSize={0.1}
-            letterSpacing={0.4}
-            textAlign="center"
-            anchorX="center"
-            anchorY="middle"
-            fillOpacity={isDeepDrillDown ? 0 : dimmed ? 0.4 : 0.65}
-          >
-            CORE
-          </Text>
-        </group>
-      </Billboard>
+      {!hideCompanyName && (
+        <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
+          <group position={[0, 1.6, 0]}>
+            <Text
+              color="#ffffff"
+              fontSize={0.32}
+              maxWidth={3.2}
+              lineHeight={1.1}
+              letterSpacing={0.12}
+              textAlign="center"
+              anchorX="center"
+              anchorY="middle"
+              fillOpacity={isDeepDrillDown ? 0 : dimmed ? 0.65 : 0.92}
+              outlineWidth={0.01}
+              outlineColor="#0f172a"
+              outlineOpacity={isDeepDrillDown ? 0 : dimmed ? 0.35 : 0.6}
+            >
+              {companyName}
+            </Text>
+            <Text
+              position={[0, -0.35, 0]}
+              color="#94a3b8"
+              fontSize={0.1}
+              letterSpacing={0.4}
+              textAlign="center"
+              anchorX="center"
+              anchorY="middle"
+              fillOpacity={isDeepDrillDown ? 0 : dimmed ? 0.4 : 0.65}
+            >
+              CORE
+            </Text>
+          </group>
+        </Billboard>
+      )}
 
       {/* CTA below core — same treatment as company name above */}
       {showWorkspaceCta && !isDeepDrillDown && (
@@ -97,7 +134,7 @@ export function OrgCore({
               outlineColor="#0f172a"
               outlineOpacity={0.55}
             >
-              Double click to chat with AI Agent
+              Click to interact with WorkOS AI
             </Text>
           </group>
         </Billboard>
@@ -349,6 +386,74 @@ export function PlasmaSphere({
             uColor: { value: col },
             uGlowIntensity: { value: glowIntensity },
             uOpacity: { value: opacity }
+          }}
+          transparent 
+          depthWrite={depthWrite} 
+        />
+      </mesh>
+    </group>
+  );
+}
+
+/* ─────────────────────────────────
+   STAR SPHERE (VOICE AI ENABLED)
+───────────────────────────────── */
+export function StarSphere({
+  color,
+  radius,
+  opacity = 1,
+  glowIntensity = 1,
+  depthWrite = true,
+  speed = 1,
+  uAudio = 0,
+  coreWorkspacePhase = 'idle',
+}: {
+  color: string;
+  radius: number;
+  opacity?: number;
+  glowIntensity?: number;
+  depthWrite?: boolean;
+  speed?: number;
+  uAudio?: number;
+  coreWorkspacePhase?: string;
+}) {
+  const materialRef = useRef<THREE.ShaderMaterial>(null);
+  const col = useMemo(() => new THREE.Color(color), [color]);
+  const opacityFactorRef = useRef(1.0);
+
+  useFrame((state) => {
+    const t = state.clock.elapsedTime * speed;
+    if (materialRef.current) {
+      materialRef.current.uniforms.uTime.value = t;
+      materialRef.current.uniforms.uColor.value.copy(col);
+
+      let targetFactor = 1.0;
+      if (coreWorkspacePhase === 'diving-in' || coreWorkspacePhase === 'workspace') {
+        targetFactor = 0.0;
+      }
+      opacityFactorRef.current += (targetFactor - opacityFactorRef.current) * 0.04;
+
+      materialRef.current.uniforms.uIntensity.value = opacity * glowIntensity * opacityFactorRef.current;
+      
+      // Smoothly approach the target audio level for fluid visualizer effect
+      const currentAudio = materialRef.current.uniforms.uAudio.value;
+      materialRef.current.uniforms.uAudio.value += (uAudio - currentAudio) * 0.25;
+    }
+  });
+
+  return (
+    <group>
+      <mesh>
+        <icosahedronGeometry args={[radius, 6]} />
+        <shaderMaterial 
+          ref={materialRef}
+          vertexShader={starVertexShader} 
+          fragmentShader={starFragmentShader} 
+          uniforms={{
+            uTime: { value: 0 },
+            uColor: { value: col },
+            uIntensity: { value: opacity * glowIntensity },
+            uAudio: { value: 0 }
           }}
           transparent 
           depthWrite={depthWrite} 

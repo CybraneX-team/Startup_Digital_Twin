@@ -50,11 +50,16 @@ export class SystemParticles {
     const coreGroup = new THREE.Group();
     group.add(coreGroup);
 
-    const starGeo = new THREE.IcosahedronGeometry(60 * sizeMultiplier, 5);
+    const starGeo = new THREE.IcosahedronGeometry(60 * sizeMultiplier, 6);
     const starMat = new THREE.ShaderMaterial({
       vertexShader: starVertexShader,
       fragmentShader: starFragmentShader,
-      uniforms: { uTime: { value: 0 }, uColor: { value: color.clone() }, uIntensity: { value: 0.55 } },
+      uniforms: {
+        uTime: { value: 0 },
+        uColor: { value: color.clone() },
+        uIntensity: { value: 0.55 },
+        uAudio: { value: 0 },
+      },
     });
     const star = new THREE.Mesh(starGeo, starMat);
     coreGroup.add(star);

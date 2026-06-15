@@ -42,6 +42,7 @@ export function ProductWorkspace({
         </button>
 
         <div className="ws-layout flex-1 min-h-0 flex gap-3 px-3 pb-2 pt-14">
+          <div className="twin-workspace-fullscreen-hover-zone" />
           <WorkspaceLeftPanel />
 
           <div className="ws-center flex-1 min-w-0 flex flex-col gap-3 min-h-0">
@@ -56,6 +57,7 @@ export function ProductWorkspace({
             <WorkspaceActiveCanvasPanel />
           </div>
 
+          <div className="twin-workspace-fullscreen-hover-zone-right" />
           <WorkspaceRightPanel />
         </div>
 

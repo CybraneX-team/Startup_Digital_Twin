@@ -12,6 +12,8 @@ import type { CoreWorkspacePhase } from '../../lib/coreWorkspaceTransition';
 
 export interface UniversalPolytopeProps {
   companyName?: string;
+  industryName?: string;
+  subdomainName?: string;
   onExitIntent?: () => void;
   transparent?: boolean;
   cameraResetTrigger?: number;
@@ -47,13 +49,15 @@ export interface UniversalPolytopeProps {
   onCoreSurfaceComplete?: () => void;
   /** Which persisted graph to use when `departments` is not passed (default: twin /3d) */
   storeScope?: PolytopeStoreScope;
-  readOnly?: boolean;
+  voiceIntensityRef?: MutableRefObject<number>;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
 export default function UniversalPolytope({
   companyName = 'Universal Polytope',
+  industryName,
+  subdomainName,
   onExitIntent,
   transparent = false,
   cameraResetTrigger = 0,
@@ -75,14 +79,14 @@ export default function UniversalPolytope({
   onCoreDiveComplete,
   onCoreSurfaceComplete,
   storeScope = 'twin',
-  readOnly = false,
+  voiceIntensityRef,
 }: UniversalPolytopeProps) {
   const [selectedId, setSelectedIdRaw] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   // no-op — back info is used only when rendering an in-canvas back button
   const setBackInfo = useCallback(
-    (_info: { label: string; onClick: () => void } | null) => {},
+    (_info: { label: string; onClick: () => void } | null) => { },
     []
   );
 
@@ -107,6 +111,8 @@ export default function UniversalPolytope({
           onPathChange={path => { onInternalPathChange?.(path); }}
           setBackInfo={setBackInfo}
           companyName={companyName}
+          industryName={industryName}
+          subdomainName={subdomainName}
           hoveredId={hoveredId}
           setHoveredId={setHoveredId}
           departments={displayDepartments}
@@ -126,6 +132,7 @@ export default function UniversalPolytope({
           onCoreClickIntent={onCoreClickIntent}
           onCoreDiveComplete={onCoreDiveComplete}
           onCoreSurfaceComplete={onCoreSurfaceComplete}
+          voiceIntensityRef={voiceIntensityRef}
         />
       </Canvas>
 

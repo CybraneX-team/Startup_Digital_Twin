@@ -1774,3 +1774,197 @@ input[type="range"]::-moz-range-thumb:hover {
 .animate-slide-left-fade {
   animation: slideLeftFade 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+
+/* Fullscreen hover zone to trigger left panel slide-in */
+.twin-workspace-fullscreen-hover-zone {
+  position: fixed;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 18px; /* Slightly wider hover trigger area for easier access */
+  z-index: 99;  /* Ensure it sits above the canvas but below the panel when hovered */
+  background: transparent;
+  pointer-events: none;
+}
+
+.twin-workspace-shell:has(.ws-canvas-wrap--fullscreen) .twin-workspace-fullscreen-hover-zone,
+.ws-shell:has(.ws-canvas-wrap--fullscreen) .twin-workspace-fullscreen-hover-zone {
+  pointer-events: auto;
+}
+
+/* Subtle hover indicator line on the left edge of the screen in fullscreen mode */
+.twin-workspace-fullscreen-hover-zone::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 15%;
+  bottom: 15%;
+  width: 2px;
+  background: linear-gradient(to bottom, transparent, rgba(147, 197, 253, 0.15), transparent);
+  border-radius: 1px;
+  opacity: 0.5;
+  transition: opacity 0.3s, background-color 0.3s, width 0.3s;
+}
+
+.twin-workspace-fullscreen-hover-zone:hover::after {
+  background: linear-gradient(to bottom, transparent, rgba(147, 197, 253, 0.45), transparent);
+  opacity: 1;
+  width: 3px;
+}
+
+/* ──────────────────────────────────────────────────
+   1. TwinWorkspaceLayout Fullscreen Hover Sidepanel
+   ────────────────────────────────────────────────── */
+/* Fast transition and initial hidden state in fullscreen */
+.twin-workspace-shell:has(.ws-canvas-wrap--fullscreen) .twin-workspace-panel--left {
+  position: fixed;
+  left: 0;
+  top: 56px; /* below TopBar header */
+  bottom: 8px;
+  height: calc(100vh - 64px);
+  width: 228px !important;
+  z-index: 100;
+  transform: translateX(-115%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease-out !important;
+}
+
+/* Slide left panel in on hover */
+.twin-workspace-shell:has(.ws-canvas-wrap--fullscreen) .twin-workspace-fullscreen-hover-zone:hover + .twin-workspace-panel--left,
+.twin-workspace-shell:has(.ws-canvas-wrap--fullscreen) .twin-workspace-panel--left:hover {
+  transform: translateX(12px) !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  z-index: 100;
+  box-shadow: 20px 0 50px rgba(0, 0, 0, 0.95);
+}
+
+/* ──────────────────────────────────────────────────
+   2. ProductWorkspace Fullscreen Hover Sidepanel
+   ────────────────────────────────────────────────── */
+/* Re-style ws-left-nav to slide out over full-screen canvas instead of collapsing to 0px */
+.ws-layout:has(.ws-canvas-wrap--fullscreen) .ws-left-nav {
+  position: fixed;
+  left: 0;
+  top: 60px; /* Leave space for TopBar header */
+  bottom: 12px;
+  height: calc(100vh - 72px);
+  width: 228px !important;
+  z-index: 100;
+  transform: translateX(-115%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  background: rgba(10, 10, 12, 0.85) !important;
+  backdrop-filter: blur(30px) saturate(1.5);
+  -webkit-backdrop-filter: blur(30px) saturate(1.5);
+  box-shadow: none;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease-out !important;
+}
+
+/* Slide ws-left-nav in on hover */
+.ws-layout:has(.ws-canvas-wrap--fullscreen) .twin-workspace-fullscreen-hover-zone:hover + .ws-left-nav,
+.ws-layout:has(.ws-canvas-wrap--fullscreen) .ws-left-nav:hover {
+  transform: translateX(12px) !important; /* Slide slightly in with an elegant gap from left edge */
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  box-shadow: 20px 0 50px rgba(0, 0, 0, 0.95);
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Fullscreen hover zone to trigger right panel slide-in */
+.twin-workspace-fullscreen-hover-zone-right {
+  position: fixed;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 18px; /* Slightly wider hover trigger area for easier access */
+  z-index: 99;  /* Ensure it sits above the canvas but below the panel when hovered */
+  background: transparent;
+  pointer-events: none;
+}
+
+.twin-workspace-shell:has(.ws-canvas-wrap--fullscreen) .twin-workspace-fullscreen-hover-zone-right,
+.ws-shell:has(.ws-canvas-wrap--fullscreen) .twin-workspace-fullscreen-hover-zone-right {
+  pointer-events: auto;
+}
+
+/* Subtle hover indicator line on the right edge of the screen in fullscreen mode */
+.twin-workspace-fullscreen-hover-zone-right::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 15%;
+  bottom: 15%;
+  width: 2px;
+  background: linear-gradient(to bottom, transparent, rgba(147, 197, 253, 0.15), transparent);
+  border-radius: 1px;
+  opacity: 0.5;
+  transition: opacity 0.3s, background-color 0.3s, width 0.3s;
+}
+
+.twin-workspace-fullscreen-hover-zone-right:hover::after {
+  background: linear-gradient(to bottom, transparent, rgba(147, 197, 253, 0.45), transparent);
+  opacity: 1;
+  width: 3px;
+}
+
+/* ──────────────────────────────────────────────────
+   1. TwinWorkspaceLayout Fullscreen Hover Right Sidepanel
+   ────────────────────────────────────────────────── */
+/* Fast transition and initial hidden state in fullscreen */
+.twin-workspace-shell:has(.ws-canvas-wrap--fullscreen) .twin-workspace-panel--right {
+  position: fixed;
+  right: 0;
+  top: 56px; /* below TopBar header */
+  bottom: 8px;
+  height: calc(100vh - 64px);
+  width: 268px !important; /* Right panel base width */
+  z-index: 100;
+  transform: translateX(115%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease-out !important;
+}
+
+/* Slide right panel in on hover */
+.twin-workspace-shell:has(.ws-canvas-wrap--fullscreen) .twin-workspace-fullscreen-hover-zone-right:hover + .twin-workspace-panel--right,
+.twin-workspace-shell:has(.ws-canvas-wrap--fullscreen) .twin-workspace-panel--right:hover {
+  transform: translateX(-12px) !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  z-index: 100;
+  box-shadow: -20px 0 50px rgba(0, 0, 0, 0.95);
+}
+
+/* ──────────────────────────────────────────────────
+   2. ProductWorkspace Fullscreen Hover Right Sidepanel
+   ────────────────────────────────────────────────── */
+/* Re-style ws-right-panel to slide out over full-screen canvas instead of collapsing to 0px */
+.ws-layout:has(.ws-canvas-wrap--fullscreen) .ws-right-panel {
+  position: fixed;
+  right: 0;
+  top: 60px; /* Leave space for TopBar header */
+  bottom: 12px;
+  height: calc(100vh - 72px);
+  width: 268px !important;
+  z-index: 100;
+  transform: translateX(115%) !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  background: rgba(10, 10, 12, 0.85) !important;
+  backdrop-filter: blur(30px) saturate(1.5);
+  -webkit-backdrop-filter: blur(30px) saturate(1.5);
+  box-shadow: none;
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease-out !important;
+}
+
+/* Slide ws-right-panel in on hover */
+.ws-layout:has(.ws-canvas-wrap--fullscreen) .twin-workspace-fullscreen-hover-zone-right:hover + .ws-right-panel,
+.ws-layout:has(.ws-canvas-wrap--fullscreen) .ws-right-panel:hover {
+  transform: translateX(-12px) !important; /* Slide slightly in with an elegant gap from right edge */
+  opacity: 1 !important;
+  pointer-events: auto !important;
+  box-shadow: -20px 0 50px rgba(0, 0, 0, 0.95);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+}

@@ -55,6 +55,7 @@ export interface UniverseCallbacks {
   /** Planet root systems visible in 3D */
   onEnterCompanyPlanetRoots?: (company: any) => void;
   onPlanetLevelChange?: (depth: number, path: string[]) => void;
+  onIndustryCoreVoiceToggle?: (industry: any, active: boolean) => void;
 }
 
 const _orbitPos = new THREE.Vector3();
@@ -79,6 +80,7 @@ export class UniverseController {
   private _workspaceFocusIndustryId: string | null = null;
   private _workspaceFocusSubdomainId: string | null = null;
   private _workspaceMode: 'galaxy' | 'industry' | 'subdomain' | null = null;
+  private _voiceIntensityRef: React.MutableRefObject<number> | null = null;
 
   constructor(
     container: HTMLElement,
@@ -94,6 +96,10 @@ export class UniverseController {
     this._bhCapturing = false;
 
     this._init(data);
+  }
+
+  setVoiceIntensityRef(ref: React.MutableRefObject<number> | null) {
+    this._voiceIntensityRef = ref;
   }
 
   private async _init(data: UniverseData) {
@@ -396,6 +402,9 @@ export class UniverseController {
       this._refreshInteriorLabels();
       this._callbacks?.onPlanetLevelChange?.(depth, path);
     };
+    this.navigation.onIndustryCoreVoiceToggle = (industry, active) => {
+      this._callbacks?.onIndustryCoreVoiceToggle?.(industry, active);
+    };
   }
 
   private _refreshInteriorLabels(company?: any) {
@@ -594,6 +603,24 @@ export class UniverseController {
 
   private _update(delta: number, elapsed: number, industries: any[]) {
     if (this._disposed) return;
+
+    // Direct, smoothed mapping from voice intensity ref to active industry's starMat shader uniform
+    const targetAudio = this._voiceIntensityRef ? this._voiceIntensityRef.current : 0;
+    if (this.navigation?.selectedIndustry) {
+      const sys = this.systemParticles.systems.get(this.navigation.selectedIndustry.id);
+      if (sys && sys.starMat && sys.starMat.uniforms.uAudio) {
+        sys.starMat.uniforms.uAudio.value += (targetAudio - sys.starMat.uniforms.uAudio.value) * 0.25;
+      }
+      
+      const sdSys = this.navigation._subdomainSolarSystem;
+      if (sdSys && sdSys.sunMat && sdSys.sunMat.uniforms.uAudio) {
+        sdSys.sunMat.uniforms.uAudio.value += (targetAudio - sdSys.sunMat.uniforms.uAudio.value) * 0.25;
+      }
+    }
+    
+    if (this.polytopeRenderer?.coreMat?.uniforms?.uAudio) {
+      this.polytopeRenderer.coreMat.uniforms.uAudio.value += (targetAudio - this.polytopeRenderer.coreMat.uniforms.uAudio.value) * 0.25;
+    }
 
     this.cameraCtrl.update();
 

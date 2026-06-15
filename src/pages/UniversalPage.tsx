@@ -4,20 +4,20 @@ import UniversalPolytope from '../components/UniversalPolytope';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
 import { PolytopeManager } from '../components/PolytopeManager';
 import CreateDepartmentPanel from '../components/CreateDepartmentPanel';
-import { ProductWorkspace } from '../components/workspace/ProductWorkspace';
 import { usePolytopeStore } from '../lib/usePolytopeStore';
 import type { UExternalNode, UInternalNode } from '../lib/usePolytopeStore';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/db/companies';
 import type { CoreWorkspacePhase } from '../lib/coreWorkspaceTransition';
+import { getAllIndustries } from '../lib/db/industries';
+import { getAllSubdomains } from '../lib/db/subdomains';
 import { useVoice } from '../context/VoiceContext';
 
 export default function UniversalPage() {
   const { profile, canWrite } = useAuth();
   const { company } = useCompany(profile?.company_id);
   const store = usePolytopeStore('bdt');
-  const { sendContextUpdate } = useVoice();
-  const canEditTwin = canWrite('twin');
+  const { sendContextUpdate, voiceState, toggle, intensityRef } = useVoice();
 
   /** New session id */
   const [bdtSessionId] = useState(() => Date.now());
@@ -93,11 +93,17 @@ export default function UniversalPage() {
     setManagerOpen(true);
   };
 
-  // Product workspace — click core → dive in → workspace; back → surface out
+  // Core workspace/Voice AI zoom state
   const [corePhase, setCorePhase] = useState<CoreWorkspacePhase>('idle');
-  const [workspaceMounted, setWorkspaceMounted] = useState(false);
-  const [workspaceAnim, setWorkspaceAnim] = useState<'enter' | 'exit' | null>(null);
   const isPolytopeInteractive = corePhase === 'idle';
+
+  useEffect(() => {
+    if (voiceState === 'idle' && corePhase === 'workspace') {
+      setCorePhase('surfacing');
+    } else if (voiceState !== 'idle' && corePhase === 'idle') {
+      setCorePhase('diving-in');
+    }
+  }, [voiceState, corePhase]);
 
   useLayoutEffect(() => {
     // We no longer unmount/remount the canvas or reset state on path change.
@@ -112,6 +118,22 @@ export default function UniversalPage() {
   const companyName = company?.name || (profile?.company_id
     ? profile?.first_name ? `${profile.first_name}'s workspace` : 'My workspace'
     : 'Universal Polytope');
+
+  const [industryName, setIndustryName] = useState('');
+  const [subdomainName, setSubdomainName] = useState('');
+
+  useEffect(() => {
+    if (company) {
+      getAllIndustries().then(inds => {
+        const ind = inds.find(i => i.id === company.industry_id);
+        if (ind) setIndustryName(ind.label);
+      });
+      getAllSubdomains().then(subs => {
+        const sub = subs.find(s => s.id === company.subdomain_id);
+        if (sub) setSubdomainName(sub.label);
+      });
+    }
+  }, [company]);
 
   useEffect(() => {
     const deptSummary = store.departments.length
@@ -274,42 +296,23 @@ export default function UniversalPage() {
     }
   };
 
-  const clearPolytopeSelection = useCallback(() => {
-    setSelectedDeptId(null);
-    setInternalPath([]);
-    setRequestSelectDeptId(null);
-    setInternalBackStep(0);
-    setDraftDept(null);
-    setDraftInternalNode(null);
-    setDraftMember(null);
-  }, []);
+
 
   const handleCoreClickIntent = useCallback(() => {
-    if (corePhase !== 'idle') return;
-    clearPolytopeSelection();
-    setCorePhase('diving-in');
-  }, [corePhase, clearPolytopeSelection]);
+    toggle();
+  }, [toggle]);
 
   const handleCoreDiveComplete = useCallback(() => {
-    setWorkspaceAnim('enter');
-    setWorkspaceMounted(true);
-    setCorePhase('workspace');
-  }, []);
-
-  const handleBackToCompany = useCallback(() => {
-    if (corePhase !== 'workspace') return;
-    setWorkspaceAnim('exit');
+    if (corePhase === 'diving-in') {
+      setCorePhase('workspace');
+    }
   }, [corePhase]);
 
-  const handleWorkspaceExitAnimationEnd = useCallback(() => {
-    setWorkspaceMounted(false);
-    setWorkspaceAnim(null);
-    setCorePhase('surfacing');
-  }, []);
-
   const handleCoreSurfaceComplete = useCallback(() => {
-    setCorePhase('idle');
-  }, []);
+    if (corePhase === 'surfacing') {
+      setCorePhase('idle');
+    }
+  }, [corePhase]);
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden z-40">
@@ -317,74 +320,53 @@ export default function UniversalPage() {
       <div
         className="absolute inset-0"
         style={{
-          opacity: corePhase === 'workspace' ? 0 : 1,
-          pointerEvents: isPolytopeInteractive ? 'auto' : 'none',
-          transition: corePhase === 'workspace' ? 'opacity 0.35s ease-out' : 'opacity 0.5s ease-in',
+          opacity: 1,
+          pointerEvents: (isPolytopeInteractive || corePhase === 'workspace') ? 'auto' : 'none',
         }}
       >
         {showBdtCanvas && (
-        <UniversalPolytope
-          key={bdtSessionId}
-          storeScope="bdt"
-          companyName={companyName}
-          onDepartmentChange={handleDepartmentChange}
-          onInternalPathChange={setInternalPath}
-          requestSelectDeptId={requestSelectDeptId}
-          requestBackStep={internalBackStep}
-          draftDept={draftDept}
-          draftNodeScreenPosRef={draftDeptScreenPosRef}
-          draftInternalNode={draftInternalNode}
-          draftInternalNodeScreenPosRef={draftInternalNodeScreenPosRef}
-          draftMember={draftMember}
-          draftMemberScreenPosRef={draftMemberScreenPosRef}
-          cameraResetTrigger={polytopeResetTrigger}
-          departments={store.departments}
-          selectedInternalPath={internalPath}
-          enableCoreWorkspace={canEditTwin}
-          readOnly={!canEditTwin}
-          coreWorkspacePhase={corePhase}
-          onCoreClickIntent={handleCoreClickIntent}
-          onCoreDiveComplete={handleCoreDiveComplete}
-          onCoreSurfaceComplete={handleCoreSurfaceComplete}
-        />
+          <UniversalPolytope
+            key={bdtSessionId}
+            storeScope="bdt"
+            companyName={companyName}
+            industryName={industryName}
+            subdomainName={subdomainName}
+            onDepartmentChange={handleDepartmentChange}
+            onInternalPathChange={setInternalPath}
+            requestSelectDeptId={requestSelectDeptId}
+            requestBackStep={internalBackStep}
+            draftDept={draftDept}
+            draftNodeScreenPosRef={draftDeptScreenPosRef}
+            draftInternalNode={draftInternalNode}
+            draftInternalNodeScreenPosRef={draftInternalNodeScreenPosRef}
+            draftMember={draftMember}
+            draftMemberScreenPosRef={draftMemberScreenPosRef}
+            cameraResetTrigger={polytopeResetTrigger}
+            departments={store.departments}
+            selectedInternalPath={internalPath}
+            enableCoreWorkspace={canEditTwin}
+            readOnly={!canEditTwin}
+            coreWorkspacePhase={corePhase}
+            onCoreClickIntent={handleCoreClickIntent}
+            onCoreDiveComplete={handleCoreDiveComplete}
+            onCoreSurfaceComplete={handleCoreSurfaceComplete}
+            voiceIntensityRef={intensityRef}
+          />
         )}
       </div>
 
-      {/* Core dive light burst (during camera fly-in) */}
-      {corePhase === 'diving-in' && (
-        <div
-          className="absolute inset-0 z-[65] flex items-center justify-center core-dive-flash"
-          aria-hidden
-        >
-          <div
-            className="w-[min(90vw,520px)] aspect-square rounded-full"
-            style={{
-              background: 'radial-gradient(circle, rgba(193,174,255,0.5) 0%, rgba(30,58,138,0.35) 40%, transparent 70%)',
-            }}
-          />
-        </div>
-      )}
 
-      {/* ── Product workspace (after core dive completes) ── */}
-      {workspaceMounted && (
-        <div
-          className={`absolute inset-0 z-[70] ${
-            workspaceAnim === 'enter' ? 'workspace-panel-enter' : ''
-          } ${workspaceAnim === 'exit' ? 'workspace-panel-exit' : ''}`}
-          onAnimationEnd={e => {
-            if (e.animationName === 'workspace-exit') handleWorkspaceExitAnimationEnd();
-          }}
+
+
+      {/* Back button when Voice AI is active */}
+      {voiceState !== 'idle' && (
+        <button
+          onClick={() => toggle()}
+          className="fixed top-20 left-6 z-[60] flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-purple-500/30"
+          style={{ background: 'rgba(0,0,0,0.55)', borderColor: 'rgba(148,163,184,0.1)' }}
         >
-          <ProductWorkspace
-            company={company}
-            companyName={companyName}
-            departments={store.departments.filter(
-              d => d.domain !== 'inactive' && !d.isDraft,
-            )}
-            onBackToCompany={handleBackToCompany}
-            exiting={workspaceAnim === 'exit'}
-          />
-        </div>
+          &larr; Back to Polytope
+        </button>
       )}
 
       {/* ── Left sidebar panel — hidden when create panel is shown ── */}

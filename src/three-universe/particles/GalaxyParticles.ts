@@ -980,6 +980,17 @@ export class GalaxyParticles {
         gsap.killTweensOf(this.material.uniforms.uSize);
         gsap.to(this.material.uniforms.uSize, { value: 0, duration, ease });
       }
+      if (this.backgroundStars?.material) {
+        const m = this.backgroundStars.material;
+        gsap.killTweensOf(m);
+        gsap.to(m, {
+          opacity: 0,
+          duration,
+          ease,
+          onUpdate: () => { m.needsUpdate = true; },
+          onComplete: () => { if (this.backgroundStars) this.backgroundStars.visible = false; },
+        });
+      }
       if (this.universeSphere?.material) {
         const m = this.universeSphere.material;
         gsap.killTweensOf(m);
@@ -1006,6 +1017,17 @@ export class GalaxyParticles {
         value: this._insideIndustryView ? 1 : 3.5,
         duration,
         ease,
+      });
+    }
+    if (this.backgroundStars?.material) {
+      const m = this.backgroundStars.material;
+      this.backgroundStars.visible = true;
+      gsap.killTweensOf(m);
+      gsap.to(m, {
+        opacity: this._insideIndustryView ? 0.55 : 0.40,
+        duration,
+        ease,
+        onUpdate: () => { m.needsUpdate = true; },
       });
     }
     if (this.universeSphere?.material) {

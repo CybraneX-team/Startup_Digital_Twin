@@ -34,6 +34,9 @@ export class NavigationManager {
     this.selectedIndustry = null;
     this.selectedSubdomain = null;
     this.selectedCompany = null;
+    this._isCoreZoomedIn = false;
+    this._hoveredCore = false;
+    this.onIndustryCoreVoiceToggle = null;
 
     this.onNavigate = null;
     this.onNavigateBegin = null; // fires immediately at nav start — for early label/UI updates
@@ -228,9 +231,90 @@ export class NavigationManager {
     // ── Deeper levels: hover over planets ──
     let hits = [];
     if (this.currentLevel === ZOOM_LEVELS.INDUSTRY && this.selectedIndustry) {
+      // ── Check star core hover FIRST (no scale-up, just pointer + tooltip) ──
+      const sys = this.systemParticles.systems.get(this.selectedIndustry.id);
+      const starMesh = sys?.coreGroup?.children?.find(c => c.isMesh);
+      if (starMesh) {
+        const starHits = this.raycaster.intersectObject(starMesh);
+        if (starHits.length > 0) {
+          if (!this._hoveredCore) {
+            this._hoveredCore = true;
+            // Clear any planet hover without triggering scale-down on star
+            if (this.hoveredObject) {
+              this._unhover(this.hoveredObject);
+              this.hoveredObject = null;
+            }
+            this.canvas.style.cursor = 'pointer';
+            if (this.onHover) {
+              const wp = new THREE.Vector3();
+              starMesh.getWorldPosition(wp);
+              wp.project(this.camera);
+              const rect = this.container.getBoundingClientRect();
+              const screenX = (wp.x * 0.5 + 0.5) * rect.width + rect.left;
+              const screenY = -(wp.y * 0.5 - 0.5) * rect.height + rect.top;
+              this.onHover({ 
+                type: 'core', 
+                level: 'industry',
+                nodeLabel: 'Click to interact with WorkOS AI', 
+                screenX, 
+                screenY,
+                industry: this.selectedIndustry 
+              });
+            }
+          }
+          return;
+        }
+      }
+      // Mouse left the star core area
+      if (this._hoveredCore) {
+        this._hoveredCore = false;
+        this.canvas.style.cursor = 'default';
+        if (this.onHover) this.onHover(null);
+      }
+
       const meshes = this.systemParticles.getSubdomainMeshes(this.selectedIndustry.id);
       hits = this.raycaster.intersectObjects(meshes);
     } else if (this.currentLevel === ZOOM_LEVELS.SUBDOMAIN && this.selectedSubdomain) {
+      // ── Check star core hover FIRST (no scale-up, just pointer + tooltip) ──
+      const sdSunMesh = this._subdomainSolarSystem?.sunMesh;
+      if (sdSunMesh) {
+        const starHits = this.raycaster.intersectObject(sdSunMesh);
+        if (starHits.length > 0) {
+          if (!this._hoveredCore) {
+            this._hoveredCore = true;
+            // Clear any planet hover without triggering scale-down on star
+            if (this.hoveredObject) {
+              this._unhover(this.hoveredObject);
+              this.hoveredObject = null;
+            }
+            this.canvas.style.cursor = 'pointer';
+            if (this.onHover) {
+              const wp = new THREE.Vector3();
+              sdSunMesh.getWorldPosition(wp);
+              wp.project(this.camera);
+              const rect = this.container.getBoundingClientRect();
+              const screenX = (wp.x * 0.5 + 0.5) * rect.width + rect.left;
+              const screenY = -(wp.y * 0.5 - 0.5) * rect.height + rect.top;
+              this.onHover({ 
+                type: 'core', 
+                level: 'subdomain',
+                nodeLabel: 'Click to interact with WorkOS AI', 
+                screenX, 
+                screenY,
+                industry: this.selectedIndustry 
+              });
+            }
+          }
+          return;
+        }
+      }
+      // Mouse left the star core area
+      if (this._hoveredCore) {
+        this._hoveredCore = false;
+        this.canvas.style.cursor = 'default';
+        if (this.onHover) this.onHover(null);
+      }
+
       const meshes = this._subdomainSolarSystem?.companyMeshes?.length
         ? this._subdomainSolarSystem.companyMeshes
         : this.systemParticles.getCompanyMeshes(this.selectedIndustry.id, this.selectedSubdomain.id);
@@ -429,6 +513,16 @@ export class NavigationManager {
     }
 
     if (this.currentLevel === ZOOM_LEVELS.INDUSTRY && this.selectedIndustry) {
+      const sys = this.systemParticles.systems.get(this.selectedIndustry.id);
+      const starMesh = sys?.coreGroup?.children?.find(c => c.isMesh);
+      if (starMesh) {
+        const starHits = this.raycaster.intersectObject(starMesh);
+        if (starHits.length > 0) {
+          this.toggleIndustryCoreZoom(this.selectedIndustry);
+          return;
+        }
+      }
+
       const meshes = this.systemParticles.getSubdomainMeshes(this.selectedIndustry.id);
       const hits = this.raycaster.intersectObjects(meshes);
       if (hits.length > 0) {
@@ -437,6 +531,15 @@ export class NavigationManager {
         return;
       }
     } else if (this.currentLevel === ZOOM_LEVELS.SUBDOMAIN && this.selectedSubdomain) {
+      const sdSunMesh = this._subdomainSolarSystem?.sunMesh;
+      if (sdSunMesh) {
+        const starHits = this.raycaster.intersectObject(sdSunMesh);
+        if (starHits.length > 0) {
+          this.toggleSubdomainCoreZoom(this.selectedIndustry, this.selectedSubdomain);
+          return;
+        }
+      }
+
       const meshes = this._subdomainSolarSystem?.companyMeshes?.length
         ? this._subdomainSolarSystem.companyMeshes
         : this.systemParticles.getCompanyMeshes(this.selectedIndustry.id, this.selectedSubdomain.id);
@@ -533,6 +636,179 @@ export class NavigationManager {
       this.cameraCtrl.setZoomCap(5500);
       this._onNavigateDone(this.navigationPath, this.currentLevel);
     });
+  }
+
+  toggleSubdomainCoreZoom(industry, subdomain) {
+    if (this.cameraCtrl.isTransitioning) return;
+
+    const sdSys = this._subdomainSolarSystem;
+    if (!sdSys) return;
+
+    const isZoomedIn = this._isCoreZoomedIn;
+
+    if (!isZoomedIn) {
+      this._isCoreZoomedIn = true;
+
+      if (this.onIndustryCoreVoiceToggle) {
+        this.onIndustryCoreVoiceToggle(industry, true);
+      }
+
+      // Hide company planets
+      sdSys._containers.forEach(cc => {
+        gsap.killTweensOf(cc.container.scale);
+        gsap.to(cc.container.scale, {
+          x: 0.001, y: 0.001, z: 0.001,
+          duration: 0.8,
+          ease: 'power2.inOut',
+          onComplete: () => {
+            cc.container.visible = false;
+          }
+        });
+      });
+
+      if (this.labels) {
+        this.labels.setVisibility('company-', false);
+      }
+
+      const oldMinDist = this.cameraCtrl.controls.minDistance;
+      this.cameraCtrl.controls.minDistance = 10;
+      this.cameraCtrl.flyTo(new THREE.Vector3(0, 0, 0), 100, ZOOM_LEVELS.SUBDOMAIN, () => {
+        this.cameraCtrl.controls.minDistance = oldMinDist;
+      });
+
+    } else {
+      this._isCoreZoomedIn = false;
+
+      if (this.onIndustryCoreVoiceToggle) {
+        this.onIndustryCoreVoiceToggle(industry, false);
+      }
+
+      sdSys._containers.forEach(cc => {
+        cc.container.visible = true;
+        gsap.killTweensOf(cc.container.scale);
+        gsap.to(cc.container.scale, {
+          x: 1, y: 1, z: 1,
+          duration: 1.0,
+          ease: 'power2.out'
+        });
+      });
+
+      if (this.labels) {
+        this.labels.setVisibility('company-', true);
+      }
+
+      this.cameraCtrl.flyTo(new THREE.Vector3(0, 0, 0), 750, ZOOM_LEVELS.SUBDOMAIN);
+    }
+  }
+
+  toggleIndustryCoreZoom(industry) {
+    if (this.cameraCtrl.isTransitioning) return;
+
+    const sys = this.systemParticles.systems.get(industry.id);
+    if (!sys) return;
+
+    const isZoomedIn = this._isCoreZoomedIn;
+
+    if (!isZoomedIn) {
+      this._isCoreZoomedIn = true;
+
+      if (this.onIndustryCoreVoiceToggle) {
+        this.onIndustryCoreVoiceToggle(industry, true);
+      }
+
+      if (sys.orbitGroup) {
+        gsap.killTweensOf(sys.orbitGroup.scale);
+        gsap.to(sys.orbitGroup.scale, {
+          x: 0.001, y: 0.001, z: 0.001,
+          duration: 0.8,
+          ease: 'power2.inOut',
+          onComplete: () => {
+            sys.orbitGroup.visible = false;
+          }
+        });
+      }
+
+      // Hide other industry systems
+      this.systemParticles.systems.forEach((otherSys, id) => {
+        if (id !== industry.id) {
+          gsap.killTweensOf(otherSys.group.scale);
+          gsap.to(otherSys.group.scale, {
+            x: 0.001, y: 0.001, z: 0.001,
+            duration: 0.8,
+            ease: 'power2.inOut',
+            onComplete: () => {
+              otherSys.group.visible = false;
+            }
+          });
+        }
+      });
+
+      // Hide black hole and backdrop
+      if (this.galaxyParticles) {
+        this.galaxyParticles.setIndustryWorkspaceBackdrop(true, 0.8);
+      }
+
+      if (this.labels) {
+        this.labels.setVisibility('subdomain-', false);
+      }
+
+      const starPos = sys.group.position;
+      const sizeMult = this.galaxyParticles.getSizeMultiplier(
+        this._industries.findIndex(i => i.id === industry.id)
+      ) || 1.0;
+      const zoomDist = 180 * sizeMult;
+
+      const oldMinDist = this.cameraCtrl.controls.minDistance;
+      this.cameraCtrl.controls.minDistance = 10;
+
+      this.cameraCtrl.flyTo(starPos, zoomDist, ZOOM_LEVELS.INDUSTRY, () => {
+        this.cameraCtrl.controls.minDistance = oldMinDist;
+      });
+
+    } else {
+      this._isCoreZoomedIn = false;
+
+      if (this.onIndustryCoreVoiceToggle) {
+        this.onIndustryCoreVoiceToggle(industry, false);
+      }
+
+      if (sys.orbitGroup) {
+        sys.orbitGroup.visible = true;
+        gsap.killTweensOf(sys.orbitGroup.scale);
+        gsap.to(sys.orbitGroup.scale, {
+          x: 1, y: 1, z: 1,
+          duration: 1.0,
+          ease: 'power2.out'
+        });
+      }
+
+      // Restore other industry systems
+      this.systemParticles.systems.forEach((otherSys, id) => {
+        if (id !== industry.id) {
+          otherSys.group.visible = true;
+          gsap.killTweensOf(otherSys.group.scale);
+          gsap.to(otherSys.group.scale, {
+            x: 0.08, y: 0.08, z: 0.08,
+            duration: 0.8,
+            ease: 'power2.out'
+          });
+        }
+      });
+
+      // Restore black hole and backdrop
+      if (this.galaxyParticles) {
+        this.galaxyParticles.setIndustryWorkspaceBackdrop(false, 0.8);
+      }
+
+      if (this.labels) {
+        this.labels.setVisibility('subdomain-', true);
+      }
+
+      const starPos = sys.group.position;
+      this.cameraCtrl.flyTo(starPos, 2500, ZOOM_LEVELS.INDUSTRY, () => {
+        // done
+      });
+    }
   }
 
   /** Camera pose matching flyTo(target, distance) for scene-swap teleports */
@@ -766,6 +1042,15 @@ export class NavigationManager {
   // ═══ GO BACK ═══
   goBack() {
     if (this.cameraCtrl.isTransitioning) return;
+
+    if (this._isCoreZoomedIn) {
+      if (this.currentLevel === ZOOM_LEVELS.SUBDOMAIN && this.selectedSubdomain) {
+        this.toggleSubdomainCoreZoom(this.selectedIndustry, this.selectedSubdomain);
+      } else {
+        this.toggleIndustryCoreZoom(this.selectedIndustry);
+      }
+      return;
+    }
 
     if (this.currentLevel === ZOOM_LEVELS.DEPARTMENT) {
       // Back to company

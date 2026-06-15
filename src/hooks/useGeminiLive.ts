@@ -83,6 +83,10 @@ export function useGeminiLive(systemPrompt: string): GeminiLiveHandle {
   const intensityRafRef = useRef(0);
   const pendingContextRef = useRef<string | null>(null);
 
+  const activeAnalyserRef = useRef<AnalyserNode | null>(null);
+  const micAnalyserRef = useRef<AnalyserNode | null>(null);
+  const playbackAnalyserRef = useRef<AnalyserNode | null>(null);
+
   const systemPromptRef = useRef(systemPrompt);
   useEffect(() => { systemPromptRef.current = systemPrompt; }, [systemPrompt]);
 
@@ -99,13 +103,19 @@ export function useGeminiLive(systemPrompt: string): GeminiLiveHandle {
     intensityRef.current = 0;
   }
 
-  function startIntensityLoop(analyser: AnalyserNode) {
-    const data = new Uint8Array(analyser.frequencyBinCount);
+  function startIntensityLoop() {
+    if (intensityRafRef.current) return;
     const tick = () => {
-      analyser.getByteFrequencyData(data);
-      let sum = 0;
-      for (let i = 0; i < data.length; i++) sum += data[i];
-      intensityRef.current = Math.min(1, (sum / data.length) / 128);
+      if (activeAnalyserRef.current) {
+        const analyser = activeAnalyserRef.current;
+        const data = new Uint8Array(analyser.frequencyBinCount);
+        analyser.getByteFrequencyData(data);
+        let sum = 0;
+        for (let i = 0; i < data.length; i++) sum += data[i];
+        intensityRef.current = Math.min(1, (sum / data.length) / 128);
+      } else {
+        intensityRef.current = 0;
+      }
       intensityRafRef.current = requestAnimationFrame(tick);
     };
     intensityRafRef.current = requestAnimationFrame(tick);
@@ -113,6 +123,9 @@ export function useGeminiLive(systemPrompt: string): GeminiLiveHandle {
 
   function stopAudio() {
     stopIntensityLoop();
+    activeAnalyserRef.current = null;
+    micAnalyserRef.current = null;
+    playbackAnalyserRef.current = null;
 
     if (scriptProcessorRef.current) {
       scriptProcessorRef.current.disconnect();
@@ -168,6 +181,10 @@ export function useGeminiLive(systemPrompt: string): GeminiLiveHandle {
   function playAudioChunk(base64Data: string) {
     if (!playbackCtxRef.current) {
       playbackCtxRef.current = new AudioContext({ sampleRate: 24000 });
+      const analyser = playbackCtxRef.current.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.connect(playbackCtxRef.current.destination);
+      playbackAnalyserRef.current = analyser;
     }
     const ctx = playbackCtxRef.current;
 
@@ -180,7 +197,7 @@ export function useGeminiLive(systemPrompt: string): GeminiLiveHandle {
 
     const source = ctx.createBufferSource();
     source.buffer = buffer;
-    source.connect(ctx.destination);
+    source.connect(playbackAnalyserRef.current!);
 
     const now = ctx.currentTime;
     if (nextPlayTimeRef.current < now) nextPlayTimeRef.current = now + 0.02;
@@ -283,6 +300,9 @@ export function useGeminiLive(systemPrompt: string): GeminiLiveHandle {
             nextPlayTimeRef.current = playbackCtxRef.current.currentTime;
           }
           setState('listening');
+          if (micAnalyserRef.current) {
+            activeAnalyserRef.current = micAnalyserRef.current;
+          }
           return;
         }
 
@@ -293,6 +313,9 @@ export function useGeminiLive(systemPrompt: string): GeminiLiveHandle {
               audioParts++;
               setState('speaking');
               playAudioChunk(part.inlineData.data);
+              if (playbackAnalyserRef.current) {
+                activeAnalyserRef.current = playbackAnalyserRef.current;
+              }
             }
           }
           if (audioParts) dbg('played', audioParts, 'audio part(s)');
@@ -301,6 +324,9 @@ export function useGeminiLive(systemPrompt: string): GeminiLiveHandle {
         if (sc.turnComplete) {
           dbg('turnComplete — back to listening');
           setState('listening');
+          if (micAnalyserRef.current) {
+            activeAnalyserRef.current = micAnalyserRef.current;
+          }
         }
       }
 
@@ -348,9 +374,11 @@ export function useGeminiLive(systemPrompt: string): GeminiLiveHandle {
     const source = ctx.createMediaStreamSource(stream);
     const analyser = ctx.createAnalyser();
     analyser.fftSize = 256;
+    micAnalyserRef.current = analyser;
     source.connect(analyser);
 
-    startIntensityLoop(analyser);
+    activeAnalyserRef.current = analyser;
+    startIntensityLoop();
 
     const processor = ctx.createScriptProcessor(4096, 1, 1);
     scriptProcessorRef.current = processor;

@@ -17,13 +17,15 @@ interface UniverseCanvasProps {
   onEnterCompanyPlanetRoots?: (company: any) => void;
   onPlanetLevelChange?: (depth: number, path: string[]) => void;
   controllerRef?: React.MutableRefObject<UniverseController | null>;
+  voiceIntensityRef?: React.MutableRefObject<number>;
+  onIndustryCoreVoiceToggle?: (industry: any, active: boolean) => void;
 }
 
 export default function UniverseCanvas({
   data, onNavigate, onHover, onCreateCompany, onEnterBH, onExitBH,
   onEnterCompanyPolytope, onEnterCompanyInterior, onInteriorLevelChange, onExitCompanyPolytope,
   onCompanyAwaitingRole, onEnterCompanyPlanetRoots, onPlanetLevelChange,
-  controllerRef,
+  controllerRef, voiceIntensityRef, onIndustryCoreVoiceToggle,
 }: UniverseCanvasProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const ctrlRef = useRef<UniverseController | null>(null);
@@ -52,6 +54,8 @@ export default function UniverseCanvas({
   stableOnEnterCompanyPlanetRoots.current = onEnterCompanyPlanetRoots;
   const stableOnPlanetLevelChange = useRef(onPlanetLevelChange);
   stableOnPlanetLevelChange.current = onPlanetLevelChange;
+  const stableOnIndustryCoreVoiceToggle = useRef(onIndustryCoreVoiceToggle);
+  stableOnIndustryCoreVoiceToggle.current = onIndustryCoreVoiceToggle;
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -72,10 +76,12 @@ export default function UniverseCanvas({
         onCompanyAwaitingRole: (ctx) => stableOnCompanyAwaitingRole.current?.(ctx),
         onEnterCompanyPlanetRoots: (company) => stableOnEnterCompanyPlanetRoots.current?.(company),
         onPlanetLevelChange: (depth, path) => stableOnPlanetLevelChange.current?.(depth, path),
+        onIndustryCoreVoiceToggle: (industry: any, active: boolean) => stableOnIndustryCoreVoiceToggle.current?.(industry, active),
       },
     );
     ctrlRef.current = ctrl;
     if (controllerRef) controllerRef.current = ctrl;
+    if (voiceIntensityRef) ctrl.setVoiceIntensityRef(voiceIntensityRef);
 
     // Force resize after first paint — catches any layout-timing issues where
     // clientHeight was read before the browser finalised the fixed/absolute layout.
@@ -94,6 +100,12 @@ export default function UniverseCanvas({
       ctrlRef.current.updateData(data);
     }
   }, [data]);
+
+  useEffect(() => {
+    if (ctrlRef.current && voiceIntensityRef) {
+      ctrlRef.current.setVoiceIntensityRef(voiceIntensityRef);
+    }
+  }, [voiceIntensityRef]);
 
   return <div ref={containerRef} className="absolute inset-1 w-screen h-screen overflow-hidden" />;
 }

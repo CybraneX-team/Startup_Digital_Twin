@@ -121,10 +121,14 @@ export class SubdomainSolarSystem {
         uTime:      { value: 0 },
         uColor:     { value: color.clone() },
         uIntensity: { value: 0.65 },
+        uAudio:     { value: 0 },
       },
     });
     this._sunMat = sunMat;
-    const sun = new THREE.Mesh(new THREE.IcosahedronGeometry(28, 3), sunMat);
+    this.sunMat = sunMat;
+    const sun = new THREE.Mesh(new THREE.IcosahedronGeometry(28, 6), sunMat);
+    sun.userData = { type: 'core', subdomain, industry };
+    this.sunMesh = sun;
     this.group.add(sun);
 
     // Sun glow sprite — keep small so company planets aren't swallowed
