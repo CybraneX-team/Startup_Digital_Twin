@@ -1,6 +1,5 @@
 import { WORKSPACE_LIVE_SIGNALS } from '../../../lib/workspaceLayoutData';
 import { WorkspaceFocusToday } from '../WorkspaceFocusToday';
-import { WorkspaceCanvasMinimap } from '../WorkspaceCanvasMinimap';
 
 function Sparkline({ trend }: { trend: 'up' | 'down' }) {
   const color = trend === 'up' ? '#34d399' : '#f87171';

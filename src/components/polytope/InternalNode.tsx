@@ -101,7 +101,6 @@ interface InternalNodeProps {
   revealDelayMs?: number;
 }
 
-const NODES_REVEAL_DELAY_MS = 320;
 
 export function InternalNode({
   node,

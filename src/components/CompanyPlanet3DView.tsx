@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState, useEffect, useCallback } from 'react';
+import { useRef, useMemo, useState, useEffect } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Stars, Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -281,7 +281,7 @@ function SceneContent({
 
   const [isZoomingIn, setIsZoomingIn] = useState(false);
 
-  const handleNodeClick = (nodeId: string, nodePos: THREE.Vector3) => {
+  const handleNodeClick = (nodeId: string, _nodePos: THREE.Vector3) => {
     if (insideRootPolytope && activeRootDept && nodeId === activeRootDept.id) {
       if (rootPolytopeInternalPath.length === 0) {
         onBack?.();
