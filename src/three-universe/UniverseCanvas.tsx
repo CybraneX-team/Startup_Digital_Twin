@@ -107,5 +107,5 @@ export default function UniverseCanvas({
     }
   }, [voiceIntensityRef]);
 
-  return <div ref={containerRef} className="absolute inset-1 w-screen h-screen overflow-hidden" />;
+  return <div ref={containerRef} className="absolute inset-0 w-full h-full overflow-hidden" />;
 }

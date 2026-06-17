@@ -1,10 +1,12 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 
-
 export interface OKRGoal {
   id: string;
   label: string;
   done: boolean;
+  category?: 'growth' | 'product' | 'finance' | 'talent' | 'compliance';
+  timeline?: string;
+  owner?: string;
 }
 
 export interface DepartmentFTE {
@@ -32,13 +34,67 @@ export interface FocusTask {
   id: string;
   label: string;
   done: boolean;
+  status?: 'in_progress' | 'done' | 'highlighted';
+}
+
+export interface NoteBlock {
+  id: string;
+  type: 'text' | 'h1' | 'h2' | 'h3' | 'todo' | 'table';
+  content: string;
+  checked?: boolean;
+  tableData?: string[][];
+}
+
+export interface Note {
+  id: string;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+  blocks: NoteBlock[];
+}
+
+
+export interface ChatMessage {
+  id: string;
+  sender: 'user' | 'assistant';
+  text: string;
+  timestamp: Date;
+  file?: { name: string; size: string | number; type: string };
+}
+
+export interface WorkspaceFile {
+  id: string;
+  name: string;
+  size: string;
+  type: 'image' | 'pdf' | 'excel' | 'text' | 'other';
+  uploadedAt: Date;
+  chatTitle: string;
+  content: string;
+}
+
+export interface WorkspaceState {
+  id: string;
+  name: string;
+  goals: OKRGoal[];
+  departments: DepartmentFTE[];
+  risks: RiskBlocker[];
+  gtmChannels: GTMChannel[];
+  tasks: FocusTask[];
+  mrrGrowthRate: number;
+  chatMessages: ChatMessage[];
+  isVoiceChat: boolean;
+  activeDetailCard: string | null;
+  selectedDeptId: string;
+  notes: Note[];
+  uploadedFiles?: WorkspaceFile[];
 }
 
 interface FounderWorkspaceContextType {
   // OKRs & Goals
   goals: OKRGoal[];
   toggleGoal: (id: string) => void;
-  addGoal: (label: string) => void;
+  addGoal: (label: string, category?: 'growth' | 'product' | 'finance' | 'talent' | 'compliance', timeline?: string, owner?: string) => void;
+  deleteGoal: (id: string) => void;
   goalProgress: number;
 
   // Financial Metrics
@@ -68,18 +124,61 @@ interface FounderWorkspaceContextType {
   // Focus Today Tasks
   tasks: FocusTask[];
   toggleTask: (id: string) => void;
-  addTask: (label: string) => void;
+  addTask: (label: string, status?: 'in_progress' | 'done' | 'highlighted') => void;
+  updateTaskStatus: (id: string, status: 'in_progress' | 'done' | 'highlighted') => void;
   dismissTask: (id: string) => void;
   
   resetWorkspace: () => void;
+
+  // Multi-workspace support
+  workspaces: WorkspaceState[];
+  activeWorkspaceId: string;
+  setActiveWorkspaceId: (id: string) => void;
+  createWorkspace: (name: string) => void;
+  deleteWorkspace: (id: string) => void;
+  renameWorkspace: (id: string, name: string) => void;
+
+  // Notes API
+  notes: Note[];
+  addNote: (title: string, blocks?: NoteBlock[]) => void;
+  updateNote: (id: string, updates: Partial<Note>) => void;
+  deleteNote: (id: string) => void;
+  activeNoteId: string | null;
+  setActiveNoteId: (id: string | null) => void;
+
+
+  // Chat & UI states per workspace
+  chatMessages: ChatMessage[];
+  setChatMessages: (messages: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => void;
+  isVoiceChat: boolean;
+  setIsVoiceChat: (val: boolean) => void;
+  activeDetailCard: string | null;
+  setActiveDetailCard: (cardId: string | null) => void;
+  selectedDeptId: string;
+  setSelectedDeptId: (deptId: string) => void;
+
+  // Sidebar coordination
+  activeSidebarTab: string;
+  setActiveSidebarTab: (tab: string) => void;
+
+  // Workspace expansion states
+  scrollExpansion: number;
+  setScrollExpansion: (val: number | ((prev: number) => number)) => void;
+  isFullscreen: boolean;
+  setIsFullscreen: (val: boolean) => void;
+
+  // Files API
+  uploadedFiles: WorkspaceFile[];
+  addUploadedFile: (file: Omit<WorkspaceFile, 'id' | 'uploadedAt'>) => void;
+  deleteUploadedFile: (id: string) => void;
 }
 
 const FounderWorkspaceContext = createContext<FounderWorkspaceContextType | undefined>(undefined);
 
 const DEFAULT_GOALS: OKRGoal[] = [
-  { id: 'g1', label: 'Launch Canvas v2', done: false },
-  { id: 'g2', label: 'Hire VP of Eng', done: false },
-  { id: 'g3', label: 'Close Seed Round', done: false },
+  { id: 'g1', label: 'Launch Canvas v2', done: false, category: 'product', timeline: 'Q3 2026', owner: 'Product & Eng' },
+  { id: 'g2', label: 'Hire VP of Eng', done: false, category: 'talent', timeline: 'Q3 2026', owner: 'HR & Recruiting' },
+  { id: 'g3', label: 'Close Seed Round', done: false, category: 'finance', timeline: 'Q3 2026', owner: 'Ops & Finance' },
 ];
 
 const DEFAULT_DEPARTMENTS: DepartmentFTE[] = [
@@ -102,199 +201,613 @@ const DEFAULT_GTM: GTMChannel[] = [
 ];
 
 const DEFAULT_TASKS: FocusTask[] = [
-  { id: 't1', label: 'Review candidate resumes for VP Eng', done: false },
-  { id: 't2', label: 'Finalize investor deck for Series A', done: false },
-  { id: 't3', label: 'Approve Q2 budget proposal', done: false },
-  { id: 't4', label: 'Review SOC2 compliance checklist', done: false },
+  { id: 't1', label: 'Review candidate resumes for VP Eng', done: false, status: 'in_progress' },
+  { id: 't2', label: 'Finalize investor deck for Series A', done: false, status: 'highlighted' },
+  { id: 't3', label: 'Approve Q2 budget proposal', done: false, status: 'in_progress' },
+  { id: 't4', label: 'Review SOC2 compliance checklist', done: false, status: 'in_progress' },
+];
+
+const DEFAULT_NOTES: Note[] = [
+  {
+    id: 'n1',
+    title: 'Canvas v2 Launch Strategy',
+    createdAt: new Date('2026-06-10T10:00:00Z'),
+    updatedAt: new Date('2026-06-15T14:30:00Z'),
+    blocks: [
+      { id: 'n1-b1', type: 'h1', content: 'Canvas v2 Launch Strategy' },
+      { id: 'n1-b2', type: 'h3', content: 'Objectives' },
+      { id: 'n1-b3', type: 'text', content: 'Our primary objective is to transition from beta to general availability by mid-Q3 2026. This includes stabilizing core canvas rendering, polishing the UI aesthetics, and integrating notes capabilities seamlessly.' },
+      { id: 'n1-b4', type: 'todo', content: 'Stabilize core canvas drag-and-drop animations', checked: false },
+      { id: 'n1-b5', type: 'todo', content: 'Optimize rendering of side panels on screen expand', checked: true },
+      { id: 'n1-b6', type: 'todo', content: 'Connect AI Copilot message actions for saving notes', checked: false },
+      { id: 'n1-b7', type: 'h3', content: 'Launch Channels & Budget Allocation' },
+      {
+        id: 'n1-b8',
+        type: 'table',
+        content: '',
+        tableData: [
+          ['Channel', 'Allocation', 'Expected Impact'],
+          ['Direct Enterprise', '50%', 'High LTV, long sales cycles'],
+          ['Inbound SEO', '30%', 'Low CAC, self-serve growth'],
+          ['DevRel & Community', '20%', 'Viral adoption among builders']
+        ]
+      }
+    ]
+  },
+  {
+    id: 'n2',
+    title: 'Seed Pitch Deck Outline',
+    createdAt: new Date('2026-06-12T09:00:00Z'),
+    updatedAt: new Date('2026-06-15T15:20:00Z'),
+    blocks: [
+      { id: 'n2-b1', type: 'h1', content: 'Seed Pitch Deck Outline' },
+      { id: 'n2-b2', type: 'text', content: 'A summary of key slides and milestones for the upcoming Seed round fund-raising. We aim to secure $2M to scale the engineering and GTM teams.' },
+      { id: 'n2-b3', type: 'h2', content: 'Slide Structure' },
+      { id: 'n2-b4', type: 'todo', content: 'Slide 1: The Problem (Fractured team workflows in hybrid setups)', checked: true },
+      { id: 'n2-b5', type: 'todo', content: 'Slide 2: The Solution (WorkOS Active Canvas & Collaborative Copilot)', checked: true },
+      { id: 'n2-b6', type: 'todo', content: 'Slide 3: Market Size & TAM (Targeting developer-led fast-growing startups)', checked: false },
+      { id: 'n2-b7', type: 'todo', content: 'Slide 4: Business Model (SaaS with usage-based AI token pricing)', checked: false },
+      { id: 'n2-b8', type: 'h2', content: 'Financial Summary Table' },
+      {
+        id: 'n2-b9',
+        type: 'table',
+        content: '',
+        tableData: [
+          ['Metric', 'Current State', '12-Month Target'],
+          ['Cash Balance', '$1.5M', '$3.5M (post-funding)'],
+          ['Monthly Revenue', '$135k', '$350k'],
+          ['Headcount (FTE)', '27', '42']
+        ]
+      }
+    ]
+  }
+];
+
+const DEFAULT_FILES: WorkspaceFile[] = [
+  {
+    id: 'f_soc2',
+    name: 'SOC2_Compliance_Checklist.pdf',
+    size: '420 KB',
+    type: 'pdf',
+    uploadedAt: new Date('2026-06-12T14:00:00Z'),
+    chatTitle: 'Security Audit Prep Q3',
+    content: JSON.stringify([
+      { section: 'CC1.1', title: 'Control Environment', requirement: 'The entity demonstrates a commitment to integrity and ethical values.', status: 'Compliant', owner: 'Chief of Staff' },
+      { section: 'CC2.1', title: 'Communication & Information', requirement: 'The entity communicates information necessary to support the functioning of internal control.', status: 'In Progress', owner: 'HR & Recruiting' },
+      { section: 'CC5.1', title: 'Control Activities', requirement: 'The entity selects and develops control activities that contribute to mitigation of risks.', status: 'Attention Needed', owner: 'Product & Eng' },
+      { section: 'CC6.2', title: 'User Registration & Access', requirement: 'New user credentials are authorized and registered before access is granted.', status: 'Compliant', owner: 'Product & Eng' },
+      { section: 'CC6.3', title: 'Access Modification/Revocation', requirement: 'User access is modified or revoked on a timely basis upon termination/transfer.', status: 'Compliant', owner: 'HR & Recruiting' },
+      { section: 'CC8.1', title: 'Change Management', requirement: 'The entity authorizes, designs, develops, and tests changes to infrastructure.', status: 'In Progress', owner: 'Product & Eng' }
+    ])
+  },
+  {
+    id: 'f_runway',
+    name: 'Q3_Runway_Burn_Projections.xlsx',
+    size: '1.2 MB',
+    type: 'excel',
+    uploadedAt: new Date('2026-06-13T10:30:00Z'),
+    chatTitle: 'Financial Planning & Runway',
+    content: JSON.stringify({
+      headers: ['Month', 'Base MRR', 'Growth Rate', 'FTE Headcount', 'Operating Burn', 'Net Burn', 'Projected Runway'],
+      rows: [
+        ['June 2026', '$125,000', '8.0%', '27', '$193,500', '$58,500', '25.6 months'],
+        ['July 2026', '$135,000', '8.0%', '27', '$193,500', '$47,700', '31.4 months'],
+        ['August 2026', '$145,800', '10.0%', '28', '$199,000', '$38,620', '38.8 months'],
+        ['September 2026', '$160,380', '10.0%', '28', '$199,000', '$22,582', '66.4 months'],
+        ['October 2026', '$176,418', '12.0%', '29', '$204,500', '$6,912', '217.0 months']
+      ],
+      summary: {
+        startingCash: '$1.5M',
+        burnTarget: '< $50k/mo',
+        breakEvenGoal: 'Q4 2026'
+      }
+    })
+  },
+  {
+    id: 'f_onboarding',
+    name: 'Engineer_Onboarding_Guide.txt',
+    size: '15 KB',
+    type: 'text',
+    uploadedAt: new Date('2026-06-14T09:15:00Z'),
+    chatTitle: 'Team Onboarding & Alignment',
+    content: `=========================================
+WORKOS DEVELOPER ONBOARDING GUIDE
+=========================================
+
+Welcome to the team! This guide will get you set up and running on the WorkOS Active Canvas platform in under 20 minutes.
+
+Prerequisites
+-------------
+- Node.js >= v18.0.0
+- pnpm >= v8.0.0
+- Git
+
+Getting Started
+---------------
+1. Clone the repository and navigate to the project root:
+   $ git clone https://github.com/cybranex/workos.git
+   $ cd workos
+
+2. Install dependencies:
+   $ pnpm install
+
+3. Run the development servers:
+   $ pnpm run dev
+   This will simultaneously spin up the backend API and the frontend dev server.
+
+Architecture Overview
+---------------------
+Our project is organized into two primary subfolders:
+- /backend: Express server handle simulated OKR computations and workspace state synchronization.
+- /frontend: React/Vite client utilizing Vanilla CSS custom properties for rich glassmorphism graphics and physics transitions.
+
+Need Help?
+----------
+Post in #engineering-onboarding on Slack or trigger the AI Copilot with "Explain system schema details" in the workspace canvas chat.
+
+Happy coding!
+`
+  }
 ];
 
 export function FounderWorkspaceProvider({ children }: { children: ReactNode }) {
-  const [goals, setGoals] = useState<OKRGoal[]>(DEFAULT_GOALS);
-  const [departments, setDepartments] = useState<DepartmentFTE[]>(DEFAULT_DEPARTMENTS);
-  const [risks, setRisks] = useState<RiskBlocker[]>(DEFAULT_RISKS);
-  const [gtmChannels, setGtmChannels] = useState<GTMChannel[]>(DEFAULT_GTM);
-  const [tasks, setTasks] = useState<FocusTask[]>(DEFAULT_TASKS);
-  
-  // Financial parameters
+  // Multi-workspace state initialization
+  const [workspaces, setWorkspaces] = useState<WorkspaceState[]>(() => [
+    {
+      id: 'default',
+      name: 'Workspace 1',
+      goals: DEFAULT_GOALS,
+      departments: DEFAULT_DEPARTMENTS,
+      risks: DEFAULT_RISKS,
+      gtmChannels: DEFAULT_GTM,
+      tasks: DEFAULT_TASKS,
+      mrrGrowthRate: 8,
+      chatMessages: [
+        {
+          id: 'welcome',
+          sender: 'assistant',
+          text: 'Hello! I am your FounderOS AI Copilot. I have access to your workspace metrics (runway, OKRs, FTE count, risks, and GTM strategy). Ask me to analyze metrics, add new objectives, or run simulations!',
+          timestamp: new Date(),
+        },
+      ],
+      isVoiceChat: false,
+      activeDetailCard: null,
+      selectedDeptId: 'eng',
+      notes: DEFAULT_NOTES,
+      uploadedFiles: DEFAULT_FILES,
+    },
+  ]);
+
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('default');
+  const [activeSidebarTab, setActiveSidebarTab] = useState<string>('canvas');
+  const [scrollExpansion, setScrollExpansionState] = useState(0);
+  const [isFullscreen, setIsFullscreenState] = useState(false);
+  const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+
+  const setScrollExpansion = (val: number | ((prev: number) => number)) => {
+    setScrollExpansionState(prev => {
+      const next = typeof val === 'function' ? val(prev) : val;
+      const clamped = Math.max(0, Math.min(100, next));
+      if (clamped === 100) {
+        setIsFullscreenState(true);
+      } else {
+        setIsFullscreenState(false);
+      }
+      return clamped;
+    });
+  };
+
+  const setIsFullscreen = (val: boolean) => {
+    setIsFullscreenState(val);
+    setScrollExpansionState(val ? 100 : 0);
+  };
+
+  // Resolve active workspace state
+  const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId) || workspaces[0];
+
+  const goals = activeWorkspace.goals;
+  const departments = activeWorkspace.departments;
+  const risks = activeWorkspace.risks;
+  const gtmChannels = activeWorkspace.gtmChannels;
+  const tasks = activeWorkspace.tasks;
+  const mrrGrowthRate = activeWorkspace.mrrGrowthRate;
+  const chatMessages = activeWorkspace.chatMessages;
+  const isVoiceChat = activeWorkspace.isVoiceChat;
+  const activeDetailCard = activeWorkspace.activeDetailCard;
+  const selectedDeptId = activeWorkspace.selectedDeptId;
+  const notes = activeWorkspace.notes || [];
+  const uploadedFiles = activeWorkspace.uploadedFiles || [];
+
+  // Helper to update active workspace fields
+  const updateActiveWorkspace = (updater: (prev: WorkspaceState) => Partial<WorkspaceState>) => {
+    setWorkspaces(prev => prev.map(w => w.id === activeWorkspaceId ? { ...w, ...updater(w) } : w));
+  };
+
+  // Financial parameters (constant base and cash)
   const cashBalance = 1500000; // $1.5M cash
-  const [mrrGrowthRate, setMrrGrowthRate] = useState(8); // 8% monthly growth
   const baseMRR = 125000; // $125k base MRR
-  
-  // Dynamic metrics
+
+  // Dynamic metrics calculated on active workspace values
   const totalFTE = departments.reduce((acc, curr) => acc + curr.fte, 0);
-  
-  // Operating burn is base cost ($45k) + employee cost ($5.5k per FTE)
   const operatingBurn = 45000 + totalFTE * 5500;
-  
-  // Monthly revenue including growth multiplier
   const monthlyRev = Math.round(baseMRR * (1 + mrrGrowthRate / 100));
-  
-  // Net Burn = Operating Burn - Monthly Revenue (if monthly revenue is less than operating burn)
   const netBurn = Math.max(10000, operatingBurn - monthlyRev);
   const projectedRunway = Number((cashBalance / netBurn).toFixed(1));
 
-  // Goal Progress
-  const goalProgress = goals.length > 0 
-    ? Math.round((goals.filter(g => g.done).length / goals.length) * 100) 
+  const goalProgress = goals.length > 0
+    ? Math.round((goals.filter(g => g.done).length / goals.length) * 100)
     : 0;
 
-  // Confidence Score based on risks: starts at 50% and goes up by 15% per mitigated risk, capped at 100%
   const confidenceScore = Math.min(
     100,
     50 + risks.filter(r => r.status === 'Mitigated').length * 16.6
   );
 
-  // Sync OKR goal completions to Focus Tasks
-  const toggleGoal = (id: string) => {
-    setGoals(prev => prev.map(g => {
-      if (g.id === id) {
-        const nextDone = !g.done;
-        // Check if there is an associated task and update it
-        setTasks(tPrev => tPrev.map(t => {
-          if (t.label.toLowerCase().includes(g.label.toLowerCase()) || 
-              (g.id === 'g2' && t.id === 't1') || // VP Eng hiring sync
-              (g.id === 'g3' && t.id === 't2')) { // Seed round deck sync
-            return { ...t, done: nextDone };
-          }
-          return t;
-        }));
-        return { ...g, done: nextDone };
-      }
-      return g;
-    }));
+  // Switch active mrr growth rate
+  const setMrrGrowthRate = (rate: number) => {
+    updateActiveWorkspace(() => ({ mrrGrowthRate: rate }));
   };
 
-  const addGoal = (label: string) => {
-    const newId = `g_${Date.now()}`;
-    setGoals(prev => [...prev, { id: newId, label, done: false }]);
-    // Add to focus tasks as well
-    setTasks(prev => [...prev, { id: `t_${Date.now()}`, label: `Align teams on OKR: ${label}`, done: false }]);
-  };
-
-  // Hire headcount
-  const hireHeadcount = (deptId: string, role: string) => {
-    setDepartments(prev => prev.map(d => {
-      if (d.id === deptId) {
-        return {
-          ...d,
-          fte: d.fte + 1,
-          roles: [...d.roles, role],
-        };
-      }
-      return d;
-    }));
-    // Add a corresponding task
-    setTasks(prev => [
-      { id: `t_${Date.now()}`, label: `Onboard new hire for ${role}`, done: false },
-      ...prev
-    ]);
-  };
-
-  // Mitigate risks
-  const mitigateRisk = (id: string) => {
-    setRisks(prev => prev.map(r => {
-      if (r.id === id) {
-        // Toggle status
-        const nextStatus = r.status === 'Mitigated' ? 'Active' : 'Mitigated';
-        // If mitigated, complete the corresponding task
-        setTasks(tPrev => tPrev.map(t => {
-          if ((r.id === 'r1' && t.id === 't1') || 
-              (r.id === 'r3' && t.id === 't4') ||
-              t.label.toLowerCase().includes(r.label.toLowerCase())) {
-            return { ...t, done: nextStatus === 'Mitigated' };
-          }
-          return t;
-        }));
-        return { ...r, status: nextStatus };
-      }
-      return r;
-    }));
-  };
-
-  const addRisk = (label: string, impact: 'High' | 'Medium' | 'Low') => {
-    const newId = `r_${Date.now()}`;
-    setRisks(prev => [...prev, { id: newId, label, status: 'Active', impact }]);
-    // Add warning task
-    setTasks(prev => [...prev, { id: `t_${Date.now()}`, label: `Mitigate risk: ${label}`, done: false }]);
-  };
-
-  // GTM Channels Budget adjustments
-  const updateGTMChannelBudget = (id: string, budget: number) => {
-    setGtmChannels(prev => {
-      const target = prev.find(c => c.id === id);
-      if (!target) return prev;
-      
-      const diff = budget - target.budget;
-      const otherChannels = prev.filter(c => c.id !== id);
-      
-      // Distribute the inverse difference among other channels proportionally
-      const otherSum = otherChannels.reduce((sum, c) => sum + c.budget, 0);
-      if (otherSum === 0) {
-        // Fallback split
-        return prev.map(c => {
-          if (c.id === id) return { ...c, budget };
-          return { ...c, budget: Math.round((100 - budget) / otherChannels.length) };
-        });
-      }
-
-      const updatedOther = otherChannels.map(c => {
-        const share = c.budget / otherSum;
-        const nextBudget = Math.max(0, Math.round(c.budget - diff * share));
-        return { ...c, budget: nextBudget };
-      });
-
-      // Adjust the last one to make exactly sum to 100
-      const total = budget + updatedOther.reduce((sum, c) => sum + c.budget, 0);
-      if (total !== 100 && updatedOther.length > 0) {
-        updatedOther[updatedOther.length - 1].budget += (100 - total);
-      }
-
-      return prev.map(c => {
-        if (c.id === id) return { ...c, budget };
-        const updated = updatedOther.find(uo => uo.id === c.id);
-        return updated ? updated : c;
-      });
+  // Switch chat messages list
+  const setChatMessages = (messagesOrUpdater: ChatMessage[] | ((prev: ChatMessage[]) => ChatMessage[])) => {
+    updateActiveWorkspace(w => {
+      const nextMsgs = typeof messagesOrUpdater === 'function' 
+        ? messagesOrUpdater(w.chatMessages) 
+        : messagesOrUpdater;
+      return { chatMessages: nextMsgs };
     });
   };
 
-  // Tasks operations
-  const toggleTask = (id: string) => {
-    setTasks(prev => prev.map(t => {
-      if (t.id === id) {
-        const nextDone = !t.done;
-        // Check for goals/risks association
-        if (t.id === 't1') {
-          // VP Eng sync
-          setRisks(rPrev => rPrev.map(r => r.id === 'r1' ? { ...r, status: nextDone ? 'Mitigated' : 'Active' } : r));
-          setGoals(gPrev => gPrev.map(g => g.id === 'g2' ? { ...g, done: nextDone } : g));
-        } else if (t.id === 't2') {
-          // Seed round sync
-          setGoals(gPrev => gPrev.map(g => g.id === 'g3' ? { ...g, done: nextDone } : g));
-        } else if (t.id === 't4') {
-          // SOC2 sync
-          setRisks(rPrev => rPrev.map(r => r.id === 'r3' ? { ...r, status: nextDone ? 'Mitigated' : 'Active' } : r));
+  // Set active detail card
+  const setActiveDetailCard = (cardId: string | null) => {
+    updateActiveWorkspace(() => ({ activeDetailCard: cardId }));
+  };
+
+  // Set voice chat state
+  const setIsVoiceChat = (val: boolean) => {
+    updateActiveWorkspace(() => ({ isVoiceChat: val }));
+  };
+
+  // Set selected department ID
+  const setSelectedDeptId = (deptId: string) => {
+    updateActiveWorkspace(() => ({ selectedDeptId: deptId }));
+  };
+
+  // Sync OKR goal completions to Focus Tasks
+  const toggleGoal = (id: string) => {
+    updateActiveWorkspace(w => {
+      const updatedGoals = w.goals.map(g => g.id === id ? { ...g, done: !g.done } : g);
+      const targetGoal = w.goals.find(g => g.id === id);
+      const nextDone = targetGoal ? !targetGoal.done : false;
+
+      const updatedTasks = w.tasks.map(t => {
+        if (targetGoal && (t.label.toLowerCase().includes(targetGoal.label.toLowerCase()) ||
+            (id === 'g2' && t.id === 't1') ||
+            (id === 'g3' && t.id === 't2'))) {
+          return { ...t, done: nextDone };
         }
-        return { ...t, done: nextDone };
-      }
-      return t;
+        return t;
+      });
+
+      return { goals: updatedGoals, tasks: updatedTasks };
+    });
+  };
+
+  const addGoal = (
+    label: string,
+    category?: 'growth' | 'product' | 'finance' | 'talent' | 'compliance',
+    timeline?: string,
+    owner?: string
+  ) => {
+    updateActiveWorkspace(w => ({
+      goals: [
+        ...w.goals,
+        {
+          id: `g_${Date.now()}`,
+          label,
+          done: false,
+          category: category || 'product',
+          timeline: timeline || 'Q3 2026',
+          owner: owner || 'CEO',
+        },
+      ],
+      tasks: [
+        ...w.tasks,
+        {
+          id: `t_${Date.now()}`,
+          label: `Align teams on OKR: ${label}`,
+          done: false,
+          status: 'in_progress',
+        },
+      ],
     }));
   };
 
-  const addTask = (label: string) => {
-    setTasks(prev => [...prev, { id: `t_${Date.now()}`, label, done: false }]);
+  const deleteGoal = (id: string) => {
+    updateActiveWorkspace(w => ({
+      goals: w.goals.filter(g => g.id !== id),
+    }));
+  };
+
+  const hireHeadcount = (deptId: string, role: string) => {
+    updateActiveWorkspace(w => {
+      const updatedDeps = w.departments.map(d => d.id === deptId ? {
+        ...d,
+        fte: d.fte + 1,
+        roles: [...d.roles, role],
+      } : d);
+
+      const updatedTasks = [
+        { id: `t_${Date.now()}`, label: `Onboard new hire for ${role}`, done: false },
+        ...w.tasks,
+      ];
+
+      return { departments: updatedDeps, tasks: updatedTasks };
+    });
+  };
+
+  const mitigateRisk = (id: string) => {
+    updateActiveWorkspace(w => {
+      const targetRisk = w.risks.find(r => r.id === id);
+      if (!targetRisk) return {};
+
+      const nextMitigated: 'Active' | 'Mitigated' = targetRisk.status === 'Mitigated' ? 'Active' : 'Mitigated';
+      const updatedRisks = w.risks.map(r => r.id === id ? { ...r, status: nextMitigated } : r);
+
+
+      const updatedTasks = w.tasks.map(t => {
+        if ((id === 'r1' && t.id === 't1') ||
+            (id === 'r3' && t.id === 't4') ||
+            t.label.toLowerCase().includes(targetRisk.label.toLowerCase())) {
+          return { ...t, done: nextMitigated === 'Mitigated' };
+        }
+        return t;
+      });
+
+      return { risks: updatedRisks, tasks: updatedTasks };
+    });
+  };
+
+  const addRisk = (label: string, impact: 'High' | 'Medium' | 'Low') => {
+    updateActiveWorkspace(w => ({
+      risks: [...w.risks, { id: `r_${Date.now()}`, label, status: 'Active', impact }],
+      tasks: [...w.tasks, { id: `t_${Date.now()}`, label: `Mitigate risk: ${label}`, done: false }],
+    }));
+  };
+
+  const updateGTMChannelBudget = (id: string, budget: number) => {
+    updateActiveWorkspace(w => {
+      const target = w.gtmChannels.find(c => c.id === id);
+      if (!target) return {};
+
+      const diff = budget - target.budget;
+      const otherChannels = w.gtmChannels.filter(c => c.id !== id);
+      const otherSum = otherChannels.reduce((sum, c) => sum + c.budget, 0);
+
+      let updatedGtm;
+      if (otherSum === 0) {
+        updatedGtm = w.gtmChannels.map(c => {
+          if (c.id === id) return { ...c, budget };
+          return { ...c, budget: Math.round((100 - budget) / otherChannels.length) };
+        });
+      } else {
+        const updatedOther = otherChannels.map(c => {
+          const share = c.budget / otherSum;
+          return { ...c, budget: Math.max(0, Math.round(c.budget - diff * share)) };
+        });
+
+        const total = budget + updatedOther.reduce((sum, c) => sum + c.budget, 0);
+        if (total !== 100 && updatedOther.length > 0) {
+          updatedOther[updatedOther.length - 1].budget += (100 - total);
+        }
+
+        updatedGtm = w.gtmChannels.map(c => {
+          if (c.id === id) return { ...c, budget };
+          const updated = updatedOther.find(uo => uo.id === c.id);
+          return updated ? updated : c;
+        });
+      }
+
+      return { gtmChannels: updatedGtm };
+    });
+  };
+
+  const toggleTask = (id: string) => {
+    updateActiveWorkspace(w => {
+      const updatedTasks = w.tasks.map(t => {
+        if (t.id === id) {
+          const nextDone = !t.done;
+          const nextStatus: 'in_progress' | 'done' | 'highlighted' = nextDone ? 'done' : 'in_progress';
+          return { ...t, done: nextDone, status: nextStatus };
+        }
+        return t;
+      });
+
+      // Synchronize back to goals and risks
+      const targetTask = w.tasks.find(t => t.id === id);
+      const nextDone = targetTask ? !targetTask.done : false;
+
+      let nextRisks = w.risks;
+      let nextGoals = w.goals;
+
+      if (id === 't1') {
+        nextRisks = w.risks.map(r => r.id === 'r1' ? { ...r, status: nextDone ? 'Mitigated' : 'Active' } : r);
+        nextGoals = w.goals.map(g => g.id === 'g2' ? { ...g, done: nextDone } : g);
+      } else if (id === 't2') {
+        nextGoals = w.goals.map(g => g.id === 'g3' ? { ...g, done: nextDone } : g);
+      } else if (id === 't4') {
+        nextRisks = w.risks.map(r => r.id === 'r3' ? { ...r, status: nextDone ? 'Mitigated' : 'Active' } : r);
+      }
+
+      return { tasks: updatedTasks, risks: nextRisks, goals: nextGoals };
+    });
+  };
+
+  const addTask = (label: string, status: 'in_progress' | 'done' | 'highlighted' = 'in_progress') => {
+    updateActiveWorkspace(w => ({
+      tasks: [...w.tasks, { id: `t_${Date.now()}`, label, done: status === 'done', status }],
+    }));
+  };
+
+  const updateTaskStatus = (id: string, status: 'in_progress' | 'done' | 'highlighted') => {
+    updateActiveWorkspace(w => {
+      const updatedTasks = w.tasks.map(t => {
+        if (t.id === id) {
+          return { ...t, status, done: status === 'done' };
+        }
+        return t;
+      });
+
+      const nextDone = status === 'done';
+      let nextRisks = w.risks;
+      let nextGoals = w.goals;
+
+      if (id === 't1') {
+        nextRisks = w.risks.map(r => r.id === 'r1' ? { ...r, status: nextDone ? 'Mitigated' : 'Active' } : r);
+        nextGoals = w.goals.map(g => g.id === 'g2' ? { ...g, done: nextDone } : g);
+      } else if (id === 't2') {
+        nextGoals = w.goals.map(g => g.id === 'g3' ? { ...g, done: nextDone } : g);
+      } else if (id === 't4') {
+        nextRisks = w.risks.map(r => r.id === 'r3' ? { ...r, status: nextDone ? 'Mitigated' : 'Active' } : r);
+      }
+
+      return { tasks: updatedTasks, risks: nextRisks, goals: nextGoals };
+    });
   };
 
   const dismissTask = (id: string) => {
-    setTasks(prev => prev.filter(t => t.id !== id));
+    updateActiveWorkspace(w => ({
+      tasks: w.tasks.filter(t => t.id !== id),
+    }));
   };
 
   const resetWorkspace = () => {
-    setGoals(DEFAULT_GOALS);
-    setDepartments(DEFAULT_DEPARTMENTS);
-    setRisks(DEFAULT_RISKS);
-    setGtmChannels(DEFAULT_GTM);
-    setTasks(DEFAULT_TASKS);
-    setMrrGrowthRate(8);
+    updateActiveWorkspace(() => ({
+      goals: DEFAULT_GOALS,
+      departments: DEFAULT_DEPARTMENTS,
+      risks: DEFAULT_RISKS,
+      gtmChannels: DEFAULT_GTM,
+      tasks: DEFAULT_TASKS,
+      mrrGrowthRate: 8,
+    }));
+  };
+
+  // Create workspace method
+  const createWorkspace = (name: string) => {
+    const newId = `ws_${Date.now()}`;
+    const newWorkspace: WorkspaceState = {
+      id: newId,
+      name,
+      goals: DEFAULT_GOALS.map(g => ({ ...g, done: false })),
+      departments: DEFAULT_DEPARTMENTS.map(d => ({ ...d })),
+      risks: DEFAULT_RISKS.map(r => ({ ...r, status: 'Active' })),
+      gtmChannels: DEFAULT_GTM.map(gtm => ({ ...gtm })),
+      tasks: DEFAULT_TASKS.map(t => ({ ...t, done: false })),
+      mrrGrowthRate: 8,
+      chatMessages: [
+        {
+          id: 'welcome',
+          sender: 'assistant',
+          text: `Hello! Welcome to your new ${name} workspace. I am your FounderOS AI Copilot. Ask me questions or simulate objectives for this project.`,
+          timestamp: new Date(),
+        },
+      ],
+      isVoiceChat: false,
+      activeDetailCard: null,
+      selectedDeptId: 'eng',
+      notes: [
+        {
+          id: `n_welcome_${Date.now()}`,
+          title: `Getting Started with ${name}`,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          blocks: [
+            { id: `b_welcome_h1_${Date.now()}`, type: 'h1', content: `Getting Started with ${name}` },
+            { id: `b_welcome_text_${Date.now()}`, type: 'text', content: `This is your first note in the ${name} workspace. You can write rich text, headings, checklists, and tables here.` }
+          ]
+        }
+      ],
+      uploadedFiles: [],
+    };
+
+    setWorkspaces(prev => [...prev, newWorkspace]);
+    setActiveWorkspaceId(newId);
+    setActiveNoteId(null);
+    setActiveSidebarTab('canvas');
+  };
+
+  const deleteWorkspace = (id: string) => {
+    if (workspaces.length <= 1) return;
+    setWorkspaces(prev => {
+      const filtered = prev.filter(w => w.id !== id);
+      if (activeWorkspaceId === id) {
+        const fallbackIndex = prev.findIndex(w => w.id === id) - 1;
+        const fallback = prev[fallbackIndex >= 0 ? fallbackIndex : 1];
+        setActiveWorkspaceId(fallback.id);
+        setActiveNoteId(null);
+      }
+      return filtered;
+    });
+  };
+
+  const handleSetActiveWorkspaceId = (id: string) => {
+    setActiveWorkspaceId(id);
+    setActiveNoteId(null);
+  };
+
+  const renameWorkspace = (id: string, name: string) => {
+    setWorkspaces(prev => prev.map(w => w.id === id ? { ...w, name } : w));
+  };
+
+  const addNote = (title: string, blocks?: NoteBlock[]) => {
+    const newNote: Note = {
+      id: `note_${Date.now()}`,
+      title: title || 'Untitled Note',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      blocks: blocks || [
+        { id: `b_h1_${Date.now()}`, type: 'h1', content: title || 'Untitled Note' },
+        { id: `b_text_${Date.now()}`, type: 'text', content: '' }
+      ]
+    };
+    updateActiveWorkspace(w => ({
+      notes: [...(w.notes || []), newNote]
+    }));
+    setActiveNoteId(newNote.id);
+  };
+
+  const updateNote = (id: string, updates: Partial<Note>) => {
+    updateActiveWorkspace(w => ({
+      notes: (w.notes || []).map(n => n.id === id ? { ...n, ...updates, updatedAt: new Date() } : n)
+    }));
+  };
+
+  const deleteNote = (id: string) => {
+    updateActiveWorkspace(w => ({
+      notes: (w.notes || []).filter(n => n.id !== id)
+    }));
+    if (activeNoteId === id) {
+      setActiveNoteId(null);
+    }
+  };
+
+  const addUploadedFile = (file: Omit<WorkspaceFile, 'id' | 'uploadedAt'>) => {
+    updateActiveWorkspace(w => ({
+      uploadedFiles: [
+        ...(w.uploadedFiles || []),
+        {
+          ...file,
+          id: `file_${Date.now()}`,
+          uploadedAt: new Date()
+        }
+      ]
+    }));
+  };
+
+  const deleteUploadedFile = (id: string) => {
+    updateActiveWorkspace(w => ({
+      uploadedFiles: (w.uploadedFiles || []).filter(f => f.id !== id)
+    }));
   };
 
   return (
@@ -303,6 +816,7 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
         goals,
         toggleGoal,
         addGoal,
+        deleteGoal,
         goalProgress,
         cashBalance,
         baseMRR,
@@ -323,10 +837,50 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
         tasks,
         toggleTask,
         addTask,
+        updateTaskStatus,
         dismissTask,
         resetWorkspace,
+        
+        // Multi-workspace API
+        workspaces,
+        activeWorkspaceId,
+        setActiveWorkspaceId: handleSetActiveWorkspaceId,
+        createWorkspace,
+        deleteWorkspace,
+        renameWorkspace,
+
+        // Notes API
+        notes,
+        addNote,
+        updateNote,
+        deleteNote,
+        activeNoteId,
+        setActiveNoteId,
+        chatMessages,
+        setChatMessages,
+        isVoiceChat,
+        setIsVoiceChat,
+        activeDetailCard,
+        setActiveDetailCard,
+        selectedDeptId,
+        setSelectedDeptId,
+
+        // Sidebar sync
+        activeSidebarTab,
+        setActiveSidebarTab,
+
+        scrollExpansion,
+        setScrollExpansion,
+        isFullscreen,
+        setIsFullscreen,
+
+        // Files API
+        uploadedFiles,
+        addUploadedFile,
+        deleteUploadedFile,
       }}
     >
+
       {children}
     </FounderWorkspaceContext.Provider>
   );

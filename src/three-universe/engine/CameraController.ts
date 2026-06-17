@@ -384,9 +384,9 @@ export class CameraController {
     const fullW = width / scale;
     const fullH = height / scale;
     const subW = width;
-    const subH = height * THREE.MathUtils.lerp(1, 0.38, t);
+    const subH = height;
     const offsetX = (fullW - subW) * 0.5;
-    const offsetY = height * THREE.MathUtils.lerp(0, 0.11, t) + (fullH - subH) * 0.5 + fsT * fullH * 0.65;
+    const offsetY = (fullH - subH) * THREE.MathUtils.lerp(0.5, 0.7, t) + fsT * fullH * 0.65;
 
     this.camera.setViewOffset(fullW, fullH, offsetX, offsetY, subW, subH);
     this.camera.updateProjectionMatrix();

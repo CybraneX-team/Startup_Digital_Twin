@@ -261,13 +261,16 @@
   grid-column: 1;
   grid-row: 1 / -1;
   transform: translateX(-110%);
+  justify-self: start;
 }
 
 .twin-workspace-panel--right {
   grid-column: 3;
   grid-row: 1 / -1;
   transform: translateX(110%);
+  justify-self: end;
 }
+
 
 .twin-workspace-panel--canvas {
   grid-column: 2;
@@ -1000,6 +1003,11 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.12),
     inset -1px 0 0 rgba(129, 140, 248, 0.12);
 }
+
+.ws-right-panel {
+  width: 268px;
+}
+
 
 .ws-nav-section {
   padding-bottom: 4px;
@@ -1967,4 +1975,299 @@ input[type="range"]::-moz-range-thumb:hover {
   pointer-events: auto !important;
   box-shadow: -20px 0 50px rgba(0, 0, 0, 0.95);
   border-left: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Scroll transition-override helper rules */
+.twin-workspace-shell--scrolling,
+.twin-workspace-shell--scrolling .twin-workspace-panel {
+  transition: none !important;
+}
+
+.ws-canvas-wrap--scrolling .ws-canvas-frame-fill,
+.ws-canvas-wrap--scrolling .ws-canvas-frame-stroke,
+.ws-canvas-wrap--scrolling .ws-canvas-clip-path {
+  transition: none !important;
+}
+
+/* ==========================================
+   Notes Component Styling
+   ========================================== */
+
+/* Apple-style floating copy tooltip */
+@keyframes tooltip-fade-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -90%) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -100%) scale(1);
+  }
+}
+
+.animate-tooltip-in {
+  animation: tooltip-fade-in 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Toast animations */
+@keyframes slide-up-toast {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-toast-in {
+  animation: slide-up-toast 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Custom styles for tables within blocks */
+.ws-notes-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.ws-notes-table th, 
+.ws-notes-table td {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ws-notes-table input {
+  transition: background-color 0.2s, border-color 0.2s;
+}
+
+.ws-notes-table input:focus {
+  background-color: rgba(255, 255, 255, 0.03);
+}
+
+/* Scrollbar adjustment for notes list */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 99px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Hover controls styling */
+.group:hover .group-hover\:opacity-100 {
+  opacity: 1;
+}
+
+/* Typography styles in raw preview */
+.underline {
+  text-decoration: underline;
+}
+
+strong {
+  font-weight: 700;
+  color: #fff;
+}
+
+em {
+  font-style: italic;
+}
+/* ═══════════════════════════════════════════════════════════════
+   FILES LIBRARY DASHBOARD  ws-files-*
+   ════════════════════════════════════════════════════════════════ */
+.ws-files-dashboard {
+  display: flex; flex-direction: column;
+  height: 100%; min-height: 0; overflow: hidden;
+}
+.ws-files-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 12px 16px 10px; flex-shrink: 0;
+}
+.ws-files-stats-bar {
+  display: flex; align-items: center; gap: 0;
+  padding: 8px 16px;
+  background: rgba(255,255,255,0.02);
+  border-top: 1px solid rgba(255,255,255,0.04);
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+  margin-bottom: 4px; flex-shrink: 0;
+}
+.ws-files-stat {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  flex: 1; border-right: 1px solid rgba(255,255,255,0.05); padding: 4px 8px;
+}
+.ws-files-stat:last-child { border-right: none; }
+.ws-files-stat-val { font-size: 15px; font-weight: 700; color: rgba(255,255,255,0.85); line-height: 1; }
+.ws-files-stat-label { font-size: 9.5px; font-weight: 500; color: rgba(255,255,255,0.3); text-transform: uppercase; letter-spacing: 0.06em; }
+.ws-files-search-box {
+  display: flex; align-items: center; gap: 6px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 10px; padding: 5px 10px; transition: border-color 0.2s;
+}
+.ws-files-search-box:focus-within { border-color: rgba(168,85,247,0.4); }
+.ws-files-search-input {
+  background: transparent; border: none; outline: none;
+  color: rgba(255,255,255,0.7); font-size: 12px; width: 130px;
+}
+.ws-files-search-input::placeholder { color: rgba(255,255,255,0.2); }
+.ws-files-upload-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 12px;
+  background: rgba(168,85,247,0.12); border: 1px solid rgba(168,85,247,0.25);
+  border-radius: 10px; color: rgba(196,148,255,0.9);
+  font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+}
+.ws-files-upload-btn:hover {
+  background: rgba(168,85,247,0.22); border-color: rgba(168,85,247,0.45); color: #d8b4fe;
+}
+.ws-files-folder-grid { display: flex; flex-direction: column; gap: 6px; }
+.ws-files-folder-card {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px; cursor: pointer; transition: all 0.2s; text-align: left; width: 100%;
+}
+.ws-files-folder-card:hover {
+  background: rgba(255,255,255,0.06); border-color: rgba(251,191,36,0.25);
+  transform: translateY(-1px); box-shadow: 0 6px 20px rgba(0,0,0,0.3);
+}
+.ws-files-folder-icon-wrap {
+  width: 40px; height: 40px; border-radius: 10px;
+  background: rgba(251,191,36,0.08); border: 1px solid rgba(251,191,36,0.15);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.ws-files-type-badge {
+  font-size: 8.5px; font-weight: 700; letter-spacing: 0.08em;
+  padding: 2px 6px; border-radius: 5px;
+  background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.4);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.ws-files-file-list { display: flex; flex-direction: column; gap: 4px; }
+.ws-files-file-row {
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 12px; transition: all 0.2s;
+}
+.ws-files-file-row:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.1); }
+.ws-files-file-icon-wrap {
+  width: 36px; height: 36px; border-radius: 9px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08);
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.ws-files-action-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 8px;
+  background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.4); cursor: pointer; transition: all 0.15s;
+}
+.ws-files-action-btn:hover { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.8); }
+.ws-files-action-btn--danger:hover {
+  background: rgba(239,68,68,0.15); border-color: rgba(239,68,68,0.25); color: #f87171;
+}
+/* FILE PREVIEWER MODAL */
+.ws-files-previewer-backdrop {
+  position: fixed; inset: 0; z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.7); backdrop-filter: blur(12px);
+  animation: ws-fade-in 0.2s ease;
+}
+@keyframes ws-fade-in { from { opacity: 0; } to { opacity: 1; } }
+.ws-files-previewer-modal {
+  display: flex; flex-direction: column;
+  width: min(900px, 92vw); height: min(620px, 88vh);
+  background: rgba(12,12,20,0.97); border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 20px; overflow: hidden;
+  box-shadow: 0 32px 80px rgba(0,0,0,0.75), 0 0 0 1px rgba(255,255,255,0.04);
+  animation: ws-modal-in 0.25s cubic-bezier(0.16,1,0.3,1);
+}
+@keyframes ws-modal-in {
+  from { opacity: 0; transform: scale(0.94) translateY(12px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.ws-files-previewer-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.07);
+  background: rgba(255,255,255,0.02); flex-shrink: 0;
+}
+/* PDF Viewer */
+.ws-files-pdf-sidebar {
+  width: 140px; flex-shrink: 0;
+  background: rgba(0,0,0,0.3); border-right: 1px solid rgba(255,255,255,0.06);
+  padding: 14px 10px; overflow-y: auto; display: flex; flex-direction: column; gap: 6px;
+}
+.ws-files-pdf-thumb {
+  display: flex; flex-direction: column; gap: 3px; padding: 8px 10px;
+  background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px; cursor: pointer; text-align: left; transition: all 0.15s;
+  color: rgba(255,255,255,0.55);
+}
+.ws-files-pdf-thumb:hover { background: rgba(255,255,255,0.07); color: rgba(255,255,255,0.8); }
+.ws-files-pdf-thumb.active { background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.25); color: #fca5a5; }
+.ws-files-pdf-doc { padding-bottom: 24px; }
+.ws-files-pdf-stamp {
+  width: 48px; height: 48px; border-radius: 12px;
+  background: rgba(239,68,68,0.12); border: 1px solid rgba(239,68,68,0.2);
+  color: #f87171; font-size: 10px; font-weight: 900; letter-spacing: 0.05em;
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.ws-files-pdf-section-header {
+  display: flex; align-items: center; gap: 10px;
+  padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+.ws-files-pdf-section-badge {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.08em;
+  padding: 3px 8px; border-radius: 6px;
+  background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2);
+  color: #fca5a5; flex-shrink: 0;
+}
+.ws-files-pdf-field {
+  display: flex; flex-direction: column; gap: 5px; padding: 12px 14px;
+  background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.05); border-radius: 12px;
+}
+.ws-files-pdf-field label {
+  font-size: 10px; font-weight: 600; color: rgba(255,255,255,0.3);
+  text-transform: uppercase; letter-spacing: 0.08em;
+}
+.ws-files-pdf-field p { font-size: 13.5px; color: rgba(255,255,255,0.65); line-height: 1.55; }
+.ws-files-pdf-evidence-box {
+  padding: 14px; background: rgba(255,255,255,0.02);
+  border: 1px solid rgba(255,255,255,0.06); border-radius: 12px;
+}
+/* Excel Viewer */
+.ws-files-excel-toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; background: rgba(16,185,129,0.05);
+  border: 1px solid rgba(16,185,129,0.12); border-radius: 12px;
+}
+.ws-files-excel-grid { border-collapse: collapse; font-size: 12.5px; }
+.ws-files-excel-header {
+  background: rgba(16,185,129,0.07); border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-right: 1px solid rgba(255,255,255,0.05); padding: 9px 14px; text-align: left;
+  font-size: 11px; font-weight: 700; color: rgba(255,255,255,0.5);
+  text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
+}
+.ws-files-excel-row-num {
+  background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.04);
+  border-right: 1px solid rgba(255,255,255,0.06); padding: 8px 10px;
+  text-align: center; font-size: 10px; color: rgba(255,255,255,0.2); font-weight: 600;
+  width: 32px; min-width: 32px;
+}
+.ws-files-excel-row:hover { background: rgba(255,255,255,0.025); }
+.ws-files-excel-row:nth-child(even) { background: rgba(255,255,255,0.012); }
+.ws-files-excel-cell {
+  border-bottom: 1px solid rgba(255,255,255,0.04); border-right: 1px solid rgba(255,255,255,0.04);
+  padding: 8px 14px; color: rgba(255,255,255,0.65); white-space: nowrap;
+}
+/* Text Reader */
+.ws-files-text-reader {
+  background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.07);
+  border-radius: 14px; padding: 24px; min-height: 100%;
 }

@@ -15,8 +15,8 @@ function Sparkline({ trend }: { trend: 'up' | 'down' }) {
 /** Reusable workspace right rail — live signals, focus today, minimap. */
 export function WorkspaceRightPanel({ className }: { className?: string }) {
   return (
-    <aside className={`ws-right-panel flex flex-col gap-3 shrink-0 min-h-0 ${className ?? ''}`}>
-      <div className="ws-glass-strong rounded-2xl flex flex-col min-h-0 flex overflow-hidden">
+    <aside className={`ws-right-panel flex flex-col gap-3 shrink-0 h-full min-h-0 ${className ?? ''}`}>
+      <div className="ws-glass-strong rounded-2xl flex flex-col shrink-0 overflow-hidden" style={{ maxHeight: '45%' }}>
         <div className="shrink-0 py-4 px-4.5 border-b border-white/[0.06]">
           <h2 className="text-sm font-semibold text-white flex items-center gap-2">
             Live Signals
@@ -42,7 +42,7 @@ export function WorkspaceRightPanel({ className }: { className?: string }) {
       </div>
 
       <WorkspaceFocusToday />
-      <WorkspaceCanvasMinimap />
+      {/* <WorkspaceCanvasMinimap /> */}
     </aside>
   );
 }

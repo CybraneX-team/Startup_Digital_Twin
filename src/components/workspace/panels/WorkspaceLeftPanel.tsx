@@ -1,3 +1,5 @@
+import { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
 import {
   ChartLine,
@@ -14,6 +16,7 @@ import {
   Users,
   FileText,
 } from 'lucide-react';
+import { useFounderWorkspace } from '../../../context/FounderWorkspaceContext';
 
 function SphereNavIcon({ className, active }: { className?: string; active?: boolean }) {
   return (
@@ -45,12 +48,11 @@ type NavItem = {
   label: string;
   icon?: LucideIcon;
   customIcon?: 'sphere';
-  active?: boolean;
   badge?: number;
 };
 
 const NAV_UNIVERSE: NavItem[] = [
-  { id: 'sphere', label: 'Sphere', customIcon: 'sphere', active: true },
+  { id: 'sphere', label: 'Sphere', customIcon: 'sphere' },
   { id: 'canvas', label: 'Canvas', icon: LayoutGrid },
   { id: 'signals', label: 'Signals', icon: Megaphone },
 ];
@@ -79,6 +81,32 @@ function NavSection({
   items: NavItem[];
   showDivider?: boolean;
 }) {
+  const {
+    activeSidebarTab,
+    setActiveSidebarTab,
+    workspaces,
+    activeWorkspaceId,
+    setActiveWorkspaceId,
+    deleteWorkspace,
+    renameWorkspace,
+  } = useFounderWorkspace();
+
+  const [activeDropdownWsId, setActiveDropdownWsId] = useState<string | null>(null);
+  const [editingWsId, setEditingWsId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState<string>('');
+  const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const [isProjectsExpanded, setIsProjectsExpanded] = useState(true);
+
+  // Close dropdown on clicking outside
+  useEffect(() => {
+    if (!activeDropdownWsId) return;
+    const handleOutsideClick = () => {
+      setActiveDropdownWsId(null);
+    };
+    window.addEventListener('click', handleOutsideClick);
+    return () => window.removeEventListener('click', handleOutsideClick);
+  }, [activeDropdownWsId]);
+
   return (
     <div className="ws-nav-section">
       {showDivider && <hr className="ws-nav-divider" />}
@@ -86,12 +114,19 @@ function NavSection({
       <ul className="ws-nav-list">
         {items.map(item => {
           const Icon = item.icon;
-          const isActive = item.active;
+          const isActive = item.id === activeSidebarTab && item.id !== 'projects';
 
           return (
             <li key={item.id}>
               <button
                 type="button"
+                onClick={() => {
+                  if (item.id === 'projects') {
+                    setIsProjectsExpanded(!isProjectsExpanded);
+                  } else {
+                    setActiveSidebarTab(item.id);
+                  }
+                }}
                 className={`ws-nav-item w-full ${isActive ? 'ws-nav-item--active' : ''}`}
               >
                 {item.customIcon === 'sphere' ? (
@@ -103,13 +138,147 @@ function NavSection({
                 {item.badge != null && (
                   <span className="ws-nav-badge tabular-nums">{item.badge}</span>
                 )}
-                {isActive && (
+                {item.id === 'projects' ? (
                   <ChevronRight
-                    className="ws-nav-chevron w-4 h-4 shrink-0"
-                    strokeWidth={2}
+                    className={`w-4 h-4 shrink-0 transition-transform duration-200 ${
+                      isProjectsExpanded ? 'rotate-90 text-white/50' : 'text-white/30'
+                    }`}
+                    strokeWidth={1.5}
                   />
+                ) : (
+                  isActive && (
+                    <ChevronRight
+                      className="ws-nav-chevron w-4 h-4 shrink-0"
+                      strokeWidth={2}
+                    />
+                  )
                 )}
               </button>
+
+              {/* Sub-projects list expanded under Projects tab when expanded */}
+              {item.id === 'projects' && isProjectsExpanded && (
+                <ul className="pl-6 mt-1.5 mb-2 space-y-1.5 border-l border-white/10 ml-5">
+                  {workspaces.map(ws => {
+                    const isActiveWorkspace = ws.id === activeWorkspaceId;
+                    const isEditing = editingWsId === ws.id;
+
+                    return (
+                      <li key={ws.id} className="relative group">
+                        {isEditing ? (
+                          <input
+                            type="text"
+                            value={editingName}
+                            onChange={(e) => setEditingName(e.target.value)}
+                            onBlur={() => {
+                              if (editingName.trim()) {
+                                renameWorkspace(ws.id, editingName.trim());
+                              }
+                              setEditingWsId(null);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                if (editingName.trim()) {
+                                  renameWorkspace(ws.id, editingName.trim());
+                                }
+                                setEditingWsId(null);
+                              } else if (e.key === 'Escape') {
+                                setEditingWsId(null);
+                              }
+                            }}
+                            className="bg-white/10 text-white border border-white/20 rounded px-2 py-1 text-[11px] w-full focus:outline-none focus:border-indigo-500"
+                            autoFocus
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!isActiveWorkspace) {
+                                  setActiveWorkspaceId(ws.id);
+                                }
+                                const rect = e.currentTarget.getBoundingClientRect();
+                                setCoords({ top: rect.top, left: rect.right + 8 });
+                                setActiveDropdownWsId(activeDropdownWsId === ws.id ? null : ws.id);
+                              }}
+                              className={`flex items-center gap-2 w-full text-left py-1.5 px-2.5 rounded-md text-[11px] font-medium transition-colors ${
+                                isActiveWorkspace
+                                  ? 'text-white bg-white/10'
+                                  : 'text-white/60 hover:text-white hover:bg-white/5'
+                              }`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                  isActiveWorkspace
+                                    ? 'bg-indigo-400 shadow-[0_0_8px_#818cf8]'
+                                    : 'bg-white/10 border border-white/20'
+                                }`}
+                              />
+                              <span className="truncate flex-1">{ws.name}</span>
+                              <span className="text-[9px] text-white/30 ml-auto opacity-0 group-hover:opacity-100 transition-opacity">
+                                •••
+                              </span>
+                            </button>
+
+                            {/* Dropdown Menu for Switch/Rename/Delete via Portal to avoid overflow clipping */}
+                            {activeDropdownWsId === ws.id && createPortal(
+                              <div
+                                onClick={(e) => e.stopPropagation()}
+                                className="fixed w-32 bg-[#121215]/95 border border-white/10 rounded-lg py-1 shadow-2xl z-[99999] backdrop-blur-md animate-in fade-in slide-in-from-left-2 duration-150"
+                                style={{
+                                  top: coords.top,
+                                  left: coords.left,
+                                }}
+                              >
+                                {!isActiveWorkspace && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setActiveWorkspaceId(ws.id);
+                                      setActiveDropdownWsId(null);
+                                    }}
+                                    className="w-full text-left px-2.5 py-1.5 text-[10px] font-semibold text-white/70 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-1.5"
+                                  >
+                                    <span className="w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                                    Switch to
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setEditingWsId(ws.id);
+                                    setEditingName(ws.name);
+                                    setActiveDropdownWsId(null);
+                                  }}
+                                  className="w-full text-left px-2.5 py-1.5 text-[10px] font-semibold text-white/70 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-1.5"
+                                >
+                                  <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                                  Rename
+                                </button>
+                                {workspaces.length > 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      deleteWorkspace(ws.id);
+                                      setActiveDropdownWsId(null);
+                                    }}
+                                    className="w-full text-left px-2.5 py-1.5 text-[10px] font-semibold text-rose-400/90 hover:text-rose-400 hover:bg-white/5 transition-colors flex items-center gap-1.5"
+                                  >
+                                    <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                                    Delete
+                                  </button>
+                                )}
+                              </div>,
+                              document.body
+                            )}
+                          </>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </li>
           );
         })}

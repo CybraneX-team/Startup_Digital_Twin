@@ -2,13 +2,11 @@ import type { CSSProperties, ReactNode } from 'react';
 import {
   CANVAS_BODY_TOP,
   CANVAS_CLIP_PATH_ID,
-  CANVAS_FRAME_PATH,
-  CANVAS_FRAME_PATH_NORMALIZED,
   CANVAS_FRAME_VIEWBOX,
   CANVAS_TAB_REGION,
-  CANVAS_FRAME_PATH_FULL,
-  CANVAS_FRAME_PATH_FULL_NORMALIZED,
+  getInterpolatedPaths,
 } from './canvasFrameShape';
+import { useFounderWorkspace } from '../../context/FounderWorkspaceContext';
 
 interface WorkspaceCanvasFrameProps {
   tabLabel?: ReactNode;
@@ -17,6 +15,7 @@ interface WorkspaceCanvasFrameProps {
 }
 
 export function WorkspaceCanvasFrame({ tabLabel, children, isFullscreen = false }: WorkspaceCanvasFrameProps) {
+  const { scrollExpansion } = useFounderWorkspace();
   const { w, h } = CANVAS_FRAME_VIEWBOX;
 
   const innerStyle: CSSProperties = {
@@ -24,8 +23,8 @@ export function WorkspaceCanvasFrame({ tabLabel, children, isFullscreen = false 
     WebkitClipPath: `url(#${CANVAS_CLIP_PATH_ID})`,
   };
 
-  const fillPath = isFullscreen ? CANVAS_FRAME_PATH_FULL : CANVAS_FRAME_PATH;
-  const clipPath = isFullscreen ? CANVAS_FRAME_PATH_FULL_NORMALIZED : CANVAS_FRAME_PATH_NORMALIZED;
+  const p = scrollExpansion / 100;
+  const { fillPath, clipPath } = getInterpolatedPaths(p);
 
   return (
     <div className={`ws-canvas-frame ${isFullscreen ? 'ws-canvas-frame--fullscreen' : ''}`}>

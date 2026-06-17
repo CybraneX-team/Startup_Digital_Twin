@@ -136,3 +136,18 @@ export const CANVAS_FRAME_PATH_FULL_NORMALIZED = serialize(
   1 / CANVAS_FRAME_VIEWBOX.w,
   1 / CANVAS_FRAME_VIEWBOX.h,
 );
+
+export function getInterpolatedPaths(p: number) {
+  const points = CANVAS_FRAME_POINTS.map((pt, i) => {
+    const ptFull = CANVAS_FRAME_POINTS_FULL[i];
+    return {
+      x: pt.x + (ptFull.x - pt.x) * p,
+      y: pt.y + (ptFull.y - pt.y) * p,
+    };
+  });
+  const corners = buildCorners(points, CANVAS_CORNER_RADIUS);
+  const fillPath = serialize(corners, 1, 1);
+  const clipPath = serialize(corners, 1 / CANVAS_FRAME_VIEWBOX.w, 1 / CANVAS_FRAME_VIEWBOX.h);
+  return { fillPath, clipPath };
+}
+

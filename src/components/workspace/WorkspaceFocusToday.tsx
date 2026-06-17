@@ -37,7 +37,7 @@ export function WorkspaceFocusToday() {
   };
 
   return (
-    <div className="ws-focus-panel shrink-0 w-full ws-glass-strong rounded-2xl p-4 flex flex-col min-h-0">
+    <div className="ws-focus-panel flex-1 w-full ws-glass-strong rounded-2xl p-4 flex flex-col min-h-0 overflow-hidden">
       <div className="ws-focus-header flex items-center justify-between mb-1">
         <h2 className="ws-focus-title text-sm font-semibold text-white">Focus Today</h2>
         <button
@@ -83,7 +83,7 @@ export function WorkspaceFocusToday() {
         </form>
       )}
 
-      <ul className="ws-focus-list space-y-2 overflow-y-auto max-h-[160px] pr-1">
+      <ul className="ws-focus-list space-y-2 overflow-y-auto flex-1 min-h-0 mt-2 pr-1">
         {tasks.map(task => (
           <li key={task.id} className="group">
             <div className="ws-focus-task flex items-start gap-2.5 py-0.5">
