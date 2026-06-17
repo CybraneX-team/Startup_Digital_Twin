@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Database, Upload, PenLine, FileSpreadsheet, Check, AlertCircle,
   Link2, Globe2, Wifi, WifiOff, Clock, XCircle, RefreshCw,
@@ -69,7 +70,9 @@ export default function DataIngestion() {
   const companyId = profile?.company_id ?? null;
   const { company } = useCompany(companyId);
   const canManageExcel = Boolean(role && INGESTION_WRITE_ROLES.has(role) && canWrite('data'));
-  const [activeTab, setActiveTab] = useState<Tab>('manual');
+  const [searchParams] = useSearchParams();
+  const requestedTab = searchParams.get('tab');
+  const [activeTab, setActiveTab] = useState<Tab>(requestedTab === 'integrations' ? 'integrations' : 'manual');
 
   // ── Integration state ──────────────────────────────────────────────────────
   const [connections, setConnections]       = useState<Record<string, IntegrationConnection>>({});

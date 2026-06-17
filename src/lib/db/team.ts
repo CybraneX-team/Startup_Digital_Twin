@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import type { UserRole } from '../supabase';
+import { api } from '../api';
 
 /* ──────────────────────────────────────────────────
    Types
@@ -66,6 +67,7 @@ export interface JoinableCompany {
   employees: number | null;
   description: string | null;
   created_at: string;
+  founderEmailMasked?: string | null;
 }
 
 /* ──────────────────────────────────────────────────
@@ -145,55 +147,34 @@ export function useJoinRequests(companyId: string | null | undefined) {
 
   async function fetchRequests() {
     if (!companyId) { setLoading(false); return; }
-
-    const { data, error } = await supabase
-      .from('join_requests')
-      .select(`
-        id, company_id, user_id, requested_role, message, status,
-        reviewed_by, reviewed_at, assigned_role, created_at,
-        user_profiles (first_name, last_name, title)
-      `)
-      .eq('company_id', companyId)
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false });
-
-    if (error) { console.error('[team] fetchRequests', error); setLoading(false); return; }
-
-    const shaped: JoinRequest[] = (data ?? []).map((row: any) => ({
-      id:             row.id,
-      company_id:     row.company_id,
-      user_id:        row.user_id,
-      requested_role: row.requested_role,
-      message:        row.message,
-      status:         row.status,
-      reviewed_by:    row.reviewed_by,
-      reviewed_at:    row.reviewed_at,
-      assigned_role:  row.assigned_role,
-      created_at:     row.created_at,
-      first_name:     row.user_profiles?.first_name ?? null,
-      last_name:      row.user_profiles?.last_name ?? null,
-      email:          null,
-      title:          row.user_profiles?.title ?? null,
-    }));
-
-    setRequests(shaped);
-    setLoading(false);
+    try {
+      const { requests: rows } = await api.get<{ requests: any[] }>('/api/join-requests');
+      const shaped: JoinRequest[] = (rows ?? []).map((row: any) => ({
+        id:             row.id,
+        company_id:     row.company_id,
+        user_id:        row.user_id,
+        requested_role: row.requested_role,
+        message:        row.message,
+        status:         row.status,
+        reviewed_by:    row.reviewed_by,
+        reviewed_at:    row.reviewed_at,
+        assigned_role:  row.assigned_role,
+        created_at:     row.created_at,
+        first_name:     row.first_name ?? null,
+        last_name:      row.last_name  ?? null,
+        email:          null,
+        title:          row.title      ?? null,
+      }));
+      setRequests(shaped);
+    } catch (err) {
+      console.error('[team] fetchRequests', err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     fetchRequests();
-
-    const channel = supabase
-      .channel(`joinreq-${companyId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'join_requests',
-        filter: `company_id=eq.${companyId}`,
-      }, () => fetchRequests())
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
   }, [companyId]);
 
   return { requests, loading, refetch: fetchRequests };
@@ -411,16 +392,18 @@ export async function submitJoinRequest(
   userId: string,
   requestedRole: UserRole = 'viewer',
   message?: string,
-): Promise<{ success: boolean; error?: string }> {
-  const { error } = await supabase
+): Promise<{ success: boolean; requestId?: string; error?: string }> {
+  const { data, error } = await supabase
     .from('join_requests')
-    .insert({ company_id: companyId, user_id: userId, requested_role: requestedRole, message });
+    .insert({ company_id: companyId, user_id: userId, requested_role: requestedRole, message })
+    .select('id')
+    .single();
 
   if (error) {
     if (error.code === '23505') return { success: false, error: 'You already have a pending request for this workspace' };
     return { success: false, error: error.message };
   }
-  return { success: true };
+  return { success: true, requestId: data.id };
 }
 
 /* ──────────────────────────────────────────────────
@@ -451,34 +434,17 @@ export async function listJoinableCompanies(options?: {
 }): Promise<{ companies: JoinableCompany[]; total: number }> {
   const page = Math.max(1, options?.page ?? 1);
   const pageSize = Math.max(1, options?.pageSize ?? 4);
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
-  const search = options?.search?.trim().replace(/[(),]/g, ' ') ?? '';
+  const search = options?.search?.trim() ?? '';
 
-  let query = supabase
-    .from('companies')
-    .select('id, name, slug, stage, industry_id, country, employees, description, created_at', { count: 'exact' })
-    .eq('status', 'active')
-    .order('created_at', { ascending: false })
-    .range(from, to);
+  const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+  if (search) params.set('search', search);
 
-  if (search) {
-    query = query.or([
-      `name.ilike.%${search}%`,
-      `slug.ilike.%${search}%`,
-      `industry_id.ilike.%${search}%`,
-      `country.ilike.%${search}%`,
-      `description.ilike.%${search}%`,
-    ].join(','));
-  }
-
-  const { data, error, count } = await query;
-
-  if (error) {
-    console.error('[team] listJoinableCompanies', error);
+  try {
+    return await api.get<{ companies: JoinableCompany[]; total: number }>(`/api/companies/joinable?${params}`);
+  } catch (err) {
+    console.error('[team] listJoinableCompanies', err);
     return { companies: [], total: 0 };
   }
-  return { companies: data ?? [], total: count ?? 0 };
 }
 
 /* ──────────────────────────────────────────────────

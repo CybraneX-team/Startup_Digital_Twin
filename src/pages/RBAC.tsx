@@ -1,14 +1,14 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  ShieldCheck, Users, Crown, Briefcase, UserCircle, Plus, Copy,
-  Check, X, ChevronDown, Clock, Link2, Trash2,
+  ShieldCheck, Users, Crown, Briefcase, UserCircle, Plus,
+  Check, X, ChevronDown, Clock, Trash2,
   UserCheck, AlertCircle, Mail,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../lib/auth';
+import { api } from '../lib/api';
 import {
-  useTeamMembers, useJoinRequests, useWorkspaceInvites,
-  generateInviteLink, deactivateInvite,
+  useTeamMembers, useJoinRequests,
   approveJoinRequest, rejectJoinRequest,
   changeMemberRole, removeMember,
 } from '../lib/db/team';
@@ -64,34 +64,37 @@ export default function RBAC() {
 
   const { members, loading: loadingMembers, refetch: refetchMembers } = useTeamMembers(companyId);
   const { requests, loading: loadingRequests, refetch: refetchRequests } = useJoinRequests(companyId);
-  const { invites, loading: loadingInvites, refetch: refetchInvites } = useWorkspaceInvites(companyId);
 
   const [selectedRole, setSelectedRole] = useState<UserRole>('founder');
   const [tab, setTab] = useState<'members' | 'requests' | 'invites' | 'permissions'>('members');
-  const [generatingLink, setGeneratingLink] = useState(false);
-  const [inviteRole, setInviteRole] = useState<UserRole>('viewer');
-  const [copiedToken, setCopiedToken] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+
+  // Auto-switch to Join Requests tab when pending requests arrive and user is on Members tab
+  useEffect(() => {
+    if (requests.length > 0 && tab === 'members') {
+      setTab('requests');
+    }
+  }, [requests.length]);
   const [approveRole, setApproveRole] = useState<Record<string, UserRole>>({});
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [sendingEmailInvite, setSendingEmailInvite] = useState(false);
+  const [inviteEmailStatus, setInviteEmailStatus] = useState<'sent' | 'exists' | 'error' | null>(null);
 
-  /* ── Invite link ── */
-  async function handleGenerateLink() {
-    if (!companyId || !user) return;
-    setGeneratingLink(true);
-    const result = await generateInviteLink(companyId, user.id, inviteRole, { maxUses: 10, expiresInDays: 7 });
-    setGeneratingLink(false);
-    if ('error' in result) { alert(result.error); return; }
-    await navigator.clipboard.writeText(result.url).catch(() => {});
-    setCopiedToken(result.token);
-    refetchInvites();
-    setTimeout(() => setCopiedToken(null), 3000);
-  }
-
-  async function handleDeactivate(inviteId: string) {
-    setActionLoading(inviteId);
-    await deactivateInvite(inviteId);
-    refetchInvites();
-    setActionLoading(null);
+  /* ── Invite by email ── */
+  async function handleEmailInvite() {
+    const email = inviteEmail.trim();
+    if (!email) return;
+    setSendingEmailInvite(true);
+    setInviteEmailStatus(null);
+    try {
+      await api.post('/api/company-invites', { email });
+      setInviteEmailStatus('sent');
+      setInviteEmail('');
+    } catch (err) {
+      setInviteEmailStatus(err instanceof Error && err.message.startsWith('409') ? 'exists' : 'error');
+    } finally {
+      setSendingEmailInvite(false);
+    }
   }
 
   /* ── Join requests ── */
@@ -130,14 +133,6 @@ export default function RBAC() {
     refetchMembers();
   }
 
-  /* ── Copy invite URL ── */
-  function copyInviteUrl(token: string) {
-    const url = `${window.location.origin}/join?token=${token}`;
-    navigator.clipboard.writeText(url).catch(() => {});
-    setCopiedToken(token);
-    setTimeout(() => setCopiedToken(null), 2000);
-  }
-
   const activeMembers = members.filter(m => m.status === 'active');
   const pendingCount = requests.length;
 
@@ -151,11 +146,10 @@ export default function RBAC() {
       />
 
       {/* ── Stats row ── */}
-      <div className="grid grid-cols-4 gap-3 mb-6">
+      <div className="grid grid-cols-3 gap-3 mb-6">
         {[
           { label: 'Total Members', value: activeMembers.length, color: 'text-sky-400' },
           { label: 'Pending Requests', value: pendingCount, color: pendingCount > 0 ? 'text-amber-400' : 'text-gray-500' },
-          { label: 'Active Invite Links', value: invites.length, color: 'text-violet-400' },
           { label: 'Your Role', value: ROLE_META[myRole ?? 'viewer']?.label ?? '—', color: ROLE_META[myRole ?? 'viewer']?.color ?? 'text-gray-400' },
         ].map(s => (
           <div key={s.label} className="glass-card p-4">
@@ -168,10 +162,10 @@ export default function RBAC() {
       {/* ── Tabs ── */}
       <div className="flex gap-1 mb-6 p-1 rounded-xl bg-gray-900/50 border border-gray-800 w-fit">
         {([
-          { key: 'members',     label: 'Members',     count: activeMembers.length },
+          { key: 'members',     label: 'Members',       count: activeMembers.length },
           { key: 'requests',    label: 'Join Requests', count: pendingCount, alert: pendingCount > 0 },
-          { key: 'invites',     label: 'Invite Links', count: invites.length },
-          { key: 'permissions', label: 'Permissions',  count: null },
+          { key: 'invites',     label: 'Invite',        count: null },
+          { key: 'permissions', label: 'Permissions',   count: null },
         ] as const).map(t => (
           <button
             key={t.key}
@@ -389,113 +383,59 @@ export default function RBAC() {
       {/* ════════════════════════════════════════ INVITE LINKS TAB */}
       {tab === 'invites' && (
         <div className="space-y-4">
-          {/* Generate new link */}
+          {/* Invite a specific user by email — view-only access */}
           {canManage && (
             <div className="glass-card p-5">
               <h3 className="text-sm font-medium text-gray-200 mb-4 flex items-center gap-2">
-                <Link2 className="w-4 h-4 text-violet-400" />
-                Generate Invite Link
+                <Mail className="w-4 h-4 text-sky-400" />
+                Invite Someone by Email
               </h3>
               <div className="flex items-end gap-3">
                 <div className="flex-1">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">Role to Assign</label>
-                  <select
-                    value={inviteRole}
-                    onChange={e => setInviteRole(e.target.value as UserRole)}
-                    className="w-full px-3 py-2.5 text-sm rounded-lg border border-gray-700 bg-gray-900/50 text-white focus:border-violet-500/50 focus:outline-none"
-                  >
-                    {ASSIGNABLE_ROLES.map(r => (
-                      <option key={r} value={r}>{ROLE_META[r].label}</option>
-                    ))}
-                  </select>
+                  <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">Email Address</label>
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={e => { setInviteEmail(e.target.value); setInviteEmailStatus(null); }}
+                    placeholder="someone@company.com"
+                    className="w-full px-3 py-2.5 text-sm rounded-lg border border-gray-700 bg-gray-900/50 text-white focus:border-sky-500/50 focus:outline-none"
+                  />
                 </div>
                 <button
-                  onClick={handleGenerateLink}
-                  disabled={generatingLink}
-                  className="flex items-center gap-2 px-5 py-2.5 text-sm rounded-lg bg-violet-600 hover:bg-violet-500 text-white font-medium transition-all disabled:opacity-60"
+                  onClick={handleEmailInvite}
+                  disabled={sendingEmailInvite || !inviteEmail.trim()}
+                  className="flex items-center gap-2 px-5 py-2.5 text-sm rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-medium transition-all disabled:opacity-60"
                 >
-                  {generatingLink ? (
+                  {sendingEmailInvite ? (
                     <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                   ) : (
-                    <Link2 className="w-4 h-4" />
+                    <Mail className="w-4 h-4" />
                   )}
-                  Generate & Copy Link
+                  Send Invite
                 </button>
               </div>
+              {inviteEmailStatus === 'exists' && (
+                <p className="text-[11px] text-amber-400 mt-3 flex items-center gap-1.5">
+                  <AlertCircle className="w-3 h-3" /> This email already has an account.
+                </p>
+              )}
+              {inviteEmailStatus === 'sent' && (
+                <p className="text-[11px] text-emerald-400 mt-3 flex items-center gap-1.5">
+                  <Check className="w-3 h-3" /> Invite sent — they'll get login credentials by email.
+                </p>
+              )}
+              {inviteEmailStatus === 'error' && (
+                <p className="text-[11px] text-red-400 mt-3 flex items-center gap-1.5">
+                  <AlertCircle className="w-3 h-3" /> Failed to send invite. Try again.
+                </p>
+              )}
               <p className="text-[10px] text-gray-600 mt-3 flex items-center gap-1.5">
                 <Clock className="w-3 h-3" />
-                Links expire in 7 days and can be used up to 10 times. Share with caution.
+                If they don't have an account yet, we create one and email them view-only login credentials.
               </p>
             </div>
           )}
 
-          {/* Active invite links */}
-          <div className="glass-card overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-800/50">
-              <h3 className="text-sm font-medium text-gray-200">Active Invite Links</h3>
-            </div>
-
-            {loadingInvites ? (
-              <div className="p-6 text-center text-gray-500 text-sm">Loading...</div>
-            ) : invites.length === 0 ? (
-              <div className="p-8 text-center">
-                <Link2 className="w-8 h-8 text-gray-700 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">No active invite links. Generate one above.</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-800/40">
-                {invites.map(inv => {
-                  const meta = ROLE_META[inv.role] ?? ROLE_META.viewer;
-                  const expiresIn = Math.ceil((new Date(inv.expires_at).getTime() - Date.now()) / 86400000);
-                  const copied = copiedToken === inv.token;
-                  return (
-                    <div key={inv.id} className="flex items-center gap-4 px-5 py-3.5">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${meta.bg}`}>
-                        <Link2 className={`w-4 h-4 ${meta.color}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className={`text-[11px] px-2 py-0.5 rounded-full border ${meta.bg} ${meta.border} ${meta.color}`}>
-                            {meta.label}
-                          </span>
-                          {inv.email && (
-                            <span className="text-[10px] text-gray-400 flex items-center gap-1">
-                              <Mail className="w-3 h-3" /> {inv.email}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[10px] text-gray-500 mt-1">
-                          {inv.used_count}/{inv.max_uses} uses · expires in {expiresIn}d
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <button
-                          onClick={() => copyInviteUrl(inv.token)}
-                          className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-lg border transition-all ${
-                            copied
-                              ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
-                              : 'bg-gray-800/60 border-gray-700 text-gray-300 hover:border-gray-600'
-                          }`}
-                        >
-                          {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-                          {copied ? 'Copied!' : 'Copy Link'}
-                        </button>
-                        {canManage && (
-                          <button
-                            onClick={() => handleDeactivate(inv.id)}
-                            disabled={actionLoading === inv.id}
-                            className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </div>
       )}
 

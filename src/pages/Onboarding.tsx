@@ -8,7 +8,7 @@ import type { CreateCompanyInput } from '../lib/db/companies';
 import { INDUSTRIES } from '../db/industries';
 import { useSubdomainsByIndustry } from '../lib/db/subdomains';
 import type { BusinessModel, CompanyStage } from '../lib/supabase';
-import { joinCompanyAsViewer, listJoinableCompanies } from '../lib/db/team';
+import { submitJoinRequest, listJoinableCompanies } from '../lib/db/team';
 import type { JoinableCompany } from '../lib/db/team';
 import { api } from '../lib/api';
 
@@ -279,24 +279,33 @@ export default function Onboarding() {
     return () => window.clearTimeout(timer);
   }, [profile?.company_id, navigate]);
 
-  async function handleJoinSubmit() {
-    if (!joinSelected || !user) return;
+  async function requestToJoin(company: JoinableCompany) {
+    if (!user) return;
     if (profile?.company_id) {
       setError('You are already a company account, so you cannot join another workspace.');
       return;
     }
+    setJoinSelected(company);
     setLoading(true);
     setError(null);
-    const result = await joinCompanyAsViewer(joinSelected.id, user.id);
+    const result = await submitJoinRequest(company.id, user.id, 'viewer');
     if (!result.success) {
-      setError(result.error ?? 'Failed to join workspace');
+      setError(result.error ?? 'Failed to send join request');
       setLoading(false);
       return;
     }
-    await refreshProfile();
+    if (result.requestId) {
+      api.post(`/api/join-requests/${result.requestId}/notify`, {}).catch(err =>
+        console.error('[onboarding] failed to notify company owner', err),
+      );
+    }
     setLoading(false);
     setJoinJoined(true);
-    setTimeout(() => navigate('/overview', { replace: true }), 700);
+  }
+
+  async function handleJoinSubmit() {
+    if (!joinSelected) return;
+    await requestToJoin(joinSelected);
   }
 
   function update(field: keyof FormData, value: string) {
@@ -504,16 +513,17 @@ export default function Onboarding() {
       return (
         <div className="min-h-screen flex flex-col items-center justify-center px-4" style={{ background: '#161618' }}>
           <div className="w-full max-w-md text-center">
-            <CheckCircle className="w-14 h-14 text-emerald-400 mx-auto mb-5" />
-            <h2 className="text-white text-xl font-semibold mb-2">Workspace Joined</h2>
+            <Clock className="w-14 h-14 text-amber-400 mx-auto mb-5" />
+            <h2 className="text-white text-xl font-semibold mb-2">Request Sent</h2>
             <p className="text-sm mb-1" style={{ color: '#5E5E5E' }}>
-              You now have read-only access to <span className="text-white font-medium">{joinSelected?.name}</span>.
+              We've asked the owner of <span className="text-white font-medium">{joinSelected?.name}</span> to approve your request.
+              You'll get access once they accept it.
             </p>
             <button
-              onClick={() => navigate('/overview', { replace: true })}
-              className="px-6 py-2.5 rounded-xl text-sm font-medium text-white bg-gray-800 hover:bg-gray-700 transition-all"
+              onClick={() => navigate('/', { replace: true })}
+              className="mt-4 px-6 py-2.5 rounded-xl text-sm font-medium text-white bg-gray-800 hover:bg-gray-700 transition-all"
             >
-              Open Dashboard
+              Back to Home
             </button>
           </div>
         </div>
@@ -568,28 +578,46 @@ export default function Onboarding() {
                     ? INDUSTRIES.find(i => i.id === r.industry_id)?.label ?? r.industry_id
                     : 'Industry not set';
                   return (
-                  <button
+                  <div
                     key={r.id}
                     onClick={() => setJoinSelected(r)}
-                    className={`w-full text-left px-4 py-3 rounded-xl border transition-all ${
+                    className={`w-full text-left px-4 py-3 rounded-xl border transition-all cursor-pointer ${
                       joinSelected?.id === r.id
                         ? 'border-sky-500/40 bg-sky-500/10'
                         : 'border-gray-800 hover:border-gray-700'
                     }`}
                   >
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-white font-medium">{r.name}</span>
-                      {joinSelected?.id === r.id && <Check className="w-4 h-4 text-sky-400" />}
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-white font-medium">{r.name}</span>
+                          {joinSelected?.id === r.id && <Check className="w-4 h-4 text-sky-400" />}
+                        </div>
+                        <span className="text-[10px]" style={{ color: '#5E5E5E' }}>
+                          {r.stage ?? 'Stage not set'} · {industryLabel}{r.country ? ` · ${r.country}` : ''}
+                        </span>
+                        {r.description && (
+                          <p className="text-[11px] mt-1 line-clamp-2" style={{ color: '#4E4E4E' }}>
+                            {r.description}
+                          </p>
+                        )}
+                        {r.founderEmailMasked && (
+                          <p className="text-[10px] mt-1" style={{ color: '#4E4E4E' }}>
+                            Owner: {r.founderEmailMasked}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={e => { e.stopPropagation(); void requestToJoin(r); }}
+                        disabled={loading}
+                        className="shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all disabled:opacity-40"
+                        style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)', color: '#161618' }}
+                      >
+                        Join
+                      </button>
                     </div>
-                    <span className="text-[10px]" style={{ color: '#5E5E5E' }}>
-                      {r.stage ?? 'Stage not set'} · {industryLabel}{r.country ? ` · ${r.country}` : ''}
-                    </span>
-                    {r.description && (
-                      <p className="text-[11px] mt-1 line-clamp-2" style={{ color: '#4E4E4E' }}>
-                        {r.description}
-                      </p>
-                    )}
-                  </button>
+                  </div>
                 )})}
               </div>
             ) : (
@@ -647,12 +675,12 @@ export default function Onboarding() {
               className="w-full py-3 rounded-xl text-sm font-semibold transition-all disabled:opacity-40"
               style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)', color: '#161618' }}
             >
-              {loading ? 'Joining...' : `Join ${joinSelected?.name ?? 'Workspace'} as Viewer`}
+              {loading ? 'Sending request...' : `Request to Join ${joinSelected?.name ?? 'Workspace'}`}
             </button>
 
             <div className="flex items-center gap-2 text-[10px]" style={{ color: '#3E3E3E' }}>
               <Clock className="w-3 h-3" />
-              Viewer access lets you open the dashboard and 3D twin without edit controls.
+              The company owner must approve your request before you get read-only access.
             </div>
           </div>
         </div>

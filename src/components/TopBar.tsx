@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Hexagon, LogOut, LogIn, Bookmark } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useSavedWorkflows } from '../lib/useSavedWorkflows';
+import { supabase } from '../lib/supabase';
 
 export default function TopBar() {
   const location = useLocation();
@@ -57,6 +58,22 @@ export default function TopBar() {
     window.addEventListener('workspace_toggled', handler);
     return () => window.removeEventListener('workspace_toggled', handler);
   }, []);
+
+  // ── Pending join-request badge on Team tab ────────────────────────────────
+  const [pendingJoinCount, setPendingJoinCount] = useState(0);
+  useEffect(() => {
+    const companyId = profile?.company_id;
+    if (!companyId) { setPendingJoinCount(0); return; }
+    let cancelled = false;
+    supabase
+      .from('join_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('company_id', companyId)
+      .eq('status', 'pending')
+      .then(({ count }) => { if (!cancelled) setPendingJoinCount(count ?? 0); });
+    return () => { cancelled = true; };
+  }, [profile?.company_id, location.pathname]);
+
   if (workspaceOpen) return null;
 
   // ── Tabs ─────────────────────────────────────────────────────────────────
@@ -71,8 +88,9 @@ export default function TopBar() {
         { path: '/overview',  label: 'Home',     active: isOverview },
         { path: '/3d',        label: '3D Twin',  active: is3D },
         { path: '/universal', label: 'BDT',      active: location.pathname === '/universal' },
-        ...(canWrite('data')    ? [{ path: '/twin/data' as const, label: 'Data' as const,     active: isData }] : []),
-        ...(canRead('settings') ? [{ path: '/settings' as const,  label: 'Settings' as const, active: location.pathname === '/settings' }] : []),
+        ...(canRead('team')     ? [{ path: '/twin/team' as const,  label: 'Team' as const,     active: location.pathname === '/twin/team', badge: pendingJoinCount }] : []),
+        ...(canWrite('data')    ? [{ path: '/twin/data' as const,  label: 'Data' as const,     active: isData }] : []),
+        ...(canRead('settings') ? [{ path: '/settings' as const,   label: 'Settings' as const, active: location.pathname === '/settings' }] : []),
       ];
 
   return (
@@ -123,7 +141,7 @@ export default function TopBar() {
               boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 4px 24px rgba(0,0,0,0.4)',
             }}
           >
-            {tabs.map(({ path, label, active }) => (
+            {tabs.map(({ path, label, active, badge } : any) => (
               <button
                 key={path}
                 onClick={() => navigate(path)}
@@ -157,6 +175,20 @@ export default function TopBar() {
                   />
                 )}
                 {label}
+                {badge > 0 && (
+                  <span
+                    className="ml-0.5 flex items-center justify-center rounded-full text-[9px] font-bold leading-none"
+                    style={{
+                      background: '#f59e0b',
+                      color: '#000',
+                      minWidth: '14px',
+                      height: '14px',
+                      padding: '0 3px',
+                    }}
+                  >
+                    {badge}
+                  </span>
+                )}
               </button>
             ))}
           </nav>

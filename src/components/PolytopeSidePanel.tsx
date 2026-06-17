@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Command, ArrowLeft, Plus, ChevronRight, Pencil, Trash2, Target, Database, Activity, Users, BarChart2 } from 'lucide-react';
+import { Search, Command, ArrowLeft, Plus, ChevronRight, Pencil, Trash2, Target, Database, Activity, Users, BarChart2, Plug } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
 import { U_DOMAIN_COLOR } from '../lib/universalPolytopeData';
@@ -92,21 +92,12 @@ export function PolytopeSidePanel({
   onDeptSelect,
   selectedInternalPath,
   onAddDepartment,
-  onAddNode,
   onInternalBack,
   onExitToSubdomain,
   exitToSubdomainLabel,
   onDeleteDepartment,
-  onUpdateNode,
-  onDeleteNode,
-  onNodeSelect,
   onEditDepartment,
-  onEditNode,
   onDeleteDepartmentClick,
-  onDeleteNodeClick,
-  onAddMember,
-  onEditMember,
-  onDeleteMemberClick,
   canEdit = true,
 }: PolytopeSidePanelProps) {
   const navigate = useNavigate();
@@ -573,168 +564,42 @@ export function PolytopeSidePanel({
                 );
               })
             )
-          ) : isShowingMembers ? (
-            /* ── MEMBERS list ── */
-            (!activeNode.members || activeNode.members.length === 0) ? (
-              <div className="px-3 py-6 text-[11px] text-center" style={{ color: '#4b5563' }}>
-                No members yet
-              </div>
-            ) : (
-              activeNode.members.map((member, i) => (
-                <div
-                  key={i}
-                  className="panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group/row"
-                  style={{ animationDelay: `${i * 22}ms` }}
-                >
-                  <span
-                    className="w-1.5 h-1.5 rounded-full shrink-0 flex-shrink-0"
-                    style={{ background: deptColor, opacity: 0.85 }}
-                  />
-                  <div className="flex-1 min-w-0">
-                    <span className="block text-[12px] text-gray-300 group-hover/row:text-white transition-colors leading-tight truncate">
-                      {member.name}
-                    </span>
-                    <span className="flex items-center gap-1.5 mt-0.5 text-[10px] text-gray-500 truncate">
-                      {member.role}
-                    </span>
-                  </div>
-                  {/* Action buttons (pencil, trash) on hover */}
-                  {canEdit && (
-                  <div className="hidden group-hover/row:flex items-center gap-0.5 shrink-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onEditMember?.(effectiveDept!, activeNode, i);
-                      }}
-                      className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
-                      title="Edit Member"
-                    >
-                      <Pencil className="w-3 h-3" />
-                    </button>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onDeleteMemberClick) {
-                          onDeleteMemberClick(effectiveDept!, activeNode, i);
-                        } else if (window.confirm(`Delete member "${member.name}"?`)) {
-                          const newMembers = activeNode.members!.filter(m => m !== member);
-                          onUpdateNode?.(effectiveDept!.id, activeNode.id, { members: newMembers, memberCount: newMembers.length });
-                        }
-                      }}
-                      className="p-1 text-gray-400 hover:text-rose-400 hover:bg-white/10 rounded transition-colors"
-                      title="Delete Member"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </div>
-                  )}
-                </div>
-              ))
-            )
           ) : (
-            /* ── INTERNAL NODES list ── */
-            visibleNodes.length === 0 ? (
-              <div className="px-3 py-6 text-[11px] text-center" style={{ color: '#4b5563' }}>
-                No {selectedInternalPath.length === 0 ? 'internal nodes' : 'sub-nodes'} yet
-              </div>
-            ) : (
-              visibleNodes.map((node, i) => {
-                const typeColor = TYPE_COLORS[node.type] ?? '#94a3b8';
-                return (
-                  <div
-                    key={node.id}
-                    className="panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group/row"
-                    style={{ animationDelay: `${i * 22}ms` }}
-                  >
-                    <span
-                      className="w-1.5 h-1.5 rounded-full shrink-0 flex-shrink-0"
-                      style={{ background: deptColor, opacity: 0.85 }}
-                    />
-                    <div
-                      onClick={() => onNodeSelect?.([...selectedInternalPath, node.id])}
-                      className="flex-1 min-w-0 cursor-pointer"
-                    >
-                      <span className="block text-[12px] text-gray-300 group-hover/row:text-white transition-colors leading-tight truncate">
-                        {node.label}
-                      </span>
-                      <span className="flex items-center gap-1.5 mt-0.5">
-                        <span
-                          className="text-[9px] font-semibold px-1.5 py-0.5 rounded capitalize"
-                          style={{
-                            background: `${typeColor}18`,
-                            color: typeColor,
-                            border: `1px solid ${typeColor}30`,
-                          }}
-                        >
-                          {node.type}
-                        </span>
-                      </span>
-                    </div>
-
-                    {/* Action buttons (pencil, trash) on hover */}
-                    {canEdit && (
-                    <div className="hidden group-hover/row:flex items-center gap-0.5 shrink-0">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (effectiveDept) {
-                            onEditNode?.(effectiveDept, node);
-                          }
-                        }}
-                        className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
-                        title="Edit"
-                      >
-                        <Pencil className="w-3 h-3" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (onDeleteNodeClick && effectiveDept) {
-                            onDeleteNodeClick(effectiveDept, node);
-                          } else if (window.confirm(`Delete node "${node.label}"?`)) {
-                            onDeleteNode?.(selectedDeptId ?? effectiveDept?.id ?? '', node.id);
-                          }
-                        }}
-                        className="p-1 text-gray-400 hover:text-rose-400 hover:bg-white/10 rounded transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-3 h-3" />
-                      </button>
-                    </div>
-                    )}
-                  </div>
-                );
-              })
-            )
+            /* ── No real data connected for this department yet ── */
+            <div className="px-4 py-8 flex flex-col items-center text-center gap-3">
+              <Plug className="w-6 h-6" style={{ color: deptColor }} />
+              <p className="text-[11px] text-gray-400">
+                No connected data for {effectiveDept?.label ?? 'this department'} yet.
+              </p>
+              <button
+                onClick={() => navigate('/twin/data?tab=integrations')}
+                className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all hover:opacity-90"
+                style={{ background: `${deptColor}18`, border: `1px solid ${deptColor}35`, color: deptColor }}
+              >
+                Connect your data
+              </button>
+            </div>
           )}
         </div>
 
-        {/* ── Add button — always pinned at bottom ── */}
-        {canEdit && activeTab === 'departments' && (
+        {/* ── Add Department button — only at the top level; per-dept content is data-driven ── */}
+        {canEdit && activeTab === 'departments' && !showingNodes && (
         <div
           className="px-3 pb-3 pt-2 shrink-0"
           style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}
         >
           <button
-            onClick={() => {
-              if (!showingNodes) {
-                onAddDepartment?.();
-              } else if (isShowingMembers) {
-                onAddMember?.(selectedDeptId ?? effectiveDept?.id ?? '', activeNode!.id);
-              } else {
-                onAddNode?.(selectedDeptId ?? effectiveDept?.id ?? '');
-              }
-            }}
+            onClick={() => onAddDepartment?.()}
             className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-semibold transition-all hover:opacity-90 active:scale-95"
             style={{
-              background: !showingNodes ? 'rgba(99,102,241,0.12)' : `${deptColor}18`,
-              border: `1px solid ${!showingNodes ? 'rgba(99,102,241,0.35)' : `${deptColor}35`}`,
-              color: !showingNodes ? '#a5b4fc' : deptColor,
+              background: 'rgba(99,102,241,0.12)',
+              border: '1px solid rgba(99,102,241,0.35)',
+              color: '#a5b4fc',
               transition: 'all 0.15s ease',
             }}
           >
             <Plus className="w-3.5 h-3.5" />
-            {!showingNodes ? 'Add Department' : isShowingMembers ? 'Add Member' : 'Add Internal Node'}
+            Add Department
           </button>
         </div>
         )}
