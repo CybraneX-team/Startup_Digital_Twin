@@ -6,22 +6,35 @@ export function computeInternalNodePosition(
   deptPos: THREE.Vector3,
   nodeIndex: number,
   totalNodeCount: number,
+  layoutMode: 'radial' | 'flat' = 'radial'
 ): THREE.Vector3 {
   if (totalNodeCount <= 0) return deptPos.clone();
 
   const angle = (nodeIndex / totalNodeCount) * Math.PI * 2;
-  const dir = deptPos.clone().normalize();
-  let localUp = new THREE.Vector3(0, 1, 0);
-  if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
-  const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();
-  const up = new THREE.Vector3().crossVectors(right, dir).normalize();
-  const depthStep = 3.0;
+  const isFlat = layoutMode === 'flat';
+
+  const dir = isFlat ? new THREE.Vector3(0, 0, 1) : deptPos.clone().normalize();
+  const right = new THREE.Vector3();
+  const up = new THREE.Vector3();
+
+  if (isFlat) {
+    right.set(1, 0, 0);
+    up.set(0, 1, 0);
+  } else {
+    let localUp = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
+    right.crossVectors(dir, localUp).normalize();
+    up.crossVectors(right, dir).normalize();
+  }
+
+  const depthStep = isFlat ? 0.5 : 3.0;
+  const radius = isFlat ? 4.0 : 1.8;
   const childCenter = deptPos.clone().add(dir.clone().multiplyScalar(depthStep));
 
   return childCenter
     .clone()
-    .add(right.clone().multiplyScalar(Math.cos(angle) * 1.8))
-    .add(up.clone().multiplyScalar(Math.sin(angle) * 1.8));
+    .add(right.clone().multiplyScalar(Math.cos(angle) * radius))
+    .add(up.clone().multiplyScalar(Math.sin(angle) * radius));
 }
 
 /** Position for a draft node that will be appended (index = existingCount, total = existing + 1). */

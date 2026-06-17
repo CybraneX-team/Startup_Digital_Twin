@@ -10,7 +10,6 @@ import type { UniverseIndustry, UniverseSubdomain } from '../data/universeGraph'
 import CreateCompanyModal from '../components/CreateCompanyModal';
 import type { LocalCompany } from '../lib/localCompanies';
 import UniversalPolytope from '../components/UniversalPolytope';
-import PlanetRootNodeView from '../components/planet/PlanetRootNodeView';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
 import { PolytopeManager } from '../components/PolytopeManager';
 import CreateDepartmentPanel from '../components/CreateDepartmentPanel';
@@ -407,7 +406,6 @@ export default function Universe3DPage() {
 
   // ── Root → BDT internal node layout (no convex polytope hull) ──
   const [insideRootPolytope, setInsideRootPolytope] = useState(false);
-  const [rootPolytopeMounted, setRootPolytopeMounted] = useState(false);
   const [rootPolytopeDepts, setRootPolytopeDepts] = useState<UExternalNode[]>([]);
   const [rootPolytopeDeptId, setRootPolytopeDeptId] = useState<string | null>(null);
   const [rootPolytopeInternalPath, setRootPolytopeInternalPath] = useState<string[]>([]);
@@ -473,7 +471,6 @@ export default function Universe3DPage() {
 
   const handleOpenRootPolytope = useCallback((rootId: string) => {
     if (!planetContext) return;
-    setRootPolytopeMounted(true);
     setRootPolytopeDepts(rootsToPolytopeDepartments(planetContext.roots));
     setRootPolytopeDeptId(rootId);
     setRootPolytopeInternalPath([]);
@@ -532,7 +529,6 @@ export default function Universe3DPage() {
       setPlanetContext(ctx);
       setInsidePlanetRoots(true);
 
-      setRootPolytopeMounted(true);
       setRootPolytopeDepts(rootsToPolytopeDepartments(ctx.roots));
       setRootPolytopeDeptId(item.rootId);
       setRootPolytopeInternalPath([item.branchId, item.actionId]);
@@ -553,7 +549,6 @@ export default function Universe3DPage() {
         setPlanetContext(ctx);
         setInsidePlanetRoots(true);
         if (pState.insideRootPolytope && pState.rootPolytopeDeptId) {
-          setRootPolytopeMounted(true);
           setRootPolytopeDepts(rootsToPolytopeDepartments(ctx.roots));
           setRootPolytopeDeptId(pState.rootPolytopeDeptId);
           setRootPolytopeInternalPath(pState.rootPolytopeInternalPath || []);
@@ -982,13 +977,14 @@ export default function Universe3DPage() {
           background: 'radial-gradient(ellipse at 50% 40%, rgba(18,10,36,1) 0%, rgba(2,2,6,1) 65%)',
           opacity: (insidePlanetRoots && planetContext) || isZoomingOut ? 1 : 0,
           visibility: (insidePlanetRoots && planetContext) || isZoomingOut ? 'visible' : 'hidden',
-          pointerEvents: (insidePlanetRoots && planetContext && !insideRootPolytope && !isZoomingOut) ? 'auto' : 'none',
+          pointerEvents: (insidePlanetRoots && planetContext && !isZoomingOut) ? 'auto' : 'none',
           transition: (insidePlanetRoots && planetContext) || isZoomingOut
-            ? 'opacity 0.4s ease-in-out'
-            : 'opacity 0.4s ease-in-out, visibility 0s 0.4s',
+            ? 'opacity 0.4s ease-in-out, right 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
+            : 'opacity 0.4s ease-in-out, visibility 0s 0.4s, right 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+          right: (insideRootPolytope && actionWorkspace) ? '75vw' : '0',
         }}
       >
-        {planetContext && (!insideRootPolytope || isZoomingOut) && (
+        {planetContext && (
           <CompanyPlanet3DView
             context={planetContext}
             depth={0}
@@ -1001,40 +997,20 @@ export default function Universe3DPage() {
             industryColor={planetIndustryColor}
             zoomOutFromRootId={zoomOutFromRootId}
             onZoomOutComplete={handleZoomOutComplete}
-          />
-        )}
-      </div>
-
-      {/* ── Root drill-in: BDT internal node layout only (no polytope hull) ── */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          zIndex: 7,
-          opacity: insideRootPolytope ? 1 : 0,
-          visibility: insideRootPolytope ? 'visible' : 'hidden',
-          pointerEvents: insideRootPolytope ? 'auto' : 'none',
-          transition: insideRootPolytope
-            ? 'opacity 0.6s 0.2s ease-out, right 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
-            : 'opacity 0.3s ease-in, visibility 0s 0.3s, right 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
-          right: actionWorkspace ? '75vw' : '0',
-          background: 'radial-gradient(ellipse at 50% 40%, rgba(18,10,36,1) 0%, rgba(2,2,6,1) 65%)',
-        }}
-      >
-        {insideRootPolytope && rootPolytopeMounted && activeRootDept && (
-          <PlanetRootNodeView
-            key={`${activeRootDept.id}-${rootPolytopeSwitchKey}`}
-            root={activeRootDept}
-            selectedInternalPath={rootPolytopeInternalPath}
+            
+            // Unified BDT internal nodes props
+            insideRootPolytope={insideRootPolytope}
+            activeRootDept={activeRootDept}
+            rootPolytopeInternalPath={rootPolytopeInternalPath}
             onInternalPathChange={(path) => {
               setRootPolytopeInternalPath(path);
               if (path.length === 2) {
-                handleActionNodeClick(activeRootDept.id, path[0], path[1]);
+                handleActionNodeClick(activeRootDept!.id, path[0], path[1]);
               } else {
                 setActionWorkspace(null);
               }
             }}
-            requestBackStep={rootPolytopeBackStep}
+            rootPolytopeBackStep={rootPolytopeBackStep}
             rootSwitchKey={rootPolytopeSwitchKey}
             onBack={handleExitRootPolytope}
           />

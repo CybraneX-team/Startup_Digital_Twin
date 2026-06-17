@@ -68,56 +68,479 @@ const FIXED_ROOTS_TEMPLATE: PlanetRootTemplate[] = [
     description: 'Name, stage, size, HQ, founding year, website',
     relevance: 100,
     color: '#60a5fa',
-    branches: [{ label: 'Overview', actions: [{ label: 'View Profile', hint: 'Basic details' }] }]
+    branches: [
+      {
+        label: 'Corporate Profile',
+        actions: [
+          { label: 'Basic Info', hint: 'Official name, stage, and sector' },
+          { label: 'Location & HQ', hint: 'Registered office & regional hubs' },
+          { label: 'Web Presence', hint: 'Official site, socials, and traffic' }
+        ]
+      },
+      {
+        label: 'Executive Summary',
+        actions: [
+          { label: 'Vision & Mission', hint: 'Core purpose and values' },
+          { label: 'Brief History', hint: 'Timeline of major milestones' },
+          { label: 'Key Verticals', hint: 'Primary industries served' }
+        ]
+      },
+      {
+        label: 'Legal & Regulatory',
+        actions: [
+          { label: 'Incorporation Detail', hint: 'Entity structure and filing status' },
+          { label: 'IP & Trademarks', hint: 'Registered patents & marks' }
+        ]
+      }
+    ]
   },
   {
     label: 'Product & Tech',
     description: 'Core offering, differentiators, tech stack, APIs',
     relevance: 95,
     color: '#a78bfa',
-    branches: [{ label: 'Core Offering', actions: [{ label: 'View Product', hint: 'Main features' }] }]
+    branches: [
+      {
+        label: 'Core Offering',
+        actions: [
+          { label: 'Feature Matrix', hint: 'Breakdown of core capabilities' },
+          { label: 'Pricing & Packaging', hint: 'Tiers, add-ons, and pricing model' },
+          { label: 'Customer Value Prop', hint: 'ROI drivers and benefits' }
+        ]
+      },
+      {
+        label: 'Technical Architecture',
+        actions: [
+          { label: 'Frontend Stack', hint: 'Frameworks, UI libraries, and hosting' },
+          { label: 'Backend & Database', hint: 'Languages, servers, and data stores' },
+          { label: 'Security & Compliance', hint: 'SOC2, GDPR, and security protocols' }
+        ]
+      },
+      {
+        label: 'Integration & APIs',
+        actions: [
+          { label: 'API Documentation', hint: 'Public endpoints and webhooks' },
+          { label: 'Native Integrations', hint: 'Pre-built app connectors' },
+          { label: 'SDKs & Dev Tools', hint: 'Developer enablement resources' }
+        ]
+      }
+    ]
   },
   {
     label: 'Market Position',
     description: 'ICP, GTM motion, pricing model, geography',
     relevance: 90,
     color: '#34d399',
-    branches: [{ label: 'GTM Motion', actions: [{ label: 'View GTM', hint: 'Market approach' }] }]
+    branches: [
+      {
+        label: 'Target Market & ICP',
+        actions: [
+          { label: 'Industry Focus', hint: 'Primary and secondary sectors' },
+          { label: 'Buyer Personas', hint: 'Profiles of key decision makers' },
+          { label: 'Account Demographics', hint: 'Ideal company size, geo, and revenue' }
+        ]
+      },
+      {
+        label: 'Go-To-Market (GTM)',
+        actions: [
+          { label: 'Sales Strategy', hint: 'PLG, enterprise sales, or hybrid' },
+          { label: 'Marketing Channels', hint: 'Inbound, outbound, SEO, events' },
+          { label: 'Partner Network', hint: 'Channels, resellers, and affiliates' }
+        ]
+      },
+      {
+        label: 'Competitive Landscape',
+        actions: [
+          { label: 'Primary Competitors', hint: 'Direct alternatives in market' },
+          { label: 'Key Differentiators', hint: 'Unfair advantages and moats' },
+          { label: 'Market Share Analysis', hint: 'Estimated positioning & footprint' }
+        ]
+      }
+    ]
   },
   {
     label: 'Commercial Signals',
     description: 'Funding, revenue range, hiring velocity',
     relevance: 85,
     color: '#fbbf24',
-    branches: [{ label: 'Funding', actions: [{ label: 'View Funding', hint: 'Capital raised' }] }]
+    branches: [
+      {
+        label: 'Funding & Capital',
+        actions: [
+          { label: 'Round History', hint: 'Details of past funding rounds' },
+          { label: 'Cap Table Overview', hint: 'Major shareholders & share classes' },
+          { label: 'Key Investors', hint: 'VCs, angels, and strategic backers' }
+        ]
+      },
+      {
+        label: 'Financial Performance',
+        actions: [
+          { label: 'Revenue Streams', hint: 'ARR, NRR, and services revenue' },
+          { label: 'Burn Rate & Runway', hint: 'Capital efficiency metrics' },
+          { label: 'Average Contract Value', hint: 'ACV, LTV, and CAC metrics' }
+        ]
+      },
+      {
+        label: 'Headcount & Hiring',
+        actions: [
+          { label: 'Headcount Growth', hint: 'Historical growth trajectory' },
+          { label: 'Active Job Openings', hint: 'Current open roles by department' },
+          { label: 'Talent Distribution', hint: 'Geographic and functional split' }
+        ]
+      }
+    ]
   },
   {
     label: 'People & Access',
     description: 'Founders, key contacts, warm intro paths',
     relevance: 80,
     color: '#f472b6',
-    branches: [{ label: 'Key Contacts', actions: [{ label: 'View People', hint: 'Decision makers' }] }]
+    branches: [
+      {
+        label: 'Leadership Team',
+        actions: [
+          { label: 'Founders & C-Suite', hint: 'Profiles of top executives' },
+          { label: 'Board & Advisors', hint: 'Independent directors and key advisors' }
+        ]
+      },
+      {
+        label: 'Organization Chart',
+        actions: [
+          { label: 'Department Heads', hint: 'Product, Sales, Engineering leads' },
+          { label: 'Key Developers', hint: 'Engineering contributors and architects' }
+        ]
+      },
+      {
+        label: 'Network & Intro Paths',
+        actions: [
+          { label: 'Shared Connections', hint: 'Mutual contacts on LinkedIn/CRM' },
+          { label: 'Referral History', hint: 'Past introductions and referrals' },
+          { label: 'Warm Intro Plan', hint: 'Strategy to reach key buyers' }
+        ]
+      }
+    ]
   },
   {
     label: 'Engagement History',
     description: 'Past interactions, deal stage, notes, next action',
     relevance: 75,
     color: '#22d3ee',
-    branches: [{ label: 'History', actions: [{ label: 'View History', hint: 'Past events' }] }]
+    branches: [
+      {
+        label: 'Interaction Timeline',
+        actions: [
+          { label: 'Meeting Logs', hint: 'Notes and recordings of past calls' },
+          { label: 'Email History', hint: 'Sent/received communication history' },
+          { label: 'Product Usage Logs', hint: 'Trial metrics and feature adoption' }
+        ]
+      },
+      {
+        label: 'Deal Status',
+        actions: [
+          { label: 'Current Stage', hint: 'Pipeline position and deal value' },
+          { label: 'Historical Proposals', hint: 'Sent quotes and contracts' },
+          { label: 'Win/Loss Reasons', hint: 'Key factors in winning or losing' }
+        ]
+      },
+      {
+        label: 'Collaborative Notes',
+        actions: [
+          { label: 'Team Comments', hint: 'Internal notes and tags' },
+          { label: 'Action Items', hint: 'Assigned tasks and deadlines' }
+        ]
+      }
+    ]
   }
 ];
 
 const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
-  'ICP Overlap': { label: 'ICP Overlap', description: 'How much of their ICP maps to yours / fit', relevance: 92, color: '#f97316', branches: [{ label: 'Analysis', actions: [{ label: 'View Overlap', hint: 'ICP match' }] }] },
-  'Product Delta': { label: 'Product Delta', description: 'Feature gaps between you and them', relevance: 88, color: '#38bdf8', branches: [{ label: 'Analysis', actions: [{ label: 'View Delta', hint: 'Gap analysis' }] }] },
-  'GTM & Win/Loss': { label: 'GTM & Win/Loss', description: 'Where you\'ve met in deals, who won, why', relevance: 85, color: '#a78bfa', branches: [{ label: 'Analysis', actions: [{ label: 'View GTM', hint: 'Win/Loss reasons' }] }] },
-  'Velocity & Threat': { label: 'Velocity & Threat', description: 'Headcount growth rate vs yours', relevance: 78, color: '#34d399', branches: [{ label: 'Analysis', actions: [{ label: 'View Velocity', hint: 'Growth rate' }] }] },
-  'Buyer Map': { label: 'Buyer Map', description: 'Economic buyer, champion, blocker', relevance: 88, color: '#38bdf8', branches: [{ label: 'Analysis', actions: [{ label: 'View Map', hint: 'Buyer roles' }] }] },
-  'Pain & Trigger': { label: 'Pain & Trigger', description: 'Specific pain, buying window trigger', relevance: 85, color: '#a78bfa', branches: [{ label: 'Analysis', actions: [{ label: 'View Pain', hint: 'Triggers' }] }] },
-  'Stack Intel / Deal Urgency': { label: 'Stack Intel / Deal Urgency', description: 'Current tooling, displacement / Compliance, fundraise', relevance: 78, color: '#34d399', branches: [{ label: 'Analysis', actions: [{ label: 'View Stack', hint: 'Urgency' }] }] },
-  'Integration Fit': { label: 'Integration Fit', description: 'API compatibility, data model overlap', relevance: 88, color: '#38bdf8', branches: [{ label: 'Analysis', actions: [{ label: 'View Fit', hint: 'Compatibility' }] }] },
-  'Value Split': { label: 'Value Split', description: 'Rev share, referral, white-label model', relevance: 85, color: '#a78bfa', branches: [{ label: 'Analysis', actions: [{ label: 'View Split', hint: 'Models' }] }] },
-  'Joint Champion / Conflict Risk': { label: 'Joint Champion / Conflict Risk', description: 'Internal sponsor / Roadmap overlap', relevance: 78, color: '#34d399', branches: [{ label: 'Analysis', actions: [{ label: 'View Champion', hint: 'Risks' }] }] },
+  'ICP Overlap': {
+    label: 'ICP Overlap',
+    description: 'How much of their ICP maps to yours / fit',
+    relevance: 92,
+    color: '#f97316',
+    branches: [
+      {
+        label: 'Profile Fit',
+        actions: [
+          { label: 'Industry Match', hint: 'Core vertical alignment' },
+          { label: 'Size & Scale Fit', hint: 'Company size & revenue tier match' }
+        ]
+      },
+      {
+        label: 'Audience Fit',
+        actions: [
+          { label: 'Persona Alignment', hint: 'Do we target the same buyers?' },
+          { label: 'Regional Alignment', hint: 'Geographic market overlap' }
+        ]
+      },
+      {
+        label: 'Scoring & Grade',
+        actions: [
+          { label: 'Overall ICP Score', hint: 'Weighted rating of fit' },
+          { label: 'Custom Fit Criteria', hint: 'Specific filters and signals' }
+        ]
+      }
+    ]
+  },
+  'Product Delta': {
+    label: 'Product Delta',
+    description: 'Feature gaps between you and them',
+    relevance: 88,
+    color: '#38bdf8',
+    branches: [
+      {
+        label: 'Core Feature Gap',
+        actions: [
+          { label: 'Missing Features', hint: 'What they have that we lack' },
+          { label: 'Advantage Features', hint: 'What we have that they lack' }
+        ]
+      },
+      {
+        label: 'Technology Gap',
+        actions: [
+          { label: 'Tech Stack Comparison', hint: 'Platforms and architectures' },
+          { label: 'Speed & Performance', hint: 'Infrastructure comparative metrics' }
+        ]
+      },
+      {
+        label: 'Roadmap Alignment',
+        actions: [
+          { label: 'Near-Term Gaps', hint: 'Upcoming competitor features' },
+          { label: 'Long-Term Gaps', hint: 'Roadmap divergence' }
+        ]
+      }
+    ]
+  },
+  'GTM & Win/Loss': {
+    label: 'GTM & Win/Loss',
+    description: 'Where you\'ve met in deals, who won, why',
+    relevance: 85,
+    color: '#a78bfa',
+    branches: [
+      {
+        label: 'Win/Loss Records',
+        actions: [
+          { label: 'Won Deals', hint: 'Deals won against this competitor' },
+          { label: 'Lost Deals', hint: 'Deals lost to this competitor' }
+        ]
+      },
+      {
+        label: 'Competitive Factors',
+        actions: [
+          { label: 'Price Sensitivity', hint: 'How price impacted the decision' },
+          { label: 'Feature Capability', hint: 'How features decided the deal' },
+          { label: 'Relationship Factor', hint: 'Influence of sales reps / champions' }
+        ]
+      },
+      {
+        label: 'Sales Plays',
+        actions: [
+          { label: 'De-positioning Playbook', hint: 'How to handle their pitches' },
+          { label: 'Common Objections', hint: 'Handling competitor objections' }
+        ]
+      }
+    ]
+  },
+  'Velocity & Threat': {
+    label: 'Velocity & Threat',
+    description: 'Headcount growth rate vs yours',
+    relevance: 78,
+    color: '#34d399',
+    branches: [
+      {
+        label: 'Growth Velocity',
+        actions: [
+          { label: 'Headcount Growth Rate', hint: 'Percentage growth over 6-12 months' },
+          { label: 'Funding Velocity', hint: 'Frequency and size of capital raises' }
+        ]
+      },
+      {
+        label: 'Threat Assessment',
+        actions: [
+          { label: 'Market Expansion Threat', hint: 'Entering our key sectors' },
+          { label: 'Talent Poaching', hint: 'Team members hired from our team' }
+        ]
+      },
+      {
+        label: 'Market Sentiment',
+        actions: [
+          { label: 'Social Media Momentum', hint: 'LinkedIn/Twitter follower growth' },
+          { label: 'Press & PR Activity', hint: 'Volume of media announcements' }
+        ]
+      }
+    ]
+  },
+  'Buyer Map': {
+    label: 'Buyer Map',
+    description: 'Economic buyer, champion, blocker',
+    relevance: 88,
+    color: '#38bdf8',
+    branches: [
+      {
+        label: 'Decision Makers',
+        actions: [
+          { label: 'Economic Buyer', hint: 'Budget holder and final approver' },
+          { label: 'Technical Sign-off', hint: 'CTO / Security review Lead' }
+        ]
+      },
+      {
+        label: 'Influencers',
+        actions: [
+          { label: 'Core Champion', hint: 'Our champion inside the prospect company' },
+          { label: 'Business Users', hint: 'Day-to-day operators' }
+        ]
+      },
+      {
+        label: 'Friction Points',
+        actions: [
+          { label: 'Key Blocker', hint: 'Potential detractors and risk profiles' },
+          { label: 'Strategy to Win Blockers', hint: 'Mitigation plan for negative stakeholders' }
+        ]
+      }
+    ]
+  },
+  'Pain & Trigger': {
+    label: 'Pain & Trigger',
+    description: 'Specific pain, buying window trigger',
+    relevance: 85,
+    color: '#a78bfa',
+    branches: [
+      {
+        label: 'Customer Pain Points',
+        actions: [
+          { label: 'Operational Inefficiencies', hint: 'Bottlenecks and manual effort' },
+          { label: 'Financial Cost Pain', hint: 'High maintenance / licensing cost' },
+          { label: 'Technical Limitations', hint: 'Legacy tech stack constraints' }
+        ]
+      },
+      {
+        label: 'Buying Triggers',
+        actions: [
+          { label: 'Executive Hires', hint: 'New VP/C-level leader joining' },
+          { label: 'Funding Announcement', hint: 'Fresh capital to deploy' },
+          { label: 'Compliance Mandates', hint: 'New laws/requirements forcing change' }
+        ]
+      }
+    ]
+  },
+  'Stack Intel / Deal Urgency': {
+    label: 'Stack Intel / Deal Urgency',
+    description: 'Current tooling, displacement / Compliance, fundraise',
+    relevance: 78,
+    color: '#34d399',
+    branches: [
+      {
+        label: 'Software Stack',
+        actions: [
+          { label: 'Current Tooling', hint: 'Key software currently installed' },
+          { label: 'Vendor Spend Estimate', hint: 'Calculated annual spend on stack' }
+        ]
+      },
+      {
+        label: 'Displacement Risk',
+        actions: [
+          { label: 'Contract Expirations', hint: 'Expected renewal/expiration dates' },
+          { label: 'Integration Friction', hint: 'Trouble with existing workflows' }
+        ]
+      },
+      {
+        label: 'Urgency Drivers',
+        actions: [
+          { label: 'Security Gaps', hint: 'Known vulnerabilities or compliance needs' },
+          { label: 'Scale Limits', hint: 'Current tool crashing under load' }
+        ]
+      }
+    ]
+  },
+  'Integration Fit': {
+    label: 'Integration Fit',
+    description: 'API compatibility, data model overlap',
+    relevance: 88,
+    color: '#38bdf8',
+    branches: [
+      {
+        label: 'Data Model Alignment',
+        actions: [
+          { label: 'Entity Mapping', hint: 'Matching schema fields and types' },
+          { label: 'Sync Frequency', hint: 'Realtime vs batch synchronization' }
+        ]
+      },
+      {
+        label: 'Technical Fit',
+        actions: [
+          { label: 'Authentication Protocol', hint: 'OAuth, SAML, API Key compatibility' },
+          { label: 'API Rate Limits', hint: 'Handling volume and throughput limits' }
+        ]
+      },
+      {
+        label: 'Effort Estimation',
+        actions: [
+          { label: 'Core Integration Cost', hint: 'Estimated engineering hours' },
+          { label: 'Maintenance Overhead', hint: 'Long-term upkeep cost' }
+        ]
+      }
+    ]
+  },
+  'Value Split': {
+    label: 'Value Split',
+    description: 'Rev share, referral, white-label model',
+    relevance: 85,
+    color: '#a78bfa',
+    branches: [
+      {
+        label: 'Commercial Model',
+        actions: [
+          { label: 'Revenue Share Scheme', hint: 'Percentage share on co-sell deals' },
+          { label: 'Referral Fees', hint: 'One-time bonus for passed leads' },
+          { label: 'Wholesale Pricing', hint: 'Discounted reseller rates' }
+        ]
+      },
+      {
+        label: 'Partnerships Plan',
+        actions: [
+          { label: 'Co-Marketing Agreement', hint: 'Joint webinars, press releases, etc.' },
+          { label: 'Joint Account Mapping', hint: 'Shared target accounts list' }
+        ]
+      },
+      {
+        label: 'Legal Terms',
+        actions: [
+          { label: 'SLA Agreement', hint: 'Service level requirements' },
+          { label: 'Data Sharing Policy', hint: 'Compliance and privacy constraints' }
+        ]
+      }
+    ]
+  },
+  'Joint Champion / Conflict Risk': {
+    label: 'Joint Champion / Conflict Risk',
+    description: 'Internal sponsor / Roadmap overlap',
+    relevance: 78,
+    color: '#34d399',
+    branches: [
+      {
+        label: 'Joint Champion Strategy',
+        actions: [
+          { label: 'Shared Sponsor Profile', hint: 'Key contact driving partnership' },
+          { label: 'Co-selling Strategy', hint: 'Enabling sponsor to pitch both products' }
+        ]
+      },
+      {
+        label: 'Product Overlap Risk',
+        actions: [
+          { label: 'Feature Conflicts', hint: 'Areas where product roadmaps compete' },
+          { label: 'Customer Base Overlap', hint: 'Risk of cannibalizing sales' }
+        ]
+      },
+      {
+        label: 'Mitigation Plan',
+        actions: [
+          { label: 'Rules of Engagement', hint: 'Protocol for conflict resolution' },
+          { label: 'Product Boundaries', hint: 'Defined API boundaries and scopes' }
+        ]
+      }
+    ]
+  }
 };
 
 const DYNAMIC_SETS: Record<CompanyTag, string[]> = {

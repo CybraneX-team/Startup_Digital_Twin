@@ -98,6 +98,7 @@ interface InternalNodeProps {
   draftMemberScreenPosRef?: React.MutableRefObject<{ x: number; y: number } | null>;
   onNodeFocus?: (pos: THREE.Vector3, node: UInternalNode) => void;
   rootPos?: THREE.Vector3;
+  revealDelayMs?: number;
 }
 
 const NODES_REVEAL_DELAY_MS = 320;
@@ -121,10 +122,12 @@ export function InternalNode({
   draftMemberScreenPosRef,
   onNodeFocus,
   rootPos,
+  revealDelayMs = 320,
 }: InternalNodeProps) {
   const groupRef = useRef<THREE.Group>(null);
   const currentPos = useRef(startPos.clone());
   const [entryAnimDone, setEntryAnimDone] = useState(isDraft);
+  const hasFocusedRef = useRef(false);
 
   const radii = [0.25, 0.20, 0.15, 0.12, 0.09];
   const radius = radii[depth] || 0.05;
@@ -143,18 +146,31 @@ export function InternalNode({
     if (totalCount === 0) return [];
     
     const pts: THREE.Vector3[] = [];
-    const ringRadius = 1.4 * Math.pow(0.7, depth - 1);
+    const isFlat = !!rootPos;
+    const ringRadius = isFlat
+      ? 1.8 * Math.pow(0.7, depth - 1)
+      : 1.4 * Math.pow(0.7, depth - 1);
 
     const effectiveRoot = rootPos || new THREE.Vector3(0, 0, 0);
     const offset = targetPos.clone().sub(effectiveRoot);
-    const dir = offset.lengthSq() > 0.0001 ? offset.normalize() : new THREE.Vector3(0, 0, 1);
+    const dir = isFlat 
+      ? new THREE.Vector3(0, 0, 1)
+      : (offset.lengthSq() > 0.0001 ? offset.normalize() : new THREE.Vector3(0, 0, 1));
 
-    const localUp = new THREE.Vector3(0, 1, 0);
-    if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
-    const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();
-    const up = new THREE.Vector3().crossVectors(right, dir).normalize();
+    const right = new THREE.Vector3();
+    const up = new THREE.Vector3();
 
-    const depthStep = 3.0;
+    if (isFlat) {
+      right.set(1, 0, 0);
+      up.set(0, 1, 0);
+    } else {
+      const localUp = new THREE.Vector3(0, 1, 0);
+      if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
+      right.crossVectors(dir, localUp).normalize();
+      up.crossVectors(right, dir).normalize();
+    }
+
+    const depthStep = isFlat ? 0.5 : 3.0;
     const childCenter = targetPos.clone().add(dir.clone().multiplyScalar(depthStep));
 
     for (let i = 0; i < totalCount; i++) {
@@ -165,7 +181,7 @@ export function InternalNode({
       pts.push(pt);
     }
     return pts;
-  }, [node.children, targetPos, depth, isMeActiveCenter, draftChildNode]);
+  }, [node.children, targetPos, depth, isMeActiveCenter, draftChildNode, rootPos]);
 
   const visibleChildIndices = useMemo(() => {
     if (!node.children) return [];
@@ -218,7 +234,7 @@ export function InternalNode({
       groupRef.current.scale.setScalar(0);
     }
 
-    const revealDelay = NODES_REVEAL_DELAY_MS / 1000;
+    const revealDelay = revealDelayMs / 1000;
 
     let targetScale = 0.0;
     if (isHiddenParent) {
@@ -257,7 +273,7 @@ export function InternalNode({
       posTween.kill();
       scaleTween.kill();
     };
-  }, [startPos, targetPos, isDraft]);
+  }, [startPos.x, startPos.y, startPos.z, targetPos.x, targetPos.y, targetPos.z, isDraft]);
 
   useEffect(() => {
     if (isMeActiveCenter) {
@@ -265,12 +281,17 @@ export function InternalNode({
         label: parentLabel,
         onClick: () => onSelectPath(pathContext, parentPos),
       });
-      if (onNodeFocus) onNodeFocus(targetPos, node);
+      if (!hasFocusedRef.current) {
+        if (onNodeFocus) onNodeFocus(targetPos, node);
+        hasFocusedRef.current = true;
+      }
       return () => {
         setBackInfo(null);
       };
+    } else {
+      hasFocusedRef.current = false;
     }
-  }, [isMeActiveCenter, parentLabel, pathContext, parentPos, onSelectPath, setBackInfo, onNodeFocus, targetPos]);
+  }, [isMeActiveCenter, parentLabel, pathContext, parentPos, onSelectPath, setBackInfo, onNodeFocus, targetPos, node]);
 
   useFrame(() => {
     if (groupRef.current) {
@@ -510,6 +531,7 @@ export function InternalNode({
             draftMemberScreenPosRef={draftMemberScreenPosRef}
             onNodeFocus={onNodeFocus}
             rootPos={rootPos}
+            revealDelayMs={revealDelayMs}
           />
         );
       })}
@@ -532,6 +554,7 @@ export function InternalNode({
           isDraft
           onNodeFocus={onNodeFocus}
           rootPos={rootPos}
+          revealDelayMs={revealDelayMs}
         />
       )}
 

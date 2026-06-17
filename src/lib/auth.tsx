@@ -189,8 +189,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   async function signOut() {
     await supabase.auth.signOut();
+    
+    // Preserve saved workflows across sessions
+    const savedWorkflows = localStorage.getItem('industry_os_saved_workflows_v1');
+    
     localStorage.clear();
     sessionStorage.clear();
+    
+    if (savedWorkflows) {
+      localStorage.setItem('industry_os_saved_workflows_v1', savedWorkflows);
+    }
+    
     setState({ user: null, session: null, profile: null, loading: false });
   }
 

@@ -38,3 +38,13 @@ claude.md
 handover.md
 .vercel
 IndustryOs_Activity,md
+
+# Ignore all markdown files except README
+*.md
+!README.md
+!readme.md
+!AGENTS.md
+!claude.md
+!gemini.md
+!voiceAIApi.md
+!AI.context.md

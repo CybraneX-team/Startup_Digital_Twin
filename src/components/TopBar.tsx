@@ -38,8 +38,8 @@ export default function TopBar() {
     return () => window.removeEventListener('company_entered_in_3d', handler);
   }, []);
 
-  // Bookmark button is visible when: not on /3d, OR on /3d and a company has been entered
-  const showBookmark = !is3D || companyEnteredIn3D;
+  // Bookmark button is visible when: not on /3d, OR on /3d and a company has been entered, OR there are saved workflows
+  const showBookmark = !is3D || companyEnteredIn3D || savedCount > 0;
 
   const initials = profile?.first_name
     ? `${profile.first_name[0]}${profile.last_name?.[0] ?? ''}`.toUpperCase()

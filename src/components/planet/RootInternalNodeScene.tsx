@@ -66,7 +66,7 @@ export function RootInternalNodeScene({
       return;
     }
     
-    const dir = ROOT_POS.clone().normalize();
+    const dir = new THREE.Vector3(0, 0, 1);
     // Use 18 as the base distance (26 - 8 = 18)
     const { camPos, orbitTarget } = computeCameraFraming(ROOT_POS, dir, root.internalNodes.length, 18);
 
@@ -103,7 +103,7 @@ export function RootInternalNodeScene({
   }, [root.id, root.internalNodes.length, rootSwitchKey, camera]);
 
   const flyToRootOverview = useCallback(() => {
-    const dir = ROOT_POS.clone().normalize();
+    const dir = new THREE.Vector3(0, 0, 1);
     const { camPos, orbitTarget } = computeCameraFraming(ROOT_POS, dir, root.internalNodes.length, 18);
     
     if (orbitRef.current) {
@@ -114,7 +114,7 @@ export function RootInternalNodeScene({
 
   const handleNodeFocus = useCallback((targetPos: THREE.Vector3, node?: any) => {
     if (orbitRef.current) {
-      const dir = targetPos.clone().sub(ROOT_POS).normalize();
+      const dir = new THREE.Vector3(0, 0, 1);
       const { camPos, orbitTarget } = computeCameraFraming(targetPos, dir, node?.children?.length ?? 0, 10);
       gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.0, ease: 'power2.inOut' });
       gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.0, ease: 'power2.inOut' });
