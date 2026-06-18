@@ -175,6 +175,18 @@ export function useJoinRequests(companyId: string | null | undefined) {
 
   useEffect(() => {
     fetchRequests();
+
+    const channel = supabase
+      .channel(`join-requests-${companyId}`)
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'join_requests',
+        filter: `company_id=eq.${companyId}`,
+      }, () => fetchRequests())
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [companyId]);
 
   return { requests, loading, refetch: fetchRequests };

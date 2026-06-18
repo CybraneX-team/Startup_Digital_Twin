@@ -162,11 +162,11 @@ export default function RBAC() {
       {/* ── Tabs ── */}
       <div className="flex gap-1 mb-6 p-1 rounded-xl bg-gray-900/50 border border-gray-800 w-fit">
         {([
-          { key: 'members',     label: 'Members',       count: activeMembers.length },
-          { key: 'requests',    label: 'Join Requests', count: pendingCount, alert: pendingCount > 0 },
-          { key: 'invites',     label: 'Invite',        count: null },
-          { key: 'permissions', label: 'Permissions',   count: null },
-        ] as const).map(t => (
+          { key: 'members',     label: 'Members',       count: activeMembers.length,                    show: true },
+          { key: 'requests',    label: 'Join Requests', count: pendingCount, alert: pendingCount > 0,   show: canManage },
+          { key: 'invites',     label: 'Invite',        count: null,                                    show: canManage },
+          { key: 'permissions', label: 'Permissions',   count: null,                                    show: true },
+        ] as const).filter(t => t.show).map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
@@ -380,62 +380,56 @@ export default function RBAC() {
         </div>
       )}
 
-      {/* ════════════════════════════════════════ INVITE LINKS TAB */}
+      {/* ════════════════════════════════════════ INVITE TAB */}
       {tab === 'invites' && (
-        <div className="space-y-4">
-          {/* Invite a specific user by email — view-only access */}
-          {canManage && (
-            <div className="glass-card p-5">
-              <h3 className="text-sm font-medium text-gray-200 mb-4 flex items-center gap-2">
-                <Mail className="w-4 h-4 text-sky-400" />
-                Invite Someone by Email
-              </h3>
-              <div className="flex items-end gap-3">
-                <div className="flex-1">
-                  <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">Email Address</label>
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={e => { setInviteEmail(e.target.value); setInviteEmailStatus(null); }}
-                    placeholder="someone@company.com"
-                    className="w-full px-3 py-2.5 text-sm rounded-lg border border-gray-700 bg-gray-900/50 text-white focus:border-sky-500/50 focus:outline-none"
-                  />
-                </div>
-                <button
-                  onClick={handleEmailInvite}
-                  disabled={sendingEmailInvite || !inviteEmail.trim()}
-                  className="flex items-center gap-2 px-5 py-2.5 text-sm rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-medium transition-all disabled:opacity-60"
-                >
-                  {sendingEmailInvite ? (
-                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  ) : (
-                    <Mail className="w-4 h-4" />
-                  )}
-                  Send Invite
-                </button>
-              </div>
-              {inviteEmailStatus === 'exists' && (
-                <p className="text-[11px] text-amber-400 mt-3 flex items-center gap-1.5">
-                  <AlertCircle className="w-3 h-3" /> This email already has an account.
-                </p>
-              )}
-              {inviteEmailStatus === 'sent' && (
-                <p className="text-[11px] text-emerald-400 mt-3 flex items-center gap-1.5">
-                  <Check className="w-3 h-3" /> Invite sent — they'll get login credentials by email.
-                </p>
-              )}
-              {inviteEmailStatus === 'error' && (
-                <p className="text-[11px] text-red-400 mt-3 flex items-center gap-1.5">
-                  <AlertCircle className="w-3 h-3" /> Failed to send invite. Try again.
-                </p>
-              )}
-              <p className="text-[10px] text-gray-600 mt-3 flex items-center gap-1.5">
-                <Clock className="w-3 h-3" />
-                If they don't have an account yet, we create one and email them view-only login credentials.
-              </p>
+        <div className="glass-card p-5">
+          <h3 className="text-sm font-medium text-gray-200 mb-4 flex items-center gap-2">
+            <Mail className="w-4 h-4 text-sky-400" />
+            Invite Someone by Email
+          </h3>
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <label className="text-[10px] text-gray-500 uppercase tracking-wider mb-2 block">Email Address</label>
+              <input
+                type="email"
+                value={inviteEmail}
+                onChange={e => { setInviteEmail(e.target.value); setInviteEmailStatus(null); }}
+                placeholder="someone@company.com"
+                className="w-full px-3 py-2.5 text-sm rounded-lg border border-gray-700 bg-gray-900/50 text-white focus:border-sky-500/50 focus:outline-none"
+              />
             </div>
+            <button
+              onClick={handleEmailInvite}
+              disabled={sendingEmailInvite || !inviteEmail.trim()}
+              className="flex items-center gap-2 px-5 py-2.5 text-sm rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-medium transition-all disabled:opacity-60"
+            >
+              {sendingEmailInvite ? (
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              ) : (
+                <Mail className="w-4 h-4" />
+              )}
+              Send Invite
+            </button>
+          </div>
+          {inviteEmailStatus === 'exists' && (
+            <p className="text-[11px] text-amber-400 mt-3 flex items-center gap-1.5">
+              <AlertCircle className="w-3 h-3" /> This email already has an account.
+            </p>
           )}
-
+          {inviteEmailStatus === 'sent' && (
+            <p className="text-[11px] text-emerald-400 mt-3 flex items-center gap-1.5">
+              <Check className="w-3 h-3" /> Invite sent — they'll get login credentials by email.
+            </p>
+          )}
+          {inviteEmailStatus === 'error' && (
+            <p className="text-[11px] text-red-400 mt-3 flex items-center gap-1.5">
+              <AlertCircle className="w-3 h-3" /> Failed to send invite. Try again.
+            </p>
+          )}
+          <p className="text-[10px] text-gray-600 mt-3 flex items-center gap-1.5">
+            <Clock className="w-3 h-3" />
+            If they don't have an account yet, we create one and email them view-only login credentials.
+          </p>
         </div>
       )}
 
