@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Hexagon, LogOut, LogIn, Bookmark } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useSavedWorkflows } from '../lib/useSavedWorkflows';
-import { supabase } from '../lib/supabase';
+import { api } from '../lib/api';
 
 export default function TopBar() {
   const location = useLocation();
@@ -26,6 +26,7 @@ export default function TopBar() {
   const isAuthed     = !!user;
   const hasCompany   = !!profile?.company_id;
   const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
+  const canManageTeam = canWrite('team');
 
   const { totalCount: savedCount } = useSavedWorkflows();
 
@@ -63,16 +64,13 @@ export default function TopBar() {
   const [pendingJoinCount, setPendingJoinCount] = useState(0);
   useEffect(() => {
     const companyId = profile?.company_id;
-    if (!companyId) { setPendingJoinCount(0); return; }
+    if (!companyId || !canManageTeam) { setPendingJoinCount(0); return; }
     let cancelled = false;
-    supabase
-      .from('join_requests')
-      .select('id', { count: 'exact', head: true })
-      .eq('company_id', companyId)
-      .eq('status', 'pending')
-      .then(({ count }) => { if (!cancelled) setPendingJoinCount(count ?? 0); });
+    api.get<{ count: number }>('/api/join-requests/count')
+      .then(({ count }) => { if (!cancelled) setPendingJoinCount(count ?? 0); })
+      .catch(() => { if (!cancelled) setPendingJoinCount(0); });
     return () => { cancelled = true; };
-  }, [profile?.company_id, location.pathname]);
+  }, [profile?.company_id, location.pathname, canManageTeam]);
 
   if (workspaceOpen) return null;
 

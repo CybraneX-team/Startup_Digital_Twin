@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ShieldCheck, Users, Crown, Briefcase, UserCircle, Plus,
-  Check, X, ChevronDown, Clock, Trash2,
-  UserCheck, AlertCircle, Mail,
+  Check, X, ChevronDown, Clock, Trash2, UserCheck, AlertCircle,
+  Mail, Copy, Archive, Save, Pencil,
 } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../lib/auth';
@@ -12,12 +12,24 @@ import {
   approveJoinRequest, rejectJoinRequest,
   changeMemberRole, removeMember,
 } from '../lib/db/team';
-import type { UserRole } from '../lib/supabase';
+import type { RoleId, SystemRole } from '../lib/supabase';
 import type { TeamMember, JoinRequest } from '../lib/db/team';
+import {
+  ACTIONS,
+  MODULES,
+  SYSTEM_ROLE_ORDER,
+  archiveCustomRole,
+  clonePermissions,
+  createCustomRole,
+  fetchRbacRoles,
+  hasPermission,
+  isSystemRole,
+  updateCustomRole,
+  type ExpandedPermissions,
+  type RoleDefinition,
+} from '../lib/db/rbac';
 
-/* ─────────────────────────────────────────────────── */
-
-const ROLE_META: Record<UserRole, { label: string; color: string; bg: string; border: string; icon: typeof Crown }> = {
+const SYSTEM_ROLE_META: Record<SystemRole, { label: string; color: string; bg: string; border: string; icon: typeof Crown }> = {
   super_admin: { label: 'Super Admin', color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20',    icon: ShieldCheck },
   founder:     { label: 'Founder',     color: 'text-amber-400',  bg: 'bg-amber-500/10',  border: 'border-amber-500/20',  icon: Crown },
   co_founder:  { label: 'Co-Founder',  color: 'text-orange-400', bg: 'bg-orange-500/10', border: 'border-orange-500/20', icon: Crown },
@@ -25,25 +37,22 @@ const ROLE_META: Record<UserRole, { label: string; color: string; bg: string; bo
   analyst:     { label: 'Analyst',     color: 'text-cyan-400',   bg: 'bg-cyan-500/10',   border: 'border-cyan-500/20',   icon: UserCircle },
   engineer:    { label: 'Engineer',    color: 'text-indigo-400', bg: 'bg-indigo-500/10', border: 'border-indigo-500/20', icon: UserCircle },
   viewer:      { label: 'Viewer',      color: 'text-gray-400',   bg: 'bg-gray-500/10',   border: 'border-gray-500/20',   icon: UserCircle },
-  vc:          { label: 'VC Partner',  color: 'text-emerald-400',bg: 'bg-emerald-500/10',border: 'border-emerald-500/20',icon: UserCircle },
   investor:    { label: 'Investor',    color: 'text-teal-400',   bg: 'bg-teal-500/10',   border: 'border-teal-500/20',   icon: UserCircle },
 };
 
-const ASSIGNABLE_ROLES: UserRole[] = ['co_founder', 'admin', 'analyst', 'engineer', 'viewer', 'vc', 'investor'];
+const CUSTOM_META = { label: 'Custom', color: 'text-violet-400', bg: 'bg-violet-500/10', border: 'border-violet-500/20', icon: ShieldCheck };
 
-const MODULE_PERMS: Record<UserRole, Record<string, { read: boolean; write: boolean }>> = {
-  super_admin: { twin: {read:true,write:true}, strategy:{read:true,write:true}, analytics:{read:true,write:true}, data:{read:true,write:true}, benchmarks:{read:true,write:true}, team:{read:true,write:true} },
-  founder:     { twin: {read:true,write:true}, strategy:{read:true,write:true}, analytics:{read:true,write:true}, data:{read:true,write:true}, benchmarks:{read:true,write:false},team:{read:true,write:true} },
-  co_founder:  { twin: {read:true,write:true}, strategy:{read:true,write:true}, analytics:{read:true,write:true}, data:{read:true,write:true}, benchmarks:{read:true,write:false},team:{read:true,write:true} },
-  admin:       { twin: {read:true,write:true}, strategy:{read:true,write:true}, analytics:{read:true,write:true}, data:{read:true,write:true}, benchmarks:{read:true,write:false},team:{read:true,write:true} },
-  analyst:     { twin: {read:true,write:false},strategy:{read:true,write:true}, analytics:{read:true,write:true}, data:{read:true,write:false},benchmarks:{read:true,write:false}, team:{read:true,write:false} },
-  engineer:    { twin: {read:true,write:false},strategy:{read:true,write:false},analytics:{read:true,write:false},data:{read:true,write:true}, benchmarks:{read:true,write:false}, team:{read:true,write:false} },
-  viewer:      { twin: {read:true,write:false},strategy:{read:true,write:false},analytics:{read:true,write:false},data:{read:true,write:false},benchmarks:{read:true,write:false}, team:{read:true,write:false} },
-  vc:          { twin: {read:true,write:false},strategy:{read:false,write:false},analytics:{read:true,write:false},data:{read:false,write:false},benchmarks:{read:true,write:false},team:{read:true,write:false} },
-  investor:    { twin: {read:true,write:false},strategy:{read:false,write:false},analytics:{read:true,write:false},data:{read:false,write:false},benchmarks:{read:true,write:false},team:{read:true,write:false} },
-};
+function roleMeta(role?: RoleDefinition | null, roleId?: RoleId | null) {
+  if (role?.isSystem && isSystemRole(role.id)) return SYSTEM_ROLE_META[role.id];
+  if (roleId && isSystemRole(roleId)) return SYSTEM_ROLE_META[roleId];
+  return CUSTOM_META;
+}
 
-const MODULES = ['twin', 'strategy', 'analytics', 'data', 'benchmarks', 'team'];
+function roleLabel(role?: RoleDefinition | null, fallback?: RoleId | null) {
+  if (role) return role.name;
+  if (fallback && isSystemRole(fallback)) return SYSTEM_ROLE_META[fallback].label;
+  return fallback ?? 'Unknown';
+}
 
 function memberName(m: TeamMember | JoinRequest) {
   if (m.first_name || m.last_name) return [m.first_name, m.last_name].filter(Boolean).join(' ');
@@ -55,32 +64,71 @@ function initials(m: TeamMember | JoinRequest) {
   return n.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
-/* ─────────────────────────────────────────────────── */
+type RoleDraft = {
+  sourceRoleId: RoleId;
+  name: string;
+  description: string;
+  permissions: ExpandedPermissions;
+};
 
 export default function RBAC() {
-  const { user, profile, role: myRole, canWrite } = useAuth();
+  const { user, profile, role: myRole, roleName, can, canWrite, canDelete } = useAuth();
   const companyId = profile?.company_id ?? null;
   const canManage = canWrite('team');
+  const canRemoveMembers = canDelete('team');
 
   const { members, loading: loadingMembers, refetch: refetchMembers } = useTeamMembers(companyId);
-  const { requests, loading: loadingRequests, refetch: refetchRequests } = useJoinRequests(companyId);
+  const { requests, loading: loadingRequests, refetch: refetchRequests } = useJoinRequests(companyId, canManage);
 
-  const [selectedRole, setSelectedRole] = useState<UserRole>('founder');
+  const [roles, setRoles] = useState<RoleDefinition[]>([]);
+  const [loadingRoles, setLoadingRoles] = useState(true);
+  const [selectedRoleId, setSelectedRoleId] = useState<RoleId>('founder');
   const [tab, setTab] = useState<'members' | 'requests' | 'invites' | 'permissions'>('members');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-
-  // Auto-switch to Join Requests tab when pending requests arrive and user is on Members tab
-  useEffect(() => {
-    if (requests.length > 0 && tab === 'members') {
-      setTab('requests');
-    }
-  }, [requests.length]);
-  const [approveRole, setApproveRole] = useState<Record<string, UserRole>>({});
+  const [approveRole, setApproveRole] = useState<Record<string, RoleId>>({});
   const [inviteEmail, setInviteEmail] = useState('');
   const [sendingEmailInvite, setSendingEmailInvite] = useState(false);
   const [inviteEmailStatus, setInviteEmailStatus] = useState<'sent' | 'exists' | 'error' | null>(null);
+  const [editingRoleId, setEditingRoleId] = useState<RoleId | 'new' | null>(null);
+  const [draft, setDraft] = useState<RoleDraft | null>(null);
+  const [roleError, setRoleError] = useState<string | null>(null);
 
-  /* ── Invite by email ── */
+  const loadRoles = useCallback(async () => {
+    setLoadingRoles(true);
+    try {
+      const rows = await fetchRbacRoles();
+      setRoles(rows);
+      if (!rows.some(r => r.id === selectedRoleId)) {
+        setSelectedRoleId(rows.find(r => r.id === 'founder')?.id ?? rows[0]?.id ?? 'viewer');
+      }
+    } catch (error) {
+      console.error('[rbac] fetch roles', error);
+      setRoles([]);
+    } finally {
+      setLoadingRoles(false);
+    }
+  }, [selectedRoleId]);
+
+  useEffect(() => {
+    if (!companyId) return;
+    void loadRoles();
+  }, [companyId, loadRoles]);
+
+  const roleById = useMemo(() => new Map(roles.map(r => [r.id, r])), [roles]);
+  const sortedRoles = useMemo(() => {
+    const order = new Map(SYSTEM_ROLE_ORDER.map((id, index) => [id, index]));
+    return [...roles].sort((a, b) => {
+      const aOrder = order.get(a.id as SystemRole) ?? 1000;
+      const bOrder = order.get(b.id as SystemRole) ?? 1000;
+      if (aOrder !== bOrder) return aOrder - bOrder;
+      return a.name.localeCompare(b.name);
+    });
+  }, [roles]);
+  const assignableRoles = sortedRoles.filter(r => r.assignable);
+  const selectedRole = roleById.get(selectedRoleId) ?? sortedRoles[0] ?? null;
+  const activeMembers = members.filter(m => m.status === 'active');
+  const pendingCount = requests.length;
+
   async function handleEmailInvite() {
     const email = inviteEmail.trim();
     if (!email) return;
@@ -97,32 +145,29 @@ export default function RBAC() {
     }
   }
 
-  /* ── Join requests ── */
   async function handleApprove(req: JoinRequest) {
-    if (!user) return;
-    const role = approveRole[req.id] ?? req.requested_role;
+    const defaultRole = assignableRoles.find(r => r.id === 'viewer')?.id ?? assignableRoles[0]?.id ?? 'viewer';
+    const role = approveRole[req.id] ?? defaultRole;
     setActionLoading(req.id);
-    const result = await approveJoinRequest(req.id, user.id, role);
+    const result = await approveJoinRequest(req.id, role);
     setActionLoading(null);
     if (!result.success) { alert(result.error); return; }
-    refetchRequests();
-    refetchMembers();
+    void refetchRequests();
+    void refetchMembers();
   }
 
   async function handleReject(reqId: string) {
-    if (!user) return;
     setActionLoading(reqId);
-    await rejectJoinRequest(reqId, user.id);
+    await rejectJoinRequest(reqId);
     setActionLoading(null);
-    refetchRequests();
+    void refetchRequests();
   }
 
-  /* ── Member actions ── */
-  async function handleRoleChange(memberId: string, newRole: UserRole) {
+  async function handleRoleChange(memberId: string, newRole: RoleId) {
     setActionLoading(memberId);
     await changeMemberRole(memberId, newRole);
     setActionLoading(null);
-    refetchMembers();
+    void refetchMembers();
   }
 
   async function handleRemove(memberId: string) {
@@ -130,27 +175,108 @@ export default function RBAC() {
     setActionLoading(memberId);
     await removeMember(memberId);
     setActionLoading(null);
-    refetchMembers();
+    void refetchMembers();
   }
 
-  const activeMembers = members.filter(m => m.status === 'active');
-  const pendingCount = requests.length;
+  function startCopy(source: RoleDefinition) {
+    setRoleError(null);
+    setEditingRoleId('new');
+    setDraft({
+      sourceRoleId: source.id,
+      name: `${source.name} Copy`,
+      description: source.description ?? '',
+      permissions: clonePermissions(source.permissions),
+    });
+  }
+
+  function startEdit(role: RoleDefinition) {
+    if (role.isSystem) return;
+    setRoleError(null);
+    setEditingRoleId(role.id);
+    setDraft({
+      sourceRoleId: role.baseRoleId ?? role.id,
+      name: role.name,
+      description: role.description ?? '',
+      permissions: clonePermissions(role.permissions),
+    });
+  }
+
+  function cancelDraft() {
+    setEditingRoleId(null);
+    setDraft(null);
+    setRoleError(null);
+  }
+
+  function toggleDraftPermission(module: keyof ExpandedPermissions, action: 'read' | 'write' | 'delete') {
+    if (!draft) return;
+    const current = draft.permissions[module][action];
+    if (!current && !can(module, action)) return;
+    const permissions = clonePermissions(draft.permissions);
+    permissions[module][action] = !current;
+    setDraft({ ...draft, permissions });
+  }
+
+  async function saveDraft() {
+    if (!draft) return;
+    setRoleError(null);
+    try {
+      const name = draft.name.trim();
+      if (!name) {
+        setRoleError('Role name is required.');
+        return;
+      }
+      if (editingRoleId === 'new') {
+        const created = await createCustomRole({
+          name,
+          description: draft.description,
+          sourceRoleId: draft.sourceRoleId,
+          permissions: draft.permissions,
+        });
+        setSelectedRoleId(created.id);
+      } else if (editingRoleId) {
+        const updated = await updateCustomRole(editingRoleId, {
+          name,
+          description: draft.description,
+          permissions: draft.permissions,
+        });
+        setSelectedRoleId(updated.id);
+      }
+      cancelDraft();
+      await loadRoles();
+    } catch (error) {
+      setRoleError(error instanceof Error ? error.message : 'Role save failed.');
+    }
+  }
+
+  async function handleArchive(role: RoleDefinition) {
+    if (!confirm(`Archive ${role.name}?`)) return;
+    setRoleError(null);
+    try {
+      await archiveCustomRole(role.id);
+      if (selectedRoleId === role.id) setSelectedRoleId('founder');
+      await loadRoles();
+    } catch (error) {
+      setRoleError(error instanceof Error ? error.message : 'Role archive failed.');
+    }
+  }
+
+  const selectedMeta = roleMeta(selectedRole, selectedRoleId);
+  const SelectedIcon = selectedMeta.icon;
 
   return (
     <div>
       <PageHeader
         title="Team & Access"
-        subtitle="Manage who's in your workspace, their roles, and join requests"
+        subtitle="Manage workspace members, roles, and join requests"
         icon={<ShieldCheck className="w-6 h-6" />}
         badge={`${activeMembers.length} member${activeMembers.length !== 1 ? 's' : ''}`}
       />
 
-      {/* ── Stats row ── */}
       <div className="grid grid-cols-3 gap-3 mb-6">
         {[
           { label: 'Total Members', value: activeMembers.length, color: 'text-sky-400' },
           { label: 'Pending Requests', value: pendingCount, color: pendingCount > 0 ? 'text-amber-400' : 'text-gray-500' },
-          { label: 'Your Role', value: ROLE_META[myRole ?? 'viewer']?.label ?? '—', color: ROLE_META[myRole ?? 'viewer']?.color ?? 'text-gray-400' },
+          { label: 'Your Role', value: roleName ?? roleLabel(roleById.get(myRole ?? ''), myRole), color: roleMeta(roleById.get(myRole ?? ''), myRole).color },
         ].map(s => (
           <div key={s.label} className="glass-card p-4">
             <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{s.label}</p>
@@ -159,29 +285,24 @@ export default function RBAC() {
         ))}
       </div>
 
-      {/* ── Tabs ── */}
       <div className="flex gap-1 mb-6 p-1 rounded-xl bg-gray-900/50 border border-gray-800 w-fit">
         {([
-          { key: 'members',     label: 'Members',       count: activeMembers.length,                    show: true },
-          { key: 'requests',    label: 'Join Requests', count: pendingCount, alert: pendingCount > 0,   show: canManage },
-          { key: 'invites',     label: 'Invite',        count: null,                                    show: canManage },
-          { key: 'permissions', label: 'Permissions',   count: null,                                    show: true },
+          { key: 'members',     label: 'Members',       count: activeMembers.length,                  show: true },
+          { key: 'requests',    label: 'Join Requests', count: pendingCount, alert: pendingCount > 0, show: canManage },
+          { key: 'invites',     label: 'Invite',        count: null,                                  show: canManage },
+          { key: 'permissions', label: 'Permissions',   count: null,                                  show: true },
         ] as const).filter(t => t.show).map(t => (
           <button
             key={t.key}
             onClick={() => setTab(t.key)}
             className={`flex items-center gap-2 px-4 py-2 text-xs rounded-lg transition-all ${
-              tab === t.key
-                ? 'bg-gray-800 text-white font-medium'
-                : 'text-gray-500 hover:text-gray-300'
+              tab === t.key ? 'bg-gray-800 text-white font-medium' : 'text-gray-500 hover:text-gray-300'
             }`}
           >
             {t.label}
             {t.count !== null && t.count > 0 && (
               <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                t.key === 'requests' && pendingCount > 0
-                  ? 'bg-amber-500/20 text-amber-400'
-                  : 'bg-gray-700 text-gray-400'
+                t.key === 'requests' && pendingCount > 0 ? 'bg-amber-500/20 text-amber-400' : 'bg-gray-700 text-gray-400'
               }`}>
                 {t.count}
               </span>
@@ -190,7 +311,6 @@ export default function RBAC() {
         ))}
       </div>
 
-      {/* ════════════════════════════════════════ MEMBERS TAB */}
       {tab === 'members' && (
         <div className="glass-card overflow-hidden">
           <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800/50">
@@ -213,45 +333,39 @@ export default function RBAC() {
           ) : activeMembers.length === 0 ? (
             <div className="p-8 text-center">
               <Users className="w-8 h-8 text-gray-700 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">No members yet. Send an invite link to get started.</p>
+              <p className="text-sm text-gray-500">No members yet.</p>
             </div>
           ) : (
             <div className="divide-y divide-gray-800/40">
               {activeMembers.map(m => {
-                const meta = ROLE_META[m.role] ?? ROLE_META.viewer;
+                const role = roleById.get(m.role);
+                const meta = roleMeta(role, m.role);
                 const Icon = meta.icon;
                 const isMe = m.user_id === user?.id;
-                const isFounder = m.role === 'founder';
+                const isProtectedMember = m.is_protected_role;
                 return (
                   <div key={m.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.02] transition-colors">
-                    {/* Avatar */}
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${meta.bg} ${meta.color}`}>
                       {initials(m)}
                     </div>
-
-                    {/* Name + title */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-white font-medium truncate">{memberName(m)}</span>
                         {isMe && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-400">You</span>}
                       </div>
-                      <p className="text-[10px] text-gray-500 mt-0.5 truncate">
-                        {m.email ?? m.title ?? '—'}
-                      </p>
+                      <p className="text-[10px] text-gray-500 mt-0.5 truncate">{m.email ?? m.title ?? '-'}</p>
                     </div>
-
-                    {/* Role badge / selector */}
                     <div className="flex items-center gap-2">
-                      {canManage && !isMe && !isFounder ? (
+                      {canManage && !isMe && !isProtectedMember ? (
                         <div className="relative">
                           <select
                             value={m.role}
-                            onChange={e => handleRoleChange(m.id, e.target.value as UserRole)}
+                            onChange={e => handleRoleChange(m.id, e.target.value)}
                             disabled={actionLoading === m.id}
                             className={`text-[11px] px-2.5 py-1.5 pr-6 rounded-lg border appearance-none cursor-pointer transition-colors ${meta.bg} ${meta.border} ${meta.color} bg-transparent`}
                           >
-                            {ASSIGNABLE_ROLES.map(r => (
-                              <option key={r} value={r} className="bg-gray-900 text-white">{ROLE_META[r].label}</option>
+                            {assignableRoles.map(r => (
+                              <option key={r.id} value={r.id} className="bg-gray-900 text-white">{r.name}</option>
                             ))}
                           </select>
                           <ChevronDown className={`w-3 h-3 absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none ${meta.color}`} />
@@ -259,12 +373,10 @@ export default function RBAC() {
                       ) : (
                         <span className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-lg border ${meta.bg} ${meta.border} ${meta.color}`}>
                           <Icon className="w-3 h-3" />
-                          {meta.label}
+                          {roleLabel(role, m.role)}
                         </span>
                       )}
-
-                      {/* Remove */}
-                      {canManage && !isMe && !isFounder && (
+                      {canRemoveMembers && !isMe && !isProtectedMember && (
                         <button
                           onClick={() => handleRemove(m.id)}
                           disabled={actionLoading === m.id}
@@ -283,104 +395,80 @@ export default function RBAC() {
         </div>
       )}
 
-      {/* ════════════════════════════════════════ JOIN REQUESTS TAB */}
       {tab === 'requests' && (
-        <div className="space-y-4">
-          {!canManage && (
-            <div className="glass-card p-4 flex items-center gap-3 text-amber-400 text-xs">
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
-              You need Admin or above to approve requests.
+        <div className="glass-card overflow-hidden">
+          <div className="px-5 py-4 border-b border-gray-800/50">
+            <h3 className="text-sm font-medium text-gray-200 flex items-center gap-2">
+              <UserCheck className="w-4 h-4 text-amber-400" />
+              Pending Join Requests
+              {pendingCount > 0 && <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400">{pendingCount} pending</span>}
+            </h3>
+          </div>
+          {loadingRequests ? (
+            <div className="p-8 text-center text-gray-500 text-sm">Loading...</div>
+          ) : requests.length === 0 ? (
+            <div className="p-8 text-center">
+              <UserCheck className="w-8 h-8 text-gray-700 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">No pending requests right now.</p>
+            </div>
+          ) : (
+            <div className="divide-y divide-gray-800/40">
+              {requests.map(req => {
+                const defaultRole = assignableRoles.find(r => r.id === 'viewer')?.id ?? assignableRoles[0]?.id ?? 'viewer';
+                const roleForApproval = approveRole[req.id] ?? defaultRole;
+                const approvalRole = roleById.get(roleForApproval);
+                const meta = roleMeta(approvalRole, roleForApproval);
+                return (
+                  <div key={req.id} className="flex items-center gap-4 px-5 py-4">
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-amber-500/10 text-amber-400">
+                      {initials(req)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white font-medium">{memberName(req)}</p>
+                      <div className="flex items-center gap-2 mt-0.5">
+                        <span className="text-[10px] text-gray-500">Access request</span>
+                        <span className="text-[10px] text-gray-600 flex items-center gap-1">
+                          <Clock className="w-2.5 h-2.5" />
+                          {new Date(req.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                      {req.message && <p className="text-[11px] text-gray-400 mt-1 italic">"{req.message}"</p>}
+                    </div>
+                    {canManage && (
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <select
+                          value={roleForApproval}
+                          onChange={e => setApproveRole(prev => ({ ...prev, [req.id]: e.target.value }))}
+                          className={`text-[11px] px-2.5 py-1.5 rounded-lg border appearance-none cursor-pointer ${meta.bg} ${meta.border} ${meta.color} bg-transparent`}
+                        >
+                          {assignableRoles.map(r => (
+                            <option key={r.id} value={r.id} className="bg-gray-900 text-white">{r.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          onClick={() => handleApprove(req)}
+                          disabled={actionLoading === req.id}
+                          className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25 transition-all disabled:opacity-50"
+                        >
+                          <Check className="w-3.5 h-3.5" /> Approve
+                        </button>
+                        <button
+                          onClick={() => handleReject(req.id)}
+                          disabled={actionLoading === req.id}
+                          className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
-
-          <div className="glass-card overflow-hidden">
-            <div className="px-5 py-4 border-b border-gray-800/50">
-              <h3 className="text-sm font-medium text-gray-200 flex items-center gap-2">
-                <UserCheck className="w-4 h-4 text-amber-400" />
-                Pending Join Requests
-                {pendingCount > 0 && (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400">
-                    {pendingCount} pending
-                  </span>
-                )}
-              </h3>
-            </div>
-
-            {loadingRequests ? (
-              <div className="p-8 text-center text-gray-500 text-sm">Loading...</div>
-            ) : requests.length === 0 ? (
-              <div className="p-8 text-center">
-                <UserCheck className="w-8 h-8 text-gray-700 mx-auto mb-2" />
-                <p className="text-sm text-gray-500">No pending requests right now.</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-gray-800/40">
-                {requests.map(req => {
-                  const roleForApproval = approveRole[req.id] ?? req.requested_role;
-                  const meta = ROLE_META[roleForApproval] ?? ROLE_META.viewer;
-                  return (
-                    <div key={req.id} className="flex items-center gap-4 px-5 py-4">
-                      {/* Avatar */}
-                      <div className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 bg-amber-500/10 text-amber-400">
-                        {initials(req)}
-                      </div>
-
-                      {/* Info */}
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-white font-medium">{memberName(req)}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] text-gray-500">Requested:</span>
-                          <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${ROLE_META[req.requested_role]?.bg} ${ROLE_META[req.requested_role]?.color}`}>
-                            {ROLE_META[req.requested_role]?.label}
-                          </span>
-                          <span className="text-[10px] text-gray-600 flex items-center gap-1">
-                            <Clock className="w-2.5 h-2.5" />
-                            {new Date(req.created_at).toLocaleDateString()}
-                          </span>
-                        </div>
-                        {req.message && (
-                          <p className="text-[11px] text-gray-400 mt-1 italic">"{req.message}"</p>
-                        )}
-                      </div>
-
-                      {/* Assign role selector + actions */}
-                      {canManage && (
-                        <div className="flex items-center gap-2 flex-shrink-0">
-                          <select
-                            value={roleForApproval}
-                            onChange={e => setApproveRole(prev => ({ ...prev, [req.id]: e.target.value as UserRole }))}
-                            className={`text-[11px] px-2.5 py-1.5 rounded-lg border appearance-none cursor-pointer ${meta.bg} ${meta.border} ${meta.color} bg-transparent`}
-                          >
-                            {ASSIGNABLE_ROLES.map(r => (
-                              <option key={r} value={r} className="bg-gray-900 text-white">{ROLE_META[r].label}</option>
-                            ))}
-                          </select>
-                          <button
-                            onClick={() => handleApprove(req)}
-                            disabled={actionLoading === req.id}
-                            className="flex items-center gap-1 px-3 py-1.5 text-xs rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-400 hover:bg-emerald-500/25 transition-all disabled:opacity-50"
-                          >
-                            <Check className="w-3.5 h-3.5" /> Approve
-                          </button>
-                          <button
-                            onClick={() => handleReject(req.id)}
-                            disabled={actionLoading === req.id}
-                            className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
         </div>
       )}
 
-      {/* ════════════════════════════════════════ INVITE TAB */}
       {tab === 'invites' && (
         <div className="glass-card p-5">
           <h3 className="text-sm font-medium text-gray-200 mb-4 flex items-center gap-2">
@@ -403,122 +491,185 @@ export default function RBAC() {
               disabled={sendingEmailInvite || !inviteEmail.trim()}
               className="flex items-center gap-2 px-5 py-2.5 text-sm rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-medium transition-all disabled:opacity-60"
             >
-              {sendingEmailInvite ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              ) : (
-                <Mail className="w-4 h-4" />
-              )}
+              {sendingEmailInvite ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Mail className="w-4 h-4" />}
               Send Invite
             </button>
           </div>
-          {inviteEmailStatus === 'exists' && (
-            <p className="text-[11px] text-amber-400 mt-3 flex items-center gap-1.5">
-              <AlertCircle className="w-3 h-3" /> This email already has an account.
-            </p>
-          )}
-          {inviteEmailStatus === 'sent' && (
-            <p className="text-[11px] text-emerald-400 mt-3 flex items-center gap-1.5">
-              <Check className="w-3 h-3" /> Invite sent — they'll get login credentials by email.
-            </p>
-          )}
-          {inviteEmailStatus === 'error' && (
-            <p className="text-[11px] text-red-400 mt-3 flex items-center gap-1.5">
-              <AlertCircle className="w-3 h-3" /> Failed to send invite. Try again.
-            </p>
-          )}
-          <p className="text-[10px] text-gray-600 mt-3 flex items-center gap-1.5">
-            <Clock className="w-3 h-3" />
-            If they don't have an account yet, we create one and email them view-only login credentials.
-          </p>
+          {inviteEmailStatus === 'exists' && <p className="text-[11px] text-amber-400 mt-3 flex items-center gap-1.5"><AlertCircle className="w-3 h-3" /> This email already has an account.</p>}
+          {inviteEmailStatus === 'sent' && <p className="text-[11px] text-emerald-400 mt-3 flex items-center gap-1.5"><Check className="w-3 h-3" /> Invite sent.</p>}
+          {inviteEmailStatus === 'error' && <p className="text-[11px] text-red-400 mt-3 flex items-center gap-1.5"><AlertCircle className="w-3 h-3" /> Failed to send invite. Try again.</p>}
         </div>
       )}
 
-      {/* ════════════════════════════════════════ PERMISSIONS TAB */}
       {tab === 'permissions' && (
         <div className="space-y-4">
-          {/* Role selector */}
           <div className="glass-card p-5">
-            <h3 className="text-sm font-medium text-gray-200 mb-4 flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-sky-400" />
-              Permission Matrix
-            </h3>
-            <div className="flex flex-wrap gap-2 mb-5">
-              {(Object.keys(ROLE_META) as UserRole[]).map(r => {
-                const meta = ROLE_META[r];
-                const Icon = meta.icon;
-                return (
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="text-sm font-medium text-gray-200 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-sky-400" />
+                Permission Matrix
+              </h3>
+              {canManage && selectedRole && (
+                <div className="flex items-center gap-2">
                   <button
-                    key={r}
-                    onClick={() => setSelectedRole(r)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-all ${
-                      selectedRole === r
-                        ? `${meta.bg} ${meta.border} ${meta.color} font-medium`
-                        : 'bg-gray-900/50 border-gray-800 text-gray-500 hover:border-gray-700'
-                    }`}
+                    onClick={() => startCopy(selectedRole)}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-300 hover:bg-violet-500/15"
                   >
-                    <Icon className="w-3 h-3" />
-                    {meta.label}
+                    <Copy className="w-3.5 h-3.5" /> Copy Role
                   </button>
-                );
-              })}
+                  {!selectedRole.isSystem && (
+                    <>
+                      <button
+                        onClick={() => startEdit(selectedRole)}
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-300 hover:bg-sky-500/15"
+                      >
+                        <Pencil className="w-3.5 h-3.5" /> Edit
+                      </button>
+                      <button
+                        onClick={() => handleArchive(selectedRole)}
+                        className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-300 hover:bg-red-500/15"
+                      >
+                        <Archive className="w-3.5 h-3.5" /> Archive
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
-            {/* Permission grid for selected role */}
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-800">
-                    <th className="text-left py-2.5 px-4 text-[10px] text-gray-500 uppercase tracking-wider">Module</th>
-                    <th className="text-center py-2.5 px-4 text-[10px] text-gray-500 uppercase tracking-wider">Read</th>
-                    <th className="text-center py-2.5 px-4 text-[10px] text-gray-500 uppercase tracking-wider">Write</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {MODULES.map(mod => {
-                    const perms = MODULE_PERMS[selectedRole]?.[mod] ?? { read: false, write: false };
+            {loadingRoles ? (
+              <div className="p-8 text-center text-gray-500 text-sm">Loading roles...</div>
+            ) : (
+              <>
+                <div className="flex flex-wrap gap-2 mb-5">
+                  {sortedRoles.map(r => {
+                    const meta = roleMeta(r);
+                    const Icon = meta.icon;
                     return (
-                      <tr key={mod} className="border-b border-gray-800/40">
-                        <td className="py-3 px-4 text-sm text-gray-300 capitalize">{mod}</td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold ${
-                            perms.read ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-800 text-gray-600'
-                          }`}>
-                            {perms.read ? '✓' : '✕'}
-                          </span>
-                        </td>
-                        <td className="py-3 px-4 text-center">
-                          <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold ${
-                            perms.write ? 'bg-sky-500/15 text-sky-400' : 'bg-gray-800 text-gray-600'
-                          }`}>
-                            {perms.write ? '✓' : '✕'}
-                          </span>
-                        </td>
-                      </tr>
+                      <button
+                        key={r.id}
+                        onClick={() => setSelectedRoleId(r.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border transition-all ${
+                          selectedRoleId === r.id ? `${meta.bg} ${meta.border} ${meta.color} font-medium` : 'bg-gray-900/50 border-gray-800 text-gray-500 hover:border-gray-700'
+                        }`}
+                      >
+                        <Icon className="w-3 h-3" />
+                        {r.name}
+                      </button>
                     );
                   })}
-                </tbody>
-              </table>
-            </div>
+                </div>
 
-            <p className="text-[10px] text-gray-600 mt-4">
-              Permissions are enforced both client-side and via Supabase Row Level Security policies on the server.
-            </p>
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-800">
+                        <th className="text-left py-2.5 px-4 text-[10px] text-gray-500 uppercase tracking-wider">Module</th>
+                        {ACTIONS.map(action => (
+                          <th key={action} className="text-center py-2.5 px-4 text-[10px] text-gray-500 uppercase tracking-wider capitalize">{action}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {MODULES.map(mod => (
+                        <tr key={mod} className="border-b border-gray-800/40">
+                          <td className="py-3 px-4 text-sm text-gray-300 capitalize">{mod}</td>
+                          {ACTIONS.map(action => {
+                            const allowed = hasPermission(selectedRole?.permissions, mod, action);
+                            return (
+                              <td key={action} className="py-3 px-4 text-center">
+                                <span className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold ${allowed ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-800 text-gray-600'}`}>
+                                  {allowed ? '✓' : '×'}
+                                </span>
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </div>
 
-          {/* Members per role quick view */}
+          {draft && (
+            <div className="glass-card p-5">
+              <div className="flex items-center justify-between gap-3 mb-4">
+                <h3 className="text-sm font-medium text-gray-200 flex items-center gap-2">
+                  <SelectedIcon className={`w-4 h-4 ${selectedMeta.color}`} />
+                  {editingRoleId === 'new' ? 'New Custom Role' : 'Edit Custom Role'}
+                </h3>
+                <div className="flex items-center gap-2">
+                  <button onClick={cancelDraft} className="p-1.5 rounded-lg text-gray-500 hover:text-gray-300 hover:bg-white/5"><X className="w-4 h-4" /></button>
+                  <button onClick={saveDraft} className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/25 text-emerald-300 hover:bg-emerald-500/20">
+                    <Save className="w-3.5 h-3.5" /> Save
+                  </button>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <input
+                  value={draft.name}
+                  onChange={e => setDraft({ ...draft, name: e.target.value })}
+                  className="px-3 py-2 text-sm rounded-lg border border-gray-700 bg-gray-900/50 text-white focus:outline-none focus:border-violet-500/50"
+                  placeholder="Role name"
+                />
+                <input
+                  value={draft.description}
+                  onChange={e => setDraft({ ...draft, description: e.target.value })}
+                  className="px-3 py-2 text-sm rounded-lg border border-gray-700 bg-gray-900/50 text-white focus:outline-none focus:border-violet-500/50"
+                  placeholder="Description"
+                />
+              </div>
+              {roleError && <p className="text-xs text-red-400 mb-3">{roleError}</p>}
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-gray-800">
+                      <th className="text-left py-2.5 px-4 text-[10px] text-gray-500 uppercase tracking-wider">Module</th>
+                      {ACTIONS.map(action => <th key={action} className="text-center py-2.5 px-4 text-[10px] text-gray-500 uppercase tracking-wider capitalize">{action}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {MODULES.map(mod => (
+                      <tr key={mod} className="border-b border-gray-800/40">
+                        <td className="py-3 px-4 text-sm text-gray-300 capitalize">{mod}</td>
+                        {ACTIONS.map(action => {
+                          const checked = draft.permissions[mod][action];
+                          const disabled = !checked && !can(mod, action);
+                          return (
+                            <td key={action} className="py-3 px-4 text-center">
+                              <button
+                                onClick={() => toggleDraftPermission(mod, action)}
+                                disabled={disabled}
+                                className={`inline-flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold transition-colors ${checked ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-800 text-gray-600'} disabled:opacity-40`}
+                              >
+                                {checked ? '✓' : '×'}
+                              </button>
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
           <div className="glass-card p-5">
             <h3 className="text-sm font-medium text-gray-200 mb-4">Members by Role</h3>
             <div className="grid grid-cols-4 gap-3">
-              {(Object.keys(ROLE_META) as UserRole[]).map(r => {
-                const count = activeMembers.filter(m => m.role === r).length;
+              {sortedRoles.map(r => {
+                const count = activeMembers.filter(m => m.role === r.id).length;
                 if (count === 0) return null;
-                const meta = ROLE_META[r];
+                const meta = roleMeta(r);
                 const Icon = meta.icon;
                 return (
-                  <div key={r} className={`p-3 rounded-xl border ${meta.bg} ${meta.border}`}>
+                  <div key={r.id} className={`p-3 rounded-xl border ${meta.bg} ${meta.border}`}>
                     <div className="flex items-center gap-1.5 mb-1">
                       <Icon className={`w-3.5 h-3.5 ${meta.color}`} />
-                      <span className={`text-[10px] font-medium ${meta.color}`}>{meta.label}</span>
+                      <span className={`text-[10px] font-medium ${meta.color}`}>{r.name}</span>
                     </div>
                     <p className="text-xl font-bold text-white">{count}</p>
                     <p className="text-[9px] text-gray-600">{count === 1 ? 'member' : 'members'}</p>

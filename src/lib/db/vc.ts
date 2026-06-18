@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
+import { api } from '../api';
 
 /* ──────────────────────────────────────────────────
    Types
@@ -166,26 +167,13 @@ export interface AddInvestorInput {
 }
 
 export async function addInvestorToPipeline(input: AddInvestorInput): Promise<InvestorPipeline | null> {
-  const { data, error } = await supabase
-    .from('investor_pipeline')
-    .insert({
-      company_id: input.company_id,
-      created_by: input.created_by,
-      vc_firm_id: input.vc_firm_id ?? null,
-      custom_name: input.custom_name ?? null,
-      custom_firm: input.custom_firm ?? null,
-      partner_name: input.partner_name ?? null,
-      status: input.status ?? 'prospect',
-      ask_amount: input.ask_amount ?? null,
-      warm_intro: input.warm_intro ?? false,
-      intro_by: input.intro_by ?? null,
-      notes: input.notes ?? null,
-    })
-    .select('*, vc_firms(*)')
-    .single();
-
-  if (error) { console.error('[vc] addInvestor', error); return null; }
-  return { ...data, shared_metrics: data.shared_metrics ?? [], tags: data.tags ?? [], vc_firm: (data as any).vc_firms ?? null };
+  try {
+    const { investor } = await api.post<{ investor: InvestorPipeline }>('/api/ecosystem/investors', input);
+    return investor;
+  } catch (error) {
+    console.error('[vc] addInvestor', error);
+    return null;
+  }
 }
 
 export async function updateInvestorStatus(
@@ -193,24 +181,33 @@ export async function updateInvestorStatus(
   status: InvestorStatus,
   extra?: { notes?: string; last_contact?: string; next_followup?: string },
 ): Promise<boolean> {
-  const { error } = await supabase
-    .from('investor_pipeline')
-    .update({ status, updated_at: new Date().toISOString(), ...extra })
-    .eq('id', id);
-  return !error;
+  try {
+    await api.patch(`/api/ecosystem/investors/${id}/status`, { status, ...extra });
+    return true;
+  } catch (error) {
+    console.error('[vc] updateInvestorStatus', error);
+    return false;
+  }
 }
 
 export async function updateInvestorNotes(id: string, notes: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('investor_pipeline')
-    .update({ notes, updated_at: new Date().toISOString() })
-    .eq('id', id);
-  return !error;
+  try {
+    await api.patch(`/api/ecosystem/investors/${id}/notes`, { notes });
+    return true;
+  } catch (error) {
+    console.error('[vc] updateInvestorNotes', error);
+    return false;
+  }
 }
 
 export async function removeInvestorFromPipeline(id: string): Promise<boolean> {
-  const { error } = await supabase.from('investor_pipeline').delete().eq('id', id);
-  return !error;
+  try {
+    await api.delete(`/api/ecosystem/investors/${id}`);
+    return true;
+  } catch (error) {
+    console.error('[vc] removeInvestor', error);
+    return false;
+  }
 }
 
 /* ──────────────────────────────────────────────────
@@ -250,41 +247,40 @@ export async function createInvestorUpdate(
   createdBy: string,
   input: Partial<Pick<InvestorUpdate, 'title' | 'period' | 'highlights' | 'asks' | 'metrics'>>,
 ): Promise<InvestorUpdate | null> {
-  const { data, error } = await supabase
-    .from('investor_updates')
-    .insert({
-      company_id: companyId,
-      created_by: createdBy,
-      title: input.title ?? 'Investor Update',
-      period: input.period ?? new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' }),
-      highlights: input.highlights ?? [],
-      asks: input.asks ?? [],
-      metrics: input.metrics ?? {},
-    })
-    .select()
-    .single();
-
-  if (error) { console.error('[vc] createUpdate', error); return null; }
-  return { ...data, highlights: data.highlights ?? [], asks: data.asks ?? [], sent_to: data.sent_to ?? [], metrics: data.metrics ?? {} };
+  void createdBy;
+  try {
+    const { update } = await api.post<{ update: InvestorUpdate }>('/api/ecosystem/updates', {
+      companyId,
+      ...input,
+    });
+    return update;
+  } catch (error) {
+    console.error('[vc] createUpdate', error);
+    return null;
+  }
 }
 
 export async function saveInvestorUpdate(
   id: string,
   patch: Partial<Pick<InvestorUpdate, 'title' | 'period' | 'highlights' | 'asks' | 'metrics' | 'status'>>,
 ): Promise<boolean> {
-  const { error } = await supabase
-    .from('investor_updates')
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq('id', id);
-  return !error;
+  try {
+    await api.patch(`/api/ecosystem/updates/${id}`, patch);
+    return true;
+  } catch (error) {
+    console.error('[vc] saveInvestorUpdate', error);
+    return false;
+  }
 }
 
 export async function markUpdateSent(id: string, recipientIds: string[]): Promise<boolean> {
-  const { error } = await supabase
-    .from('investor_updates')
-    .update({ status: 'sent', sent_to: recipientIds, sent_at: new Date().toISOString() })
-    .eq('id', id);
-  return !error;
+  try {
+    await api.post(`/api/ecosystem/updates/${id}/mark-sent`, { recipientIds });
+    return true;
+  } catch (error) {
+    console.error('[vc] markUpdateSent', error);
+    return false;
+  }
 }
 
 /* ──────────────────────────────────────────────────
@@ -316,18 +312,25 @@ export async function addMentor(
   addedBy: string,
   input: Pick<VcMentor, 'name' | 'role' | 'company' | 'linkedin' | 'expertise' | 'availability' | 'notes'>,
 ): Promise<VcMentor | null> {
-  const { data, error } = await supabase
-    .from('vc_mentors')
-    .insert({ company_id: companyId, added_by: addedBy, ...input })
-    .select()
-    .single();
-  if (error) { console.error('[vc] addMentor', error); return null; }
-  return { ...data, expertise: data.expertise ?? [] };
+  void companyId;
+  void addedBy;
+  try {
+    const { mentor } = await api.post<{ mentor: VcMentor }>('/api/ecosystem/mentors', input);
+    return mentor;
+  } catch (error) {
+    console.error('[vc] addMentor', error);
+    return null;
+  }
 }
 
 export async function removeMentorById(id: string): Promise<boolean> {
-  const { error } = await supabase.from('vc_mentors').delete().eq('id', id);
-  return !error;
+  try {
+    await api.delete(`/api/ecosystem/mentors/${id}`);
+    return true;
+  } catch (error) {
+    console.error('[vc] removeMentor', error);
+    return false;
+  }
 }
 
 /* ──────────────────────────────────────────────────
@@ -364,22 +367,26 @@ export async function addMentorSession(
   createdBy: string,
   input: Pick<MentorSession, 'mentor_id' | 'session_date' | 'status' | 'agenda'>,
 ): Promise<MentorSession | null> {
-  const { data, error } = await supabase
-    .from('mentor_sessions')
-    .insert({ company_id: companyId, created_by: createdBy, ...input, actions: [], follow_ups: [] })
-    .select()
-    .single();
-  if (error) { console.error('[vc] addSession', error); return null; }
-  return { ...data, agenda: data.agenda ?? [], actions: data.actions ?? [], follow_ups: data.follow_ups ?? [] };
+  void companyId;
+  void createdBy;
+  try {
+    const { session } = await api.post<{ session: MentorSession }>('/api/ecosystem/mentor-sessions', input);
+    return session;
+  } catch (error) {
+    console.error('[vc] addSession', error);
+    return null;
+  }
 }
 
 export async function updateMentorSession(
   id: string,
   patch: Partial<Pick<MentorSession, 'status' | 'agenda' | 'actions' | 'follow_ups' | 'notes'>>,
 ): Promise<boolean> {
-  const { error } = await supabase
-    .from('mentor_sessions')
-    .update({ ...patch, updated_at: new Date().toISOString() })
-    .eq('id', id);
-  return !error;
+  try {
+    await api.patch(`/api/ecosystem/mentor-sessions/${id}`, patch);
+    return true;
+  } catch (error) {
+    console.error('[vc] updateMentorSession', error);
+    return false;
+  }
 }

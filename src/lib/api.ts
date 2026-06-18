@@ -47,5 +47,10 @@ export const api = {
       method: 'POST',
       body: body instanceof FormData ? body : JSON.stringify(body ?? {}),
     }),
+  patch:  <T>(path: string, body?: object) =>
+    authed<T>(path, {
+      method: 'PATCH',
+      body: JSON.stringify(body ?? {}),
+    }),
   delete: <T>(path: string) => authed<T>(path, { method: 'DELETE' }),
 };

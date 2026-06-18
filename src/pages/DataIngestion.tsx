@@ -14,7 +14,6 @@ import { INDUSTRIES } from '../db/industries';
 import { fetchConnections } from '../lib/integrations/service';
 import type { IntegrationConnection } from '../lib/integrations/types';
 import type { Integration } from '../types';
-import type { UserRole } from '../lib/supabase';
 
 type Tab = 'manual' | 'csv' | 'integrations' | 'public';
 
@@ -63,13 +62,11 @@ const catLabels: Record<string, string> = {
   government: 'Government & Compliance',
 };
 
-const INGESTION_WRITE_ROLES = new Set<UserRole>(['founder', 'co_founder', 'admin', 'super_admin']);
-
 export default function DataIngestion() {
-  const { canWrite, role, profile } = useAuth();
+  const { canWrite, profile } = useAuth();
   const companyId = profile?.company_id ?? null;
   const { company } = useCompany(companyId);
-  const canManageExcel = Boolean(role && INGESTION_WRITE_ROLES.has(role) && canWrite('data'));
+  const canManageExcel = canWrite('data');
   const [searchParams] = useSearchParams();
   const requestedTab = searchParams.get('tab');
   const [activeTab, setActiveTab] = useState<Tab>(requestedTab === 'integrations' ? 'integrations' : 'manual');

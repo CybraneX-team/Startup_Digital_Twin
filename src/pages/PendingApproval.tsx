@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Hexagon, Clock, LogOut, RefreshCcw, Building2, CheckCircle } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { supabase } from '../lib/supabase';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../lib/api';
+import type { DbUserProfile } from '../lib/supabase';
 
 export default function PendingApproval() {
   const { profile, signOut, refreshProfile } = useAuth();
@@ -12,19 +13,18 @@ export default function PendingApproval() {
 
   async function handleCheckStatus() {
     setChecking(true);
-    await refreshProfile();
-    setChecking(false);
-    // If profile now has a company, the approval went through
-    // Re-read fresh profile to check
-    const { data: freshProfile } = await supabase
-      .from('user_profiles')
-      .select('company_id')
-      .eq('id', profile?.id ?? '')
-      .single();
-    if (freshProfile?.company_id) {
+    try {
       await refreshProfile();
-      navigate('/overview', { replace: true });
-      return;
+      const freshProfile = await api.get<DbUserProfile>('/api/me');
+      if (freshProfile?.company_id) {
+        await refreshProfile();
+        navigate('/overview', { replace: true });
+        return;
+      }
+    } catch (error) {
+      console.error('[pending] status check failed', error);
+    } finally {
+      setChecking(false);
     }
     setChecked(true);
   }

@@ -3,9 +3,9 @@ import { Settings, Palette, Bell, Layers, Plus, Trash2, ImagePlus, Save, Loader2
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/db/companies';
-import { supabase } from '../lib/supabase';
 import { INDUSTRIES } from '../db/industries';
 import type { CompanyStage } from '../lib/supabase';
+import { api } from '../lib/api';
 
 const STAGES: CompanyStage[] = [
   'Idea', 'Pre-seed', 'Seed', 'Series A', 'Series B',
@@ -91,22 +91,18 @@ export default function SettingsPage() {
     setSaving(true);
     setSaveMsg(null);
 
-    const { error } = await supabase
-      .from('companies')
-      .update({
+    try {
+      await api.patch(`/api/companies/${company.id}`, {
         name: config.companyName.trim(),
         stage: config.stage,
         industry_id: config.industry_id,
         country: config.country,
         website: config.website.trim() || null,
         description: config.description.trim() || null,
-      })
-      .eq('id', company.id);
-
-    if (error) {
-      setSaveMsg('Failed to save: ' + error.message);
-    } else {
+      });
       setSaveMsg('Company settings saved');
+    } catch (error) {
+      setSaveMsg('Failed to save: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
     setSaving(false);
     setTimeout(() => setSaveMsg(null), 3000);
@@ -118,20 +114,16 @@ export default function SettingsPage() {
     setSaving(true);
     setSaveMsg(null);
 
-    const { error } = await supabase
-      .from('user_profiles')
-      .update({
+    try {
+      await api.patch('/api/profile', {
         first_name: profileForm.first_name.trim() || null,
         last_name: profileForm.last_name.trim() || null,
         title: profileForm.title.trim() || null,
-      })
-      .eq('id', user.id);
-
-    if (error) {
-      setSaveMsg('Failed to save: ' + error.message);
-    } else {
+      });
       await refreshProfile();
       setSaveMsg('Profile updated');
+    } catch (error) {
+      setSaveMsg('Failed to save: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
     setSaving(false);
     setTimeout(() => setSaveMsg(null), 3000);

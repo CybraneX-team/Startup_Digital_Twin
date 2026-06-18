@@ -40,4 +40,4 @@ RBAC_E2E_ALLOW_SHARED_DEV=true npm run e2e:rbac -- --debug
 
 ## Expected Current State
 
-Some specs are expected to fail before RBAC hardening. Those failures are the change list: profile self-escalation, join-request RPC authorization, backend join-request listing, invite role mismatch, ecosystem writes, and `vc` DB enum support.
+The suite is expected to pass after RBAC hardening is applied, Supabase migrations `016` and `017` have been pushed, and the backend has restarted. Legacy invite/join RPCs should be unavailable, membership roles should be enforced from `company_members`, custom roles should be DB-backed, and `vc` should remain a separate persona rather than a persisted company role.

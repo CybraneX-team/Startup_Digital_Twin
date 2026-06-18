@@ -224,6 +224,59 @@ export async function createRbacFixture(testInfo?: TestInfo): Promise<RbacFixtur
   };
 }
 
+/**
+ * Create an extra disposable company (e.g. a secondary org for multi-company
+ * authJwt tests). Caller is responsible for cleanup via removeCompany().
+ */
+export async function seedCompany(
+  admin: SupabaseClient,
+  runId: string,
+  suffix: string,
+): Promise<string> {
+  const { data, error } = await admin
+    .from('companies')
+    .insert({
+      name: `RBAC E2E ${runId}-${suffix}`,
+      slug: `rbac-e2e-${runId}-${suffix}`,
+      stage: 'Seed',
+      country: 'India',
+      description: 'Disposable RBAC E2E secondary company',
+      status: 'active',
+      is_public: false,
+      offset_3d: { x: 0, y: 0, z: 0 },
+    })
+    .select('id')
+    .single();
+
+  if (error || !data) {
+    throw new Error(`Failed to seed secondary company: ${error?.message ?? 'no company returned'}`);
+  }
+  return data.id as string;
+}
+
+/** Add an existing user as an active member of a company. */
+export async function addMembership(
+  admin: SupabaseClient,
+  companyId: string,
+  userId: string,
+  role: DbBackedRole,
+): Promise<void> {
+  const { error } = await admin.from('company_members').insert({
+    company_id: companyId,
+    user_id: userId,
+    role,
+    status: 'active',
+    approved_at: new Date().toISOString(),
+  });
+  if (error) throw new Error(`Failed to add membership (${role}@${companyId}): ${error.message}`);
+}
+
+/** Tear down an extra company seeded with seedCompany(). */
+export async function removeCompany(admin: SupabaseClient, companyId: string): Promise<void> {
+  await deleteFromTable(admin, 'company_members', 'company_id', companyId);
+  await deleteFromTable(admin, 'companies', 'id', companyId);
+}
+
 async function deleteFromTable(admin: SupabaseClient, table: string, column: string, value: string) {
   const { error } = await admin.from(table).delete().eq(column, value);
   if (error && error.code !== 'PGRST116') {
@@ -260,6 +313,7 @@ export async function cleanupRbacFixture(fixture: RbacFixture | null | undefined
   await deleteFromTable(admin, 'vc_mentors', 'company_id', companyId);
   await deleteFromTable(admin, 'investor_updates', 'company_id', companyId);
   await deleteFromTable(admin, 'investor_pipeline', 'company_id', companyId);
+  await deleteFromTable(admin, 'metric_snapshots', 'company_id', companyId);
   await deleteFromTable(admin, 'join_requests', 'company_id', companyId);
   await deleteFromTable(admin, 'workspace_invites', 'company_id', companyId);
   await deleteFromTable(admin, 'company_members', 'company_id', companyId);

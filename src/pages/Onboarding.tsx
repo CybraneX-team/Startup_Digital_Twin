@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ChevronLeft, Hexagon, Check, Search, Users, Building2, Clock, CheckCircle, Plus, Sparkles } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { supabase } from '../lib/supabase';
 import { createCompany } from '../lib/db/companies';
 import type { CreateCompanyInput } from '../lib/db/companies';
 import { INDUSTRIES } from '../db/industries';
@@ -131,30 +130,6 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 export default function Onboarding() {
   const navigate = useNavigate();
   const { user, profile, refreshProfile } = useAuth();
-
-  // Auto-recovery: if the profile loaded without a company_id but a membership
-  // row exists (e.g. previous profile-update failed), look up the membership
-  // via the non-recursive helper function and patch the profile.
-  useEffect(() => {
-    if (!user) return;
-    (async () => {
-      const { data: membership } = await supabase
-        .from('company_members')
-        .select('company_id, role')
-        .eq('user_id', user.id)
-        .eq('status', 'active')
-        .limit(1)
-        .maybeSingle();
-      if (membership?.company_id) {
-        await supabase.from('user_profiles').upsert(
-          { id: user.id, company_id: membership.company_id, role: membership.role, onboarding_completed: true },
-          { onConflict: 'id' },
-        );
-        await refreshProfile();
-        navigate('/overview', { replace: true });
-      }
-    })();
-  }, [user]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 'choose' = pick create vs join, 'create' = wizard, 'join' = join flow
   const [mode, setMode] = useState<'choose' | 'create' | 'join'>('choose');
@@ -288,16 +263,11 @@ export default function Onboarding() {
     setJoinSelected(company);
     setLoading(true);
     setError(null);
-    const result = await submitJoinRequest(company.id, user.id, 'viewer');
+    const result = await submitJoinRequest(company.id, user.id);
     if (!result.success) {
       setError(result.error ?? 'Failed to send join request');
       setLoading(false);
       return;
-    }
-    if (result.requestId) {
-      api.post(`/api/join-requests/${result.requestId}/notify`, {}).catch(err =>
-        console.error('[onboarding] failed to notify company owner', err),
-      );
     }
     setLoading(false);
     setJoinJoined(true);
@@ -368,16 +338,12 @@ export default function Onboarding() {
       competitors: form.competitors
         ? form.competitors.split(',').map(s => s.trim()).filter(Boolean)
         : undefined,
+      profile: {
+        first_name: form.first_name.trim() || undefined,
+        last_name: form.last_name.trim() || undefined,
+        title: form.title.trim() || undefined,
+      },
     };
-
-    // Update profile name if provided
-    if (form.first_name || form.last_name) {
-      await supabase.from('user_profiles').update({
-        first_name: form.first_name.trim() || null,
-        last_name: form.last_name.trim() || null,
-        title: form.title.trim() || null,
-      }).eq('id', user.id);
-    }
 
     const company = await createCompany(payload, user.id);
     if (!company) {
@@ -385,14 +351,6 @@ export default function Onboarding() {
       setLoading(false);
       return;
     }
-
-    // Safety net: ensure profile is updated even if createCompany's upsert had a hiccup
-    await supabase
-      .from('user_profiles')
-      .upsert(
-        { id: user.id, company_id: company.id, role: 'founder', onboarding_completed: true },
-        { onConflict: 'id' },
-      );
 
     // Save metrics to metric_snapshots so they appear on the home page immediately
     const hasAnyMetric = form.mrr_usd || form.burn_rate_usd || form.employees ||

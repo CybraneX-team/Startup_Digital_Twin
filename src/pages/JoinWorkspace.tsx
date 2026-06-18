@@ -3,7 +3,7 @@ import { useSearchParams, useNavigate } from 'react-router-dom';
 import { Hexagon, CheckCircle, XCircle, Loader, ShieldCheck, Clock } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { lookupInviteToken, acceptInviteToken } from '../lib/db/team';
-import type { UserRole } from '../lib/supabase';
+import type { RoleId } from '../lib/supabase';
 
 const ROLE_LABELS: Record<string, string> = {
   co_founder: 'Co-Founder', admin: 'Admin', analyst: 'Analyst',
@@ -21,9 +21,9 @@ export default function JoinWorkspace() {
   const token = params.get('token') ?? '';
 
   const [state, setState] = useState<PageState>('loading');
-  const [inviteInfo, setInviteInfo] = useState<{
+	const [inviteInfo, setInviteInfo] = useState<{
     companyName: string;
-    role: UserRole;
+    role: RoleId;
     expiresAt: string;
     valid: boolean;
   } | null>(null);

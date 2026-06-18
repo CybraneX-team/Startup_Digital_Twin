@@ -13,6 +13,10 @@ dist
 dist-ssr
 *.local
 
+# Playwright test artifacts
+playwright-report
+test-results
+
 # Editor / AI tool configs — not for commit
 .dt
 .claude

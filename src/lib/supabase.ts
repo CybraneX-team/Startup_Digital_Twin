@@ -27,9 +27,15 @@ export type CompanyStage =
 
 export type CompanyStatus = 'onboarding' | 'active' | 'inactive' | 'suspended';
 export type BusinessModel  = 'B2B' | 'B2C' | 'B2B2C' | 'Marketplace' | 'SaaS' | 'D2C' | 'Other';
-export type UserRole =
-  | 'super_admin' | 'founder' | 'co_founder' | 'admin'
-  | 'analyst' | 'engineer' | 'viewer' | 'vc' | 'investor';
+
+// RBAC vocabulary lives in ./db/rbac (single source of truth). Re-exported here,
+// with legacy aliases, so existing `from './supabase'` import sites keep working.
+// `import type` keeps this erased at runtime (avoids the supabase→db/rbac→api→supabase cycle).
+import type { Action, Module, SystemRole, RoleId, ExpandedPermissions } from './db/rbac';
+export type { SystemRole, RoleId, ExpandedPermissions };
+export type RbacAction = Action;
+export type RbacModule = Module;
+export type UserRole = RoleId;
 
 export interface DbIndustry {
   id: string;
@@ -76,7 +82,10 @@ export interface DbCompany {
 export interface DbUserProfile {
   id: string;
   company_id: string | null;
-  role: UserRole;
+  role: RoleId;
+  roleName?: string;
+  isSystemRole?: boolean;
+  permissions?: ExpandedPermissions | null;
   first_name: string | null;
   last_name: string | null;
   title: string | null;
@@ -90,7 +99,7 @@ export interface DbCompanyMember {
   id: string;
   company_id: string;
   user_id: string;
-  role: UserRole;
+  role: RoleId;
   invited_by: string | null;
   joined_at: string;
 }
@@ -111,5 +120,9 @@ export interface DbRole {
   id: string;
   name: string;
   description: string | null;
-  permissions: Record<string, { read: boolean; write: boolean; delete: boolean }>;
+  permissions: ExpandedPermissions;
+  company_id?: string | null;
+  is_system?: boolean;
+  is_archived?: boolean;
+  base_role_id?: string | null;
 }

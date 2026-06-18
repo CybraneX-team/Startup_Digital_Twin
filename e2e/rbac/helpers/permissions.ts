@@ -8,8 +8,7 @@ export type Module =
   | 'team'
   | 'ecosystem'
   | 'settings';
-
-export type DbBackedRole =
+export type SystemRole =
   | 'super_admin'
   | 'founder'
   | 'co_founder'
@@ -18,38 +17,27 @@ export type DbBackedRole =
   | 'engineer'
   | 'viewer'
   | 'investor';
+export type UserRole = SystemRole;
+export type PermissionSet = Record<Action, boolean>;
+export type ExpandedPermissions = Record<Module, PermissionSet>;
 
-export type UiOnlyRole = 'vc';
-export type UserRole = DbBackedRole | UiOnlyRole;
+export type DbBackedRole = SystemRole;
 
-type PermissionSet = Partial<Record<Action, boolean>>;
-type RolePermissions = Record<string, PermissionSet>;
+const falseActions = () => ({ read: false, write: false, delete: false });
 
-export const DB_BACKED_ROLES: DbBackedRole[] = [
-  'super_admin',
-  'founder',
-  'co_founder',
-  'admin',
-  'analyst',
-  'engineer',
-  'viewer',
-  'investor',
-];
+function expanded(partial: Partial<Record<Module, Partial<Record<Action, boolean>>>>): ExpandedPermissions {
+  return Object.fromEntries(
+    MODULES.map((module) => [
+      module,
+      {
+        ...falseActions(),
+        ...(partial[module] ?? {}),
+      },
+    ]),
+  ) as ExpandedPermissions;
+}
 
-export const TEAM_WRITE_ROLES: DbBackedRole[] = [
-  'super_admin',
-  'founder',
-  'co_founder',
-  'admin',
-];
-
-export const READ_ONLY_TEAM_ROLES: DbBackedRole[] = [
-  'analyst',
-  'engineer',
-  'viewer',
-  'investor',
-];
-
+export const ACTIONS: Action[] = ['read', 'write', 'delete'];
 export const MODULES: Module[] = [
   'twin',
   'strategy',
@@ -61,110 +49,135 @@ export const MODULES: Module[] = [
   'settings',
 ];
 
-export const ROLE_PERMISSIONS: Record<UserRole, RolePermissions> = {
-  super_admin: {
-    '*': { read: true, write: true, delete: true },
-  },
-  founder: {
-    twin: { read: true, write: true, delete: false },
-    strategy: { read: true, write: true, delete: true },
-    analytics: { read: true, write: true, delete: false },
-    data: { read: true, write: true, delete: false },
-    benchmarks: { read: true, write: false, delete: false },
-    team: { read: true, write: true, delete: true },
-    ecosystem: { read: true, write: true, delete: false },
-    settings: { read: true, write: true, delete: false },
-  },
-  co_founder: {
-    twin: { read: true, write: true, delete: false },
-    strategy: { read: true, write: true, delete: true },
-    analytics: { read: true, write: true, delete: false },
-    data: { read: true, write: true, delete: false },
-    benchmarks: { read: true, write: false, delete: false },
-    team: { read: true, write: true, delete: false },
-    ecosystem: { read: true, write: true, delete: false },
-    settings: { read: true, write: false, delete: false },
-  },
-  admin: {
-    twin: { read: true, write: true, delete: false },
-    strategy: { read: true, write: true, delete: false },
-    analytics: { read: true, write: true, delete: false },
-    data: { read: true, write: true, delete: false },
-    benchmarks: { read: true, write: false, delete: false },
-    team: { read: true, write: true, delete: false },
-    ecosystem: { read: true, write: false, delete: false },
-    settings: { read: true, write: false, delete: false },
-  },
-  analyst: {
-    twin: { read: true, write: false, delete: false },
-    strategy: { read: true, write: true, delete: false },
-    analytics: { read: true, write: true, delete: false },
-    data: { read: true, write: false, delete: false },
-    benchmarks: { read: true, write: false, delete: false },
-    team: { read: true, write: false, delete: false },
-    ecosystem: { read: true, write: false, delete: false },
-    settings: { read: false, write: false, delete: false },
-  },
-  engineer: {
-    twin: { read: true, write: false, delete: false },
-    strategy: { read: true, write: false, delete: false },
-    analytics: { read: true, write: false, delete: false },
-    data: { read: true, write: true, delete: false },
-    benchmarks: { read: true, write: false, delete: false },
-    team: { read: true, write: false, delete: false },
-    ecosystem: { read: false, write: false, delete: false },
-    settings: { read: false, write: false, delete: false },
-  },
-  viewer: {
-    twin: { read: true, write: false, delete: false },
-    strategy: { read: true, write: false, delete: false },
-    analytics: { read: true, write: false, delete: false },
-    data: { read: true, write: false, delete: false },
-    benchmarks: { read: true, write: false, delete: false },
-    team: { read: true, write: false, delete: false },
-    ecosystem: { read: true, write: false, delete: false },
-    settings: { read: false, write: false, delete: false },
-  },
-  investor: {
-    twin: { read: true, write: false, delete: false },
-    strategy: { read: false, write: false, delete: false },
-    analytics: { read: true, write: false, delete: false },
-    data: { read: false, write: false, delete: false },
-    benchmarks: { read: true, write: false, delete: false },
-    team: { read: true, write: false, delete: false },
-    ecosystem: { read: false, write: false, delete: false },
-    settings: { read: false, write: false, delete: false },
-  },
-  vc: {
-    twin: { read: true, write: false, delete: false },
-    strategy: { read: false, write: false, delete: false },
-    analytics: { read: true, write: false, delete: false },
-    data: { read: false, write: false, delete: false },
-    benchmarks: { read: true, write: false, delete: false },
-    team: { read: true, write: false, delete: false },
-    ecosystem: { read: false, write: false, delete: false },
-    settings: { read: false, write: false, delete: false },
-  },
+export const ROLE_ORDER: SystemRole[] = [
+  'super_admin',
+  'founder',
+  'co_founder',
+  'admin',
+  'analyst',
+  'engineer',
+  'viewer',
+  'investor',
+];
+
+export const ASSIGNABLE_MEMBER_ROLES: SystemRole[] = [
+  'co_founder',
+  'admin',
+  'analyst',
+  'engineer',
+  'viewer',
+  'investor',
+];
+
+export const ROLE_PERMISSIONS: Record<SystemRole, ExpandedPermissions> = {
+  super_admin: expanded(Object.fromEntries(MODULES.map((module) => [
+    module,
+    { read: true, write: true, delete: true },
+  ])) as Record<Module, Record<Action, boolean>>),
+  founder: expanded({
+    twin:       { read: true, write: true },
+    strategy:   { read: true, write: true, delete: true },
+    analytics:  { read: true, write: true },
+    data:       { read: true, write: true },
+    benchmarks: { read: true },
+    team:       { read: true, write: true, delete: true },
+    ecosystem:  { read: true, write: true },
+    settings:   { read: true, write: true },
+  }),
+  co_founder: expanded({
+    twin:       { read: true, write: true },
+    strategy:   { read: true, write: true, delete: true },
+    analytics:  { read: true, write: true },
+    data:       { read: true, write: true },
+    benchmarks: { read: true },
+    team:       { read: true, write: true },
+    ecosystem:  { read: true, write: true },
+    settings:   { read: true },
+  }),
+  admin: expanded({
+    twin:       { read: true, write: true },
+    strategy:   { read: true, write: true },
+    analytics:  { read: true, write: true },
+    data:       { read: true, write: true },
+    benchmarks: { read: true },
+    team:       { read: true, write: true },
+    ecosystem:  { read: true },
+    settings:   { read: true },
+  }),
+  analyst: expanded({
+    twin:       { read: true },
+    strategy:   { read: true, write: true },
+    analytics:  { read: true, write: true },
+    data:       { read: true },
+    benchmarks: { read: true },
+    team:       { read: true },
+    ecosystem:  { read: true },
+  }),
+  engineer: expanded({
+    twin:       { read: true },
+    strategy:   { read: true },
+    analytics:  { read: true },
+    data:       { read: true, write: true },
+    benchmarks: { read: true },
+    team:       { read: true },
+  }),
+  viewer: expanded({
+    twin:       { read: true },
+    strategy:   { read: true },
+    analytics:  { read: true },
+    data:       { read: true },
+    benchmarks: { read: true },
+    team:       { read: true },
+    ecosystem:  { read: true },
+  }),
+  investor: expanded({
+    twin:       { read: true },
+    analytics:  { read: true },
+    benchmarks: { read: true },
+    team:       { read: true },
+  }),
 };
+
+export function can(role: SystemRole, module: Module, action: Action): boolean {
+  return ROLE_PERMISSIONS[role]?.[module]?.[action] ?? false;
+}
+
+export const DB_BACKED_ROLES: SystemRole[] = [
+  'super_admin',
+  'founder',
+  'co_founder',
+  'admin',
+  'analyst',
+  'engineer',
+  'viewer',
+  'investor',
+];
+
+export const TEAM_WRITE_ROLES: SystemRole[] = [
+  'super_admin',
+  'founder',
+  'co_founder',
+  'admin',
+];
+
+export const READ_ONLY_TEAM_ROLES: SystemRole[] = [
+  'analyst',
+  'engineer',
+  'viewer',
+  'investor',
+];
 
 export const ROUTE_CONTRACTS: Array<{
   path: string;
   module: Module;
   action: Action;
 }> = [
-  { path: '/twin/strategy', module: 'strategy', action: 'read' },
-  { path: '/twin/data', module: 'data', action: 'write' },
-  { path: '/twin/benchmarks', module: 'benchmarks', action: 'read' },
-  { path: '/twin/team', module: 'team', action: 'read' },
-  { path: '/twin/analytics', module: 'analytics', action: 'read' },
-  { path: '/ecosystem/vc-connect', module: 'ecosystem', action: 'read' },
-  { path: '/ecosystem/network', module: 'ecosystem', action: 'read' },
-  { path: '/settings', module: 'settings', action: 'read' },
+  { path: '/twin/strategy',        module: 'strategy',   action: 'read'  },
+  { path: '/twin/data',            module: 'data',        action: 'write' },
+  { path: '/twin/benchmarks',      module: 'benchmarks',  action: 'read'  },
+  { path: '/twin/team',            module: 'team',        action: 'read'  },
+  { path: '/twin/analytics',       module: 'analytics',   action: 'read'  },
+  { path: '/ecosystem/vc-connect', module: 'ecosystem',   action: 'read'  },
+  { path: '/ecosystem/network',    module: 'ecosystem',   action: 'read'  },
+  { path: '/settings',             module: 'settings',    action: 'read'  },
 ];
-
-export function can(role: UserRole, module: Module, action: Action): boolean {
-  const perms = ROLE_PERMISSIONS[role];
-  if (!perms) return false;
-  if (perms['*']?.[action]) return true;
-  return perms[module]?.[action] ?? false;
-}

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
-import type { UserRole } from '../supabase';
+import type { RoleId } from '../supabase';
 import { api } from '../api';
 
 /* ──────────────────────────────────────────────────
@@ -13,7 +13,10 @@ export interface TeamMember {
   id: string;              // company_members.id
   user_id: string;
   company_id: string;
-  role: UserRole;
+  role: RoleId;
+  role_name: string;
+  is_system_role: boolean;
+  is_protected_role: boolean;
   status: MemberStatus;
   invited_by: string | null;
   approved_at: string | null;
@@ -30,12 +33,12 @@ export interface JoinRequest {
   id: string;
   company_id: string;
   user_id: string;
-  requested_role: UserRole;
+  requested_role: RoleId;
   message: string | null;
   status: 'pending' | 'approved' | 'rejected';
   reviewed_by: string | null;
   reviewed_at: string | null;
-  assigned_role: UserRole | null;
+  assigned_role: RoleId | null;
   created_at: string;
   // joined from user_profiles
   first_name: string | null;
@@ -48,7 +51,7 @@ export interface WorkspaceInvite {
   id: string;
   company_id: string;
   token: string;
-  role: UserRole;
+  role: RoleId;
   email: string | null;
   expires_at: string;
   max_uses: number;
@@ -81,57 +84,21 @@ export function useTeamMembers(companyId: string | null | undefined) {
   async function fetchMembers() {
     if (!companyId) { setLoading(false); return; }
 
-    const { data, error } = await supabase
-      .from('company_members')
-      .select(`
-        id, user_id, company_id, role, status, invited_by, approved_at, joined_at,
-        user_profiles (first_name, last_name, title, avatar_url)
-      `)
-      .eq('company_id', companyId)
-      .in('status', ['active', 'pending'])
-      .order('joined_at', { ascending: true });
-
-    if (error) {
+    try {
+      const { members: rows } = await api.get<{ members: TeamMember[] }>('/api/team/members');
+      setMembers(rows ?? []);
+    } catch (error) {
       console.error('[team] fetchMembers', error);
+    } finally {
       setLoading(false);
-      return;
     }
-
-    const shaped: TeamMember[] = (data ?? []).map((row: any) => ({
-      id:          row.id,
-      user_id:     row.user_id,
-      company_id:  row.company_id,
-      role:        row.role,
-      status:      row.status,
-      invited_by:  row.invited_by,
-      approved_at: row.approved_at,
-      joined_at:   row.joined_at,
-      first_name:  row.user_profiles?.first_name ?? null,
-      last_name:   row.user_profiles?.last_name ?? null,
-      title:       row.user_profiles?.title ?? null,
-      avatar_url:  row.user_profiles?.avatar_url ?? null,
-      email:       null,  // auth.users not accessible from client SDK
-    }));
-
-    setMembers(shaped);
-    setLoading(false);
   }
 
   useEffect(() => {
-    fetchMembers();
-
-    // Real-time: re-fetch when members table changes for this company
-    const channel = supabase
-      .channel(`team-${companyId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'company_members',
-        filter: `company_id=eq.${companyId}`,
-      }, () => fetchMembers())
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
+    void fetchMembers();
+    if (!companyId) return;
+    const timer = window.setInterval(() => void fetchMembers(), 30000);
+    return () => window.clearInterval(timer);
   }, [companyId]);
 
   return { members, loading, refetch: fetchMembers };
@@ -141,12 +108,16 @@ export function useTeamMembers(companyId: string | null | undefined) {
    useJoinRequests — pending requests for this company
 ────────────────────────────────────────────────── */
 
-export function useJoinRequests(companyId: string | null | undefined) {
+export function useJoinRequests(companyId: string | null | undefined, enabled = true) {
   const [requests, setRequests] = useState<JoinRequest[]>([]);
   const [loading, setLoading] = useState(true);
 
   async function fetchRequests() {
-    if (!companyId) { setLoading(false); return; }
+    if (!companyId || !enabled) {
+      setRequests([]);
+      setLoading(false);
+      return;
+    }
     try {
       const { requests: rows } = await api.get<{ requests: any[] }>('/api/join-requests');
       const shaped: JoinRequest[] = (rows ?? []).map((row: any) => ({
@@ -174,20 +145,11 @@ export function useJoinRequests(companyId: string | null | undefined) {
   }
 
   useEffect(() => {
-    fetchRequests();
-
-    const channel = supabase
-      .channel(`join-requests-${companyId}`)
-      .on('postgres_changes', {
-        event: '*',
-        schema: 'public',
-        table: 'join_requests',
-        filter: `company_id=eq.${companyId}`,
-      }, () => fetchRequests())
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [companyId]);
+    void fetchRequests();
+    if (!companyId || !enabled) return;
+    const timer = window.setInterval(() => void fetchRequests(), 30000);
+    return () => window.clearInterval(timer);
+  }, [companyId, enabled]);
 
   return { requests, loading, refetch: fetchRequests };
 }
@@ -227,33 +189,14 @@ export function useWorkspaceInvites(companyId: string | null | undefined) {
 export async function generateInviteLink(
   companyId: string,
   createdBy: string,
-  role: UserRole = 'viewer',
+  role: RoleId = 'viewer',
   options?: { email?: string; maxUses?: number; expiresInDays?: number },
 ): Promise<{ token: string; url: string } | { error: string }> {
-
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + (options?.expiresInDays ?? 7));
-
-  const { data, error } = await supabase
-    .from('workspace_invites')
-    .insert({
-      company_id:  companyId,
-      created_by:  createdBy,
-      role,
-      email:       options?.email ?? null,
-      max_uses:    options?.maxUses ?? 1,
-      expires_at:  expiresAt.toISOString(),
-    })
-    .select('token')
-    .single();
-
-  if (error || !data) {
-    console.error('[team] generateInviteLink', error);
-    return { error: error?.message ?? 'Failed to generate link' };
-  }
-
-  const url = `${window.location.origin}/join?token=${data.token}`;
-  return { token: data.token, url };
+  void companyId;
+  void createdBy;
+  void role;
+  void options;
+  return { error: 'Shareable invite links are no longer supported. Invite by email instead.' };
 }
 
 /* ──────────────────────────────────────────────────
@@ -261,11 +204,8 @@ export async function generateInviteLink(
 ────────────────────────────────────────────────── */
 
 export async function deactivateInvite(inviteId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('workspace_invites')
-    .update({ is_active: false })
-    .eq('id', inviteId);
-  return !error;
+  void inviteId;
+  return false;
 }
 
 /* ──────────────────────────────────────────────────
@@ -274,17 +214,15 @@ export async function deactivateInvite(inviteId: string): Promise<boolean> {
 
 export async function approveJoinRequest(
   requestId: string,
-  reviewerId: string,
-  assignedRole: UserRole = 'viewer',
+  assignedRole: RoleId = 'viewer',
 ): Promise<{ success: boolean; error?: string }> {
-  const { data, error } = await supabase.rpc('approve_join_request', {
-    p_request_id:    requestId,
-    p_reviewer_id:   reviewerId,
-    p_assigned_role: assignedRole,
-  });
-
-  if (error) return { success: false, error: error.message };
-  return data as { success: boolean; error?: string };
+  try {
+    return await api.post<{ success: boolean; error?: string }>(`/api/join-requests/${requestId}/approve`, {
+      assignedRole,
+    });
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'Failed to approve request' };
+  }
 }
 
 /* ──────────────────────────────────────────────────
@@ -293,13 +231,14 @@ export async function approveJoinRequest(
 
 export async function rejectJoinRequest(
   requestId: string,
-  reviewerId: string,
 ): Promise<boolean> {
-  const { error } = await supabase
-    .from('join_requests')
-    .update({ status: 'rejected', reviewed_by: reviewerId, reviewed_at: new Date().toISOString() })
-    .eq('id', requestId);
-  return !error;
+  try {
+    await api.post(`/api/join-requests/${requestId}/reject`, {});
+    return true;
+  } catch (error) {
+    console.error('[team] rejectJoinRequest', error);
+    return false;
+  }
 }
 
 /* ──────────────────────────────────────────────────
@@ -308,29 +247,15 @@ export async function rejectJoinRequest(
 
 export async function changeMemberRole(
   memberId: string,
-  newRole: UserRole,
+  newRole: RoleId,
 ): Promise<boolean> {
-  const { error } = await supabase
-    .from('company_members')
-    .update({ role: newRole })
-    .eq('id', memberId);
-
-  if (!error) {
-    // Sync to user_profiles
-    const { data: member } = await supabase
-      .from('company_members')
-      .select('user_id')
-      .eq('id', memberId)
-      .single();
-    if (member) {
-      await supabase
-        .from('user_profiles')
-        .update({ role: newRole })
-        .eq('id', member.user_id);
-    }
+  try {
+    await api.patch(`/api/team/members/${memberId}/role`, { role: newRole });
+    return true;
+  } catch (error) {
+    console.error('[team] changeMemberRole', error);
+    return false;
   }
-
-  return !error;
 }
 
 /* ──────────────────────────────────────────────────
@@ -338,11 +263,13 @@ export async function changeMemberRole(
 ────────────────────────────────────────────────── */
 
 export async function removeMember(memberId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('company_members')
-    .update({ status: 'removed' })
-    .eq('id', memberId);
-  return !error;
+  try {
+    await api.delete(`/api/team/members/${memberId}`);
+    return true;
+  } catch (error) {
+    console.error('[team] removeMember', error);
+    return false;
+  }
 }
 
 /* ──────────────────────────────────────────────────
@@ -352,30 +279,12 @@ export async function removeMember(memberId: string): Promise<boolean> {
 
 export async function lookupInviteToken(token: string): Promise<{
   companyName: string;
-  role: UserRole;
+  role: RoleId;
   expiresAt: string;
   valid: boolean;
 } | null> {
-  const { data, error } = await supabase
-    .from('workspace_invites')
-    .select(`
-      role, expires_at, is_active, max_uses, used_count,
-      companies (name)
-    `)
-    .eq('token', token)
-    .single();
-
-  if (error || !data) return null;
-
-  const expired = new Date(data.expires_at) < new Date();
-  const exhausted = data.max_uses > 0 && data.used_count >= data.max_uses;
-
-  return {
-    companyName: (data as any).companies?.name ?? 'Unknown Company',
-    role:        data.role,
-    expiresAt:   data.expires_at,
-    valid:       data.is_active && !expired && !exhausted,
-  };
+  void token;
+  return null;
 }
 
 /* ──────────────────────────────────────────────────
@@ -386,13 +295,9 @@ export async function acceptInviteToken(
   token: string,
   userId: string,
 ): Promise<{ success: boolean; companyId?: string; role?: string; error?: string }> {
-  const { data, error } = await supabase.rpc('accept_invite', {
-    p_token:   token,
-    p_user_id: userId,
-  });
-
-  if (error) return { success: false, error: error.message };
-  return data as { success: boolean; companyId?: string; role?: string; error?: string };
+  void token;
+  void userId;
+  return { success: false, error: 'Invite links are no longer supported. Ask an admin for an email invite.' };
 }
 
 /* ──────────────────────────────────────────────────
@@ -402,20 +307,24 @@ export async function acceptInviteToken(
 export async function submitJoinRequest(
   companyId: string,
   userId: string,
-  requestedRole: UserRole = 'viewer',
   message?: string,
 ): Promise<{ success: boolean; requestId?: string; error?: string }> {
-  const { data, error } = await supabase
-    .from('join_requests')
-    .insert({ company_id: companyId, user_id: userId, requested_role: requestedRole, message })
-    .select('id')
-    .single();
-
-  if (error) {
-    if (error.code === '23505') return { success: false, error: 'You already have a pending request for this workspace' };
-    return { success: false, error: error.message };
+  void userId;
+  try {
+    const result = await api.post<{ success: boolean; requestId?: string }>('/api/join-requests', {
+      companyId,
+      message,
+    });
+    return result;
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : 'Failed to send join request';
+    return {
+      success: false,
+      error: messageText.includes('409')
+        ? 'You already have a pending request for this workspace'
+        : messageText,
+    };
   }
-  return { success: true, requestId: data.id };
 }
 
 /* ──────────────────────────────────────────────────
@@ -425,14 +334,10 @@ export async function submitJoinRequest(
 export async function joinCompanyAsViewer(
   companyId: string,
   userId: string,
-): Promise<{ success: boolean; companyId?: string; role?: UserRole; error?: string }> {
-  const { data, error } = await supabase.rpc('join_company_as_viewer', {
-    p_company_id: companyId,
-    p_user_id: userId,
-  });
-
-  if (error) return { success: false, error: error.message };
-  return data as { success: boolean; companyId?: string; role?: UserRole; error?: string };
+): Promise<{ success: boolean; companyId?: string; role?: RoleId; error?: string }> {
+  void companyId;
+  void userId;
+  return { success: false, error: 'Self-joining is no longer supported. Request access for admin approval.' };
 }
 
 /* ──────────────────────────────────────────────────

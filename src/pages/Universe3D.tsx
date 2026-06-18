@@ -426,7 +426,7 @@ export default function Universe3DPage() {
     subdomain: UniverseSubdomain;
   }) => {
     const planetRole: UserPlanetRole =
-      (authRole === 'vc' || localStorage.getItem('active_role') === 'vc') ? 'vc' :
+      localStorage.getItem('active_role') === 'vc' ? 'vc' :
         (authRole === 'founder' || authRole === 'co_founder' || authRole === 'admin') ? 'founder' :
           'career';
 

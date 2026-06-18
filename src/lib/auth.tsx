@@ -1,9 +1,10 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import type { User, Session } from '@supabase/supabase-js';
 import { hasSupabaseConfig, supabase } from './supabase';
-import type { DbUserProfile, UserRole } from './supabase';
-import { can, canRead, canWrite, canDelete } from './db/rbac';
-import type { Module } from './db/rbac';
+import type { DbUserProfile, RoleId } from './supabase';
+import { api } from './api';
+import { hasPermission } from './db/rbac';
+import type { Action, ExpandedPermissions, Module } from './db/rbac';
 
 const AUTH_TIMEOUT_MS = Number(import.meta.env.VITE_AUTH_TIMEOUT_MS ?? 15000);
 
@@ -42,7 +43,10 @@ interface AuthContextValue extends AuthState {
   canRead: (module: Module) => boolean;
   canWrite: (module: Module) => boolean;
   canDelete: (module: Module) => boolean;
-  role: UserRole | null;
+  role: RoleId | null;
+  roleName: string | null;
+  isSystemRole: boolean;
+  permissions: ExpandedPermissions | null;
   hasCompany: boolean;
   onboardingCompleted: boolean;
 }
@@ -62,13 +66,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /* Load profile from DB */
   async function loadProfile(userId: string): Promise<DbUserProfile | null> {
-    const { data, error } = await supabase
-      .from('user_profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
-    if (error) { console.error('[auth] loadProfile', error); return null; }
-    return data;
+    try {
+      return await api.get<DbUserProfile>('/api/me');
+    } catch (error) {
+      console.error('[auth] loadProfile', userId, error);
+      return null;
+    }
   }
 
   async function refreshProfile() {
@@ -205,6 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   /* Permission bindings */
   const role = state.profile?.role ?? null;
+  const permissions = state.profile?.permissions ?? null;
 
   const value: AuthContextValue = {
     ...state,
@@ -213,12 +217,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signOut,
     refreshProfile,
     role,
+    roleName: state.profile?.roleName ?? null,
+    isSystemRole: state.profile?.isSystemRole ?? false,
+    permissions,
     hasCompany: !!state.profile?.company_id,
     onboardingCompleted: state.profile?.onboarding_completed ?? false,
-    can: (module, action) => role ? can(role, module, action) : false,
-    canRead: (module) => role ? canRead(role, module) : false,
-    canWrite: (module) => role ? canWrite(role, module) : false,
-    canDelete: (module) => role ? canDelete(role, module) : false,
+    can: (module, action: Action) => hasPermission(permissions, module, action),
+    canRead: (module) => hasPermission(permissions, module, 'read'),
+    canWrite: (module) => hasPermission(permissions, module, 'write'),
+    canDelete: (module) => hasPermission(permissions, module, 'delete'),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
