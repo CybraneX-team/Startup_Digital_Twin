@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { ArrowLeft } from 'lucide-react';
 import type { DbCompany } from '../../lib/supabase';
 import { getIndustryContext } from '../../lib/productWorkspaceData';
@@ -27,6 +28,13 @@ export function ProductWorkspace({
   exiting = false,
 }: ProductWorkspaceProps) {
   const industry = getIndustryContext(company?.industry_id);
+
+  // Inner surfaces (e.g. the empty saved-nodes state) can request a full close.
+  useEffect(() => {
+    const handleRequestClose = () => onBackToCompany();
+    window.addEventListener('request-close-workspace', handleRequestClose);
+    return () => window.removeEventListener('request-close-workspace', handleRequestClose);
+  }, [onBackToCompany]);
 
   return (
     <FounderWorkspaceProvider>

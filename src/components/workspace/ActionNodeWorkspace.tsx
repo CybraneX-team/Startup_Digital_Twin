@@ -1,7 +1,7 @@
 
-import { useCallback } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
-  X, ChevronRight, Zap, Target,
+  X, ChevronRight, Zap, Target, Check,
   Users, BookOpen, TrendingUp, Shield, DollarSign, Search,
   FileText, Send, BarChart2, AlertTriangle, Rocket,
   Star, Briefcase, Globe, Lock, Activity,
@@ -19,6 +19,8 @@ export interface ActionNodeWorkspaceProps {
   onClose: () => void;
   fullScreen?: boolean;
   isOpen?: boolean;
+  /** True when opened from a node already in the workspace — hides the redundant Export button. */
+  embedded?: boolean;
 }
 
 function getModeColors(role: string, rootColor: string) {
@@ -69,25 +71,98 @@ const VARIANT_ICONS: Record<string, any> = {
   'generic': Zap,
 };
 
-function GenericPanel() {
+function ActionWorkspaceBody({
+  actionNode, branchNode, rootNode, context, colors, Icon, steps, done, onToggle, pct,
+}: {
+  actionNode: PlanetActionNode;
+  branchNode: PlanetBranchNode;
+  rootNode: PlanetRootNode;
+  context: CompanyPlanetContext;
+  colors: { primary: string; secondary: string; glow: string };
+  Icon: any;
+  steps: { id: string; label: string }[];
+  done: Record<string, boolean>;
+  onToggle: (id: string) => void;
+  pct: number;
+}) {
   return (
     <div className="flex flex-col gap-5">
+      {/* objective hero */}
+      <div
+        className="rounded-2xl p-6 relative overflow-hidden"
+        style={{ background: `linear-gradient(135deg, ${colors.primary}14, rgba(255,255,255,0.02))`, border: `1px solid ${colors.primary}30` }}
+      >
+        <div className="absolute -top-16 -right-12 w-52 h-52 rounded-full pointer-events-none opacity-40" style={{ background: `radial-gradient(circle, ${colors.primary}40, transparent 70%)` }} />
+        <div className="flex items-start gap-4 relative">
+          <div className="w-12 h-12 rounded-xl grid place-items-center shrink-0" style={{ background: `${colors.primary}1f`, border: `1px solid ${colors.primary}3a` }}>
+            <Icon className="w-6 h-6" style={{ color: colors.primary }} />
+          </div>
+          <div>
+            <SectionTitle icon={Zap}>Objective</SectionTitle>
+            <h2 className="text-xl font-bold text-white leading-snug">{actionNode.label}</h2>
+            <p className="text-[13px] text-white/60 leading-relaxed mt-2 max-w-2xl">
+              {actionNode.hint || `Complete this ${branchNode.label || 'workflow'} step to advance ${rootNode.label} for ${context.companyName}.`}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* interactive steps */}
       <GlassCard>
-        <SectionTitle icon={Zap}>Action Required</SectionTitle>
-        <p className="text-[13px] text-white/60 leading-relaxed">
-          This is the workspace for this action node. We are preparing the data and resources for you to complete this task.
-        </p>
+        <div className="flex items-center justify-between mb-4">
+          <SectionTitle icon={Target}>Steps to complete</SectionTitle>
+          <span className="text-xs font-bold tabular-nums" style={{ color: colors.primary }}>{pct}%</span>
+        </div>
+        <div className="h-1.5 rounded-full bg-white/5 overflow-hidden mb-4">
+          <div className="h-full rounded-full transition-all duration-500" style={{ width: `${pct}%`, background: `linear-gradient(90deg, ${colors.primary}, ${colors.secondary})` }} />
+        </div>
+        <div className="space-y-2">
+          {steps.map((s, i) => {
+            const checked = !!done[s.id];
+            return (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => onToggle(s.id)}
+                className="w-full flex items-center gap-3 p-3 rounded-xl text-left transition-all hover:brightness-110"
+                style={{ background: checked ? `${colors.primary}12` : 'rgba(255,255,255,0.02)', border: `1px solid ${checked ? colors.primary + '33' : 'rgba(255,255,255,0.06)'}` }}
+              >
+                <span className="w-5 h-5 rounded-md grid place-items-center shrink-0 transition-all" style={{ background: checked ? colors.primary : 'transparent', border: `1.5px solid ${checked ? colors.primary : 'rgba(255,255,255,0.25)'}` }}>
+                  {checked && <Check className="w-3 h-3 text-black/80" strokeWidth={3} />}
+                </span>
+                <span className={`text-[13px] ${checked ? 'text-white/40 line-through' : 'text-white/80'}`}>{i + 1}. {s.label}</span>
+              </button>
+            );
+          })}
+        </div>
       </GlassCard>
+
+      {/* context grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <GlassCard>
+          <SectionTitle icon={Activity}>Why this matters</SectionTitle>
+          <p className="text-[13px] text-white/60 leading-relaxed">
+            {rootNode.description || `This action supports your ${context.roleLabel} objectives by strengthening ${rootNode.label}.`}
+          </p>
+        </GlassCard>
+        <GlassCard>
+          <SectionTitle icon={Briefcase}>Definition of done</SectionTitle>
+          <p className="text-[13px] text-white/60 leading-relaxed">
+            A clear, shareable {branchNode.label || 'work'} output for “{actionNode.label}”, ready to convert into a task or decision.
+          </p>
+        </GlassCard>
+      </div>
+
+      {/* assist footer */}
+      <div className="rounded-xl p-4 flex items-center gap-3" style={{ background: `${colors.primary}0d`, border: `1px solid ${colors.primary}26` }}>
+        <Zap className="w-4 h-4 shrink-0" style={{ color: colors.primary }} />
+        <p className="text-[12px] text-white/55">
+          Use <span className="text-white/80 font-medium">Export To Workspace</span> to bring this node onto your canvas — chat with it, convert it into a task, or assign it.
+        </p>
+      </div>
     </div>
   );
 }
-
-function RoleShortlistPanel() { return <GenericPanel />; }
-function AppPlanPanel() { return <GenericPanel />; }
-function LearningPlanPanel() { return <GenericPanel />; }
-function PortfolioProjectPanel() { return <GenericPanel />; }
-function OutreachPanel() { return <GenericPanel />; }
-function InterviewPrepPanel() { return <GenericPanel />; }
 function PricingComparePanel() {
   return (
     <div className="flex flex-col gap-5">
@@ -151,7 +226,6 @@ function PricingComparePanel() {
     </div>
   );
 }
-function FeatureMatrixPanel() { return <GenericPanel />; }
 function CustomerInterviewPanel() {
   const dummyInterviews = [
     { name: 'Sarah J.', role: 'VP Operations', company: 'Logistix', painPoint: 'Manual data entry takes 15h/week.', status: 'Completed' },
@@ -206,22 +280,22 @@ function CustomerInterviewPanel() {
     </div>
   );
 }
-function IntroRequestPanel() { return <GenericPanel />; }
-function GrowthTrackerPanel() { return <GenericPanel />; }
-function MoatAnalysisPanel() { return <GenericPanel />; }
-function MitigationPlanPanel() { return <GenericPanel />; }
-function BenchmarkPanel() { return <GenericPanel />; }
-function DataRoomPanel() { return <GenericPanel />; }
-function ContactMapPanel() { return <GenericPanel />; }
-function GTMLaunchPanel() { return <GenericPanel />; }
-function MarketGapPanel() { return <GenericPanel />; }
-function PortfolioHealthPanel() { return <GenericPanel />; }
-function ExitAnalysisPanel() { return <GenericPanel />; }
 
-export function ActionNodeWorkspace({ actionNode, branchNode, rootNode, context, onClose, fullScreen = false, isOpen = true }: ActionNodeWorkspaceProps) {
+export function ActionNodeWorkspace({ actionNode, branchNode, rootNode, context, onClose, fullScreen = false, isOpen = true, embedded = false }: ActionNodeWorkspaceProps) {
   const colors = getModeColors(context.role, rootNode.color);
   const variant = resolveVariant(rootNode.label, branchNode.label, actionNode.label);
   const PanelIcon = VARIANT_ICONS[variant] ?? Zap;
+
+  const isGenericBody = variant !== 'pricing-compare' && variant !== 'customer-interview';
+  const steps = useMemo(() => ([
+    { id: 's1', label: `Review the context behind “${actionNode.label}”` },
+    { id: 's2', label: 'Gather the inputs, data, and people you need' },
+    { id: 's3', label: `Draft your ${branchNode.label || 'work'} output` },
+    { id: 's4', label: 'Validate, refine, and mark complete' },
+  ]), [actionNode.label, branchNode.label]);
+  const [stepsDone, setStepsDone] = useState<Record<string, boolean>>({});
+  const stepsPct = Math.round((steps.filter(s => stepsDone[s.id]).length / steps.length) * 100);
+  const toggleStep = (id: string) => setStepsDone(d => ({ ...d, [id]: !d[id] }));
 
   // ── Save workflow ────────────────────────────────────────────────────────
   const { save, has, getId, remove } = useSavedWorkflows();
@@ -235,6 +309,42 @@ export function ActionNodeWorkspace({ actionNode, branchNode, rootNode, context,
   };
 
   const alreadySaved = has(lookup);
+
+  const [exported, setExported] = useState(false);
+
+  // ── Export to Workspace ──────────────────────────────────────────────────
+  // Persists this node as a workspace card, then opens the product workspace
+  // focused on it (works both inline on /3d and from a standalone tab).
+  const handleExport = useCallback(() => {
+    const saved = save({
+      level: 'action',
+      companyId: context.companyId,
+      companyName: context.companyName,
+      role: context.role,
+      roleLabel: context.roleLabel,
+      rootId: rootNode.id,
+      rootLabel: rootNode.label,
+      rootColor: rootNode.color,
+      rootDescription: rootNode.description,
+      branchId: branchNode.id,
+      branchLabel: branchNode.label,
+      actionId: actionNode.id,
+      actionLabel: actionNode.label,
+      actionHint: actionNode.hint,
+    });
+    try { localStorage.setItem('ws_pending_node_v1', saved.id); } catch { /* storage full */ }
+    setExported(true);
+
+    if (window.opener && !window.opener.closed) {
+      // standalone tab → tell the universe to open the workspace, then close
+      window.opener.postMessage({ type: 'EXPORT_TO_WORKSPACE', savedId: saved.id }, '*');
+      window.setTimeout(() => window.close(), 380);
+    } else {
+      // inline on /3d → ask the host to open the product workspace
+      window.dispatchEvent(new CustomEvent('request-open-workspace'));
+      window.setTimeout(() => onClose(), 380);
+    }
+  }, [save, context, rootNode, branchNode, actionNode, onClose]);
 
   const handleToggleSave = useCallback(() => {
     if (alreadySaved) {
@@ -315,19 +425,25 @@ export function ActionNodeWorkspace({ actionNode, branchNode, rootNode, context,
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Export to WorkOS button */}
-          <button
-            className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all hover:brightness-110 shrink-0"
-            style={{
-              background: 'linear-gradient(135deg, rgba(249,198,255,0.15), rgba(193,174,255,0.1))',
-              border: '1px solid rgba(193,174,255,0.3)',
-              color: '#EDD9FF',
-              boxShadow: '0 0 16px rgba(193,174,255,0.15)',
-            }}
-          >
-            <ExternalLink className="w-3.5 h-3.5" />
-            Export To WorkOs
-          </button>
+          {/* Export to Workspace — only when opening a node fresh from the IDT
+              universe (redundant when already inside the product workspace). */}
+          {!embedded && (
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={exported}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-semibold transition-all hover:brightness-110 shrink-0 disabled:opacity-80"
+              style={{
+                background: 'linear-gradient(135deg, rgba(249,198,255,0.15), rgba(193,174,255,0.1))',
+                border: '1px solid rgba(193,174,255,0.3)',
+                color: '#EDD9FF',
+                boxShadow: '0 0 16px rgba(193,174,255,0.15)',
+              }}
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              {exported ? 'Exported ✓' : 'Export To Workspace'}
+            </button>
+          )}
 
           {/* Save Workflow button */}
           <button
@@ -359,15 +475,7 @@ export function ActionNodeWorkspace({ actionNode, branchNode, rootNode, context,
             <div className={`transition-transform duration-300 ${alreadySaved ? 'scale-110' : 'scale-100'}`}>
               {alreadySaved ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
             </div>
-            <div className="relative w-[85px] h-[16px] overflow-hidden">
-              <div 
-                className="absolute inset-0 transition-transform duration-300 flex flex-col"
-                style={{ transform: alreadySaved ? 'translateY(-16px)' : 'translateY(0)' }}
-              >
-                <div className="h-[16px] flex items-center">Save Workflow</div>
-                <div className="h-[16px] flex items-center">Saved</div>
-              </div>
-            </div>
+            <span className="whitespace-nowrap">{alreadySaved ? 'Saved' : 'Save Workflow'}</span>
           </button>
 
           <button 
@@ -398,15 +506,17 @@ export function ActionNodeWorkspace({ actionNode, branchNode, rootNode, context,
             )}
 
             <div className="space-y-4">
-              <div className="p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <SectionTitle icon={Activity as any}>Task Status</SectionTitle>
-                <div className="flex items-center gap-3 mt-3">
-                  <div className="h-1.5 flex-1 bg-white/5 rounded-full overflow-hidden">
-                    <div className="h-full rounded-full w-1/4" style={{ background: `linear-gradient(90deg, ${colors.primary}, ${colors.secondary})` }} />
+              {isGenericBody && (
+                <div className="p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <SectionTitle icon={Activity as any}>Task Status</SectionTitle>
+                  <div className="flex items-center gap-3 mt-3">
+                    <div className="h-1.5 flex-1 bg-white/5 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${stepsPct}%`, background: `linear-gradient(90deg, ${colors.primary}, ${colors.secondary})` }} />
+                    </div>
+                    <span className="text-xs font-medium text-white/50 tabular-nums">{stepsPct}%</span>
                   </div>
-                  <span className="text-xs font-medium text-white/50">25%</span>
                 </div>
-              </div>
+              )}
 
               <div className="p-4 rounded-xl" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)' }}>
                 <SectionTitle icon={Briefcase as any}>Branch Context</SectionTitle>
@@ -421,27 +531,24 @@ export function ActionNodeWorkspace({ actionNode, branchNode, rootNode, context,
         {/* Right Content Area (Dynamic Panels) */}
         <div className="flex-1 overflow-y-auto p-6 lg:p-10 scrollbar-hide relative">
           <div className="max-w-5xl mx-auto">
-            {variant === 'role-shortlist' && <RoleShortlistPanel />}
-            {variant === 'app-plan' && <AppPlanPanel />}
-            {variant === 'learning-plan' && <LearningPlanPanel />}
-            {variant === 'portfolio-project' && <PortfolioProjectPanel />}
-            {variant === 'outreach' && <OutreachPanel />}
-            {variant === 'interview-prep' && <InterviewPrepPanel />}
-            {variant === 'pricing-compare' && <PricingComparePanel />}
-            {variant === 'feature-matrix' && <FeatureMatrixPanel />}
-            {variant === 'customer-interview' && <CustomerInterviewPanel />}
-            {variant === 'intro-request' && <IntroRequestPanel />}
-            {variant === 'growth-tracker' && <GrowthTrackerPanel />}
-            {variant === 'moat-analysis' && <MoatAnalysisPanel />}
-            {variant === 'mitigation-plan' && <MitigationPlanPanel />}
-            {variant === 'benchmark' && <BenchmarkPanel />}
-            {variant === 'data-room' && <DataRoomPanel />}
-            {variant === 'contact-map' && <ContactMapPanel />}
-            {variant === 'gtm-launch' && <GTMLaunchPanel />}
-            {variant === 'market-gap' && <MarketGapPanel />}
-            {variant === 'portfolio-health' && <PortfolioHealthPanel />}
-            {variant === 'exit-analysis' && <ExitAnalysisPanel />}
-            {variant === 'generic' && <GenericPanel />}
+            {variant === 'pricing-compare' ? (
+              <PricingComparePanel />
+            ) : variant === 'customer-interview' ? (
+              <CustomerInterviewPanel />
+            ) : (
+              <ActionWorkspaceBody
+                actionNode={actionNode}
+                branchNode={branchNode}
+                rootNode={rootNode}
+                context={context}
+                colors={colors}
+                Icon={PanelIcon}
+                steps={steps}
+                done={stepsDone}
+                onToggle={toggleStep}
+                pct={stepsPct}
+              />
+            )}
           </div>
         </div>
 

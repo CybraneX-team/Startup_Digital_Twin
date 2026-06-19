@@ -45,6 +45,8 @@ import { useFounderWorkspace, type NoteBlock, type Note } from '../../context/Fo
 import { BrainIcon } from './BrainIcon';
 import Orb from '../Orb';
 import { WorkspaceFilesDashboard } from './WorkspaceFilesDashboard';
+import { WorkspaceSavedNodesCanvas } from './WorkspaceSavedNodesCanvas';
+import { WorkspaceProjectsSpace } from './WorkspaceProjectsSpace';
 
 /* ── tiny chart primitives ─────────────────────────────────────── */
 
@@ -3107,6 +3109,7 @@ function curvePath(s: Pt, e: Pt): string {
 
 export function WorkspaceActiveCanvas() {
   const [renderedCard, setRenderedCard] = useState<string | null>(null);
+  const [canvasView, setCanvasView] = useState<'nodes' | 'overview'>('nodes');
 
   const {
     goals,
@@ -3152,7 +3155,9 @@ export function WorkspaceActiveCanvas() {
     if (!container) return;
 
     const handleWheel = (e: WheelEvent) => {
-      if (activeSidebarTab !== 'tasks' && activeSidebarTab !== 'goals' && activeSidebarTab !== 'notes' && activeSidebarTab !== 'files') {
+      // Scroll-to-expand applies to the scrollable dashboards AND the saved-nodes view.
+      const isDashboardTab = ['tasks', 'goals', 'notes', 'files', 'projects'].includes(activeSidebarTab);
+      if (!isDashboardTab && canvasView !== 'nodes') {
         return;
       }
 
@@ -3171,7 +3176,7 @@ export function WorkspaceActiveCanvas() {
     return () => {
       container.removeEventListener('wheel', handleWheel);
     };
-  }, [activeSidebarTab, scrollExpansion, setScrollExpansion]);
+  }, [activeSidebarTab, canvasView, scrollExpansion, setScrollExpansion]);
 
   const visibleWorkspaces = useMemo(() => {
     if (workspaces.length <= 2) return workspaces;
@@ -3345,6 +3350,28 @@ export function WorkspaceActiveCanvas() {
 
 
             <div className="flex items-center gap-2 shrink-0">
+              {!['tasks', 'goals', 'notes', 'files', 'projects'].includes(activeSidebarTab) && !activeDetailCard && (
+                <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5 border border-white/10 mr-1">
+                  {([
+                    { id: 'nodes', label: 'Nodes', Icon: Layers },
+                    { id: 'overview', label: 'Overview', Icon: Building2 },
+                  ] as const).map(({ id, label, Icon }) => (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => setCanvasView(id)}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
+                        canvasView === id
+                          ? 'bg-white/10 text-white shadow-[0_1px_4px_rgba(0,0,0,0.3)]'
+                          : 'text-white/45 hover:text-white/80'
+                      }`}
+                    >
+                      <Icon className="w-3.5 h-3.5" />
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
               <button
                 type="button"
                 className={`ws-icon-btn ${isFullscreen ? 'ws-icon-btn--active' : ''}`}
@@ -3378,6 +3405,10 @@ export function WorkspaceActiveCanvas() {
               <WorkspaceNotesDashboard />
             ) : activeSidebarTab === 'files' ? (
               <WorkspaceFilesDashboard />
+            ) : activeSidebarTab === 'projects' ? (
+              <WorkspaceProjectsSpace />
+            ) : canvasView === 'nodes' && !activeDetailCard ? (
+              <WorkspaceSavedNodesCanvas isFullscreen={isFullscreen} />
             ) : (
               <div
                 className={`ws-canvas-stage-area absolute transition-all ${transClass} ${activeDetailCard ? 'ws-canvas-stage-area--active' : ''

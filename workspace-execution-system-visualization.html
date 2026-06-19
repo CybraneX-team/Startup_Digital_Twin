@@ -44,6 +44,16 @@
   h2{font-size:24px;letter-spacing:-.01em}
   .sec-desc{color:var(--mut);font-size:14px;margin:6px 0 26px;max-width:760px}
 
+  /* ---------- progress highlighter ---------- */
+  .hl{border-radius:3px;padding:0 .28em;box-decoration-break:clone;-webkit-box-decoration-break:clone}
+  .hl-done{background:rgba(52,211,153,0.32)}
+  .hl-partial{background:rgba(251,146,60,0.34)}
+  .hl-next{background:rgba(251,191,36,0.32)}
+  .hl-left{background:rgba(251,113,133,0.30)}
+  .hl-legend{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:16px;font-size:12px;color:var(--mut)}
+  .hl-legend span{display:inline-flex;align-items:center;gap:6px}
+  .hl-dot{width:12px;height:12px;border-radius:3px;display:inline-block}
+
   .glass{background:var(--panel);border:1px solid var(--line);border-radius:var(--radius);
     backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
   .grid{display:grid;gap:16px}
@@ -174,11 +184,18 @@
       <span class="pill">Agent Execution</span>
       <span class="pill">RBAC Visibility</span>
     </div>
+    <div class="hl-legend">
+      <span><i class="hl-dot" style="background:rgba(52,211,153,0.55)"></i> Done (frontend)</span>
+      <span><i class="hl-dot" style="background:rgba(251,146,60,0.6)"></i> Partial</span>
+      <span><i class="hl-dot" style="background:rgba(251,191,36,0.55)"></i> Next</span>
+      <span><i class="hl-dot" style="background:rgba(251,113,133,0.55)"></i> Left / later</span>
+      <span style="font-size:11px;color:var(--mut2)">· detailed per-item status in execution-status.html</span>
+    </div>
   </header>
 
   <!-- 0 CORE LOOP -->
   <section>
-    <div class="sec-head"><div class="sec-num">01</div><h2>The core operating loop</h2></div>
+    <div class="sec-head"><div class="sec-num">01</div><h2><span class="hl hl-partial">The core operating loop</span></h2></div>
     <p class="sec-desc">Every feature exists to keep this loop turning. An external (IDT) or internal (BDT) signal becomes a node, then a card you can reason with, then a decision/task/project, executed and measured back into the twin — which produces the next recommendation.</p>
     <div class="glass" style="padding:22px">
       <div class="loop">
@@ -197,7 +214,7 @@
 
   <!-- 1 LAYOUT MAP -->
   <section>
-    <div class="sec-head"><div class="sec-num">02</div><h2>Where everything lives — the workspace map</h2></div>
+    <div class="sec-head"><div class="sec-num">02</div><h2><span class="hl hl-done">Where everything lives — the workspace map</span></h2></div>
     <p class="sec-desc">The specification’s six canvas areas mapped onto our actual panels. Numbers ① – ⑥ mark where each feature group is located; the legend below ties them to the doc.</p>
 
     <div class="mock">
@@ -279,7 +296,7 @@
 
   <!-- 2 NODE TO CARD -->
   <section>
-    <div class="sec-head"><div class="sec-num">03</div><h2>The Node → Card model</h2></div>
+    <div class="sec-head"><div class="sec-num">03</div><h2><span class="hl hl-partial">The Node → Card model</span></h2></div>
     <p class="sec-desc">Every BDT/IDT node can be imported into the canvas as an <b>information card</b> — not a copy-paste block, but a live instance carrying source data, chat memory, actions, permissions and sync state. <span class="loc am">Center canvas · created via Export / + Card</span></p>
     <div class="grid g2">
       <div>
@@ -318,7 +335,7 @@
 
   <!-- 3 WORKSPACE MODES -->
   <section>
-    <div class="sec-head"><div class="sec-num">04</div><h2>Workspace modes</h2></div>
+    <div class="sec-head"><div class="sec-num">04</div><h2><span class="hl hl-left">Workspace modes</span></h2></div>
     <p class="sec-desc">Modes replace today’s confusing 0→100 expand-scroll. The mode decides which surfaces show, instead of continuously resizing the whole grid. <span class="loc">Top mode bar</span></p>
     <div class="tabs">
       <div class="tab on" data-t="m0">Explore</div>
@@ -338,7 +355,7 @@
 
   <!-- 4 PROJECT SPACES -->
   <section>
-    <div class="sec-head"><div class="sec-num">05</div><h2>Project management spaces</h2></div>
+    <div class="sec-head"><div class="sec-num">05</div><h2><span class="hl hl-partial">Project management spaces</span></h2></div>
     <p class="sec-desc">The PM layer is not a separate tool — it lives under the <b>Projects</b> item in the left rail and is represented as nodes back in the BDT. Three nested spaces serve three altitudes.</p>
     <div class="grid g3">
       <div class="space">
@@ -383,7 +400,7 @@
 
   <!-- 5 GOAL SUPERALIGNMENT -->
   <section>
-    <div class="sec-head"><div class="sec-num">06</div><h2>Goal superalignment</h2></div>
+    <div class="sec-head"><div class="sec-num">06</div><h2><span class="hl hl-partial">Goal superalignment</span></h2></div>
     <p class="sec-desc">Every card, task, project, decision and metric links to a goal across eight horizons, so work never runs disconnected from strategy. <span class="loc gr">Goal/metric strip + Goals tab</span></p>
     <div class="ladder">
       <div class="rung"><span class="h">Daily</span><span class="ex">Complete 5 critical tasks today</span><span class="ow">Member / owner</span></div>
@@ -402,7 +419,7 @@
 
   <!-- 6 METRIC IMPACT -->
   <section>
-    <div class="sec-head"><div class="sec-num">07</div><h2>Metric impact engine</h2></div>
+    <div class="sec-head"><div class="sec-num">07</div><h2><span class="hl hl-left">Metric impact engine</span></h2></div>
     <p class="sec-desc">Each decision/task carries an <b>estimated</b> impact, then a measured <b>actual</b>, with variance feeding model learning. Impact rolls up from task to strategic score. <span class="loc gr">Review mode + right-rail alerts</span></p>
     <div class="flow">
       <div class="fnode"><div class="t">Task / Decision</div><div class="d">estimated impact</div></div>
@@ -425,7 +442,7 @@
 
   <!-- 7 SUGGESTIVE TASKS -->
   <section>
-    <div class="sec-head"><div class="sec-num">08</div><h2>Suggestive task engine</h2></div>
+    <div class="sec-head"><div class="sec-num">08</div><h2><span class="hl hl-next">Suggestive task engine</span></h2></div>
     <p class="sec-desc">Runs in parallel with PM — watches goals, metrics, signals, dependencies and recommends the highest-impact next task. <span class="loc gr">Right rail · agent suggestions</span></p>
     <div class="grid g2">
       <div class="glass" style="padding:6px 6px 6px 6px">
@@ -449,7 +466,7 @@
 
   <!-- 8 AGENT LAYER -->
   <section>
-    <div class="sec-head"><div class="sec-num">09</div><h2>Agent execution layer</h2></div>
+    <div class="sec-head"><div class="sec-num">09</div><h2><span class="hl hl-left">Agent execution layer</span></h2></div>
     <p class="sec-desc">Agents are execution companions attached to cards, tasks, projects and goals — they operate with a context pack, propose a plan, and produce reviewable, traceable output. <span class="loc">Bottom dock “Ask Agent” · Agent mode · Voice</span></p>
     <div class="agrid">
       <div class="ag"><div class="n">🔎 Research</div><div class="o">Competitor / market / customer briefs</div></div>
@@ -479,7 +496,7 @@
 
   <!-- 9 VOICE -->
   <section>
-    <div class="sec-head"><div class="sec-num">10</div><h2>Voice AI — operating the workspace</h2></div>
+    <div class="sec-head"><div class="sec-num">10</div><h2><span class="hl hl-done">Voice AI — operating the workspace</span></h2></div>
     <p class="sec-desc">The voice assistant (already present) gains <b>tools</b> so it can act, not just talk — import nodes, create tasks/projects, run agents, simulate impact, navigate. <span class="loc">Top bar 🎙 · floating orb</span></p>
     <div class="grid g3">
       <div class="glass feat"><h3><span class="ic">🎙</span>“Pull the Acme signal onto my canvas”</h3><p>→ <code>import_node_as_card</code> drops the card, then compares pricing.</p></div>
@@ -490,7 +507,7 @@
 
   <!-- 10 RBAC -->
   <section>
-    <div class="sec-head"><div class="sec-num">11</div><h2>Visibility &amp; permissions</h2></div>
+    <div class="sec-head"><div class="sec-num">11</div><h2><span class="hl hl-left">Visibility &amp; permissions</span></h2></div>
     <p class="sec-desc">Different roles see different spaces, cards, metrics and actions. Company-level RBAC already exists; the new layer is project-level membership. <span class="loc cy">Left rail spaces · Team &amp; Access page</span></p>
     <div class="glass" style="padding:6px">
       <table>
@@ -511,12 +528,12 @@
     <div class="sec-head"><div class="sec-num">12</div><h2>MVP build order</h2></div>
     <p class="sec-desc">Prove the core loop first: node → card → chat → task/project → goal link → metric impact → update.</p>
     <div class="grid g3">
-      <div class="glass feat"><h3>Phase 1 · Card Workspace</h3><p>Import nodes as cards, card chat, manual updates, links. <i>Reason with multiple cards, convert one to a task.</i></p></div>
-      <div class="glass feat"><h3>Phase 2 · Project Spaces</h3><p>Superspace, project &amp; member spaces with tasks + ownership.</p></div>
-      <div class="glass feat"><h3>Phase 3 · Goal Alignment</h3><p>Daily→annual hierarchy and goal links on every project/task.</p></div>
-      <div class="glass feat"><h3>Phase 4 · Metric Impact</h3><p>Dept/company metric model, estimated vs actual tracking.</p></div>
-      <div class="glass feat"><h3>Phase 5 · Suggestive Tasks</h3><p>Recommendations from gaps, goals, blocked dependencies.</p></div>
-      <div class="glass feat"><h3>Phase 6 · Agents</h3><p>Attach agents to card/task/project with review &amp; approval.</p></div>
+      <div class="glass feat"><h3><span class="hl hl-done">Phase 1 · Card Workspace</span></h3><p>Import nodes as cards, card chat, manual updates, links. <i>Reason with multiple cards, convert one to a task.</i></p></div>
+      <div class="glass feat"><h3><span class="hl hl-partial">Phase 2 · Project Spaces</span></h3><p>Superspace, project &amp; member spaces with tasks + ownership.</p></div>
+      <div class="glass feat"><h3><span class="hl hl-partial">Phase 3 · Goal Alignment</span></h3><p>Daily→annual hierarchy and goal links on every project/task.</p></div>
+      <div class="glass feat"><h3><span class="hl hl-left">Phase 4 · Metric Impact</span></h3><p>Dept/company metric model, estimated vs actual tracking.</p></div>
+      <div class="glass feat"><h3><span class="hl hl-next">Phase 5 · Suggestive Tasks</span></h3><p>Recommendations from gaps, goals, blocked dependencies.</p></div>
+      <div class="glass feat"><h3><span class="hl hl-left">Phase 6 · Agents</span></h3><p>Attach agents to card/task/project with review &amp; approval.</p></div>
     </div>
   </section>
 

@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { ChevronDown } from 'lucide-react';
 import {
   WorkspaceLeftPanel,
@@ -45,6 +45,14 @@ function TwinWorkspaceLayoutInner({ phase, onClose }: TwinWorkspaceLayoutProps) 
       onClose?.();
     }
   };
+
+  // Allow inner surfaces (e.g. the empty saved-nodes state) to request a full close.
+  useEffect(() => {
+    const handleRequestClose = () => handleCloseClick();
+    window.addEventListener('request-close-workspace', handleRequestClose);
+    return () => window.removeEventListener('request-close-workspace', handleRequestClose);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isFullscreen, scrollExpansion]);
 
   const p = scrollExpansion / 100;
 

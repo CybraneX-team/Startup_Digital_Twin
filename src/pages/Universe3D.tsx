@@ -724,16 +724,29 @@ export default function Universe3DPage() {
     // when the user navigates away and comes back.
   }, [pathname]);
 
-  // Listen for 'Close Workspace' signal from the new tab to zoom back out
+  // Listen for signals from the action workspace (tab or inline):
+  //  • ACTION_WORKSPACE_CLOSED → zoom back out
+  //  • EXPORT_TO_WORKSPACE / request-open-workspace → open the product workspace
   useEffect(() => {
-    const handler = (event: MessageEvent) => {
+    const onMessage = (event: MessageEvent) => {
       if (event.data?.type === 'ACTION_WORKSPACE_CLOSED') {
         setRootPolytopeBackStep(c => c + 1);
+      } else if (event.data?.type === 'EXPORT_TO_WORKSPACE') {
+        setActionWorkspace(null);
+        handleOpenWorkspace();
       }
     };
-    window.addEventListener('message', handler);
-    return () => window.removeEventListener('message', handler);
-  }, []);
+    const onRequestOpen = () => {
+      setActionWorkspace(null);
+      handleOpenWorkspace();
+    };
+    window.addEventListener('message', onMessage);
+    window.addEventListener('request-open-workspace', onRequestOpen);
+    return () => {
+      window.removeEventListener('message', onMessage);
+      window.removeEventListener('request-open-workspace', onRequestOpen);
+    };
+  }, [handleOpenWorkspace]);
 
   const handleNavigate = useCallback((path: NavPathEntry[], level: ZoomLevel) => {
     setNavPath([...path]);
