@@ -7,15 +7,11 @@ import { INDUSTRIES } from '../db/industries';
 import type { CompanyStage } from '../lib/supabase';
 import { api } from '../lib/api';
 import { usePolytopeStore } from '../lib/usePolytopeStore';
+import { COUNTRIES, getCurrencyCodeForCountry } from '../lib/currency';
 
 const STAGES: CompanyStage[] = [
   'Idea', 'Pre-seed', 'Seed', 'Series A', 'Series B',
   'Series C', 'Series D+', 'Pre-IPO', 'Public', 'PSU', 'Bootstrapped',
-];
-
-const COUNTRIES = [
-  'India', 'USA', 'UK', 'Singapore', 'UAE', 'Germany', 'Canada',
-  'Australia', 'Japan', 'Brazil', 'Indonesia', 'Nigeria', 'Other',
 ];
 
 interface DeptConfig {
@@ -121,6 +117,7 @@ export default function SettingsPage() {
         stage: config.stage,
         industry_id: config.industry_id,
         country: config.country,
+        currency: getCurrencyCodeForCountry(config.country),
         website: config.website.trim() || null,
         description: config.description.trim() || null,
       });

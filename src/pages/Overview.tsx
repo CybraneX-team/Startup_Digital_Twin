@@ -12,7 +12,7 @@ import { useCompany } from '../lib/db/companies';
 import { useCompanyMetrics } from '../lib/db/metrics';
 import { INDUSTRIES } from '../db/industries';
 import { api } from '../lib/api';
-import { getCurrencySymbol } from '../lib/currency';
+import { getCurrencyCodeForCountry, getCurrencySymbol } from '../lib/currency';
 import type { Metric } from '../types';
 
 const statusConfig = {
@@ -27,7 +27,9 @@ export default function Overview() {
   const { company } = useCompany(profile?.company_id);
   const { metrics } = useCompanyMetrics(profile?.company_id ?? null);
 
-  const currencySymbol = getCurrencySymbol(company?.currency);
+  const currencySymbol = getCurrencySymbol(
+    company?.currency || getCurrencyCodeForCountry(company?.country),
+  );
 
   const industryLabel = company?.industry_id
     ? INDUSTRIES.find(i => i.id === company.industry_id)?.label ?? company.industry_id
@@ -78,9 +80,11 @@ export default function Overview() {
       .map(({ key, name, unit }) => {
         const m = metrics[key];
         if (!m) return null;
-        // Use the unit stored in DB (real currency code/symbol) for monetary fields,
-        // fall back to the hardcoded label for non-monetary fields.
-        const displayUnit = m.unit && m.unit !== 'count' ? m.unit : unit;
+        // Company currency is authoritative for monetary metrics. Source units are
+        // still used for percentages, counts, and other non-currency measurements.
+        const displayUnit = unit === c
+          ? c
+          : m.unit && m.unit !== 'count' ? m.unit : unit;
         return {
           name,
           value: Number(m.value),

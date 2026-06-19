@@ -6,6 +6,7 @@ import {
 import { saveLocalCompany, type LocalCompany } from '../lib/localCompanies';
 import type { CompanyStage, BusinessModel } from '../lib/supabase';
 import type { UniverseController } from '../three-universe/UniverseController';
+import { COUNTRIES } from '../lib/currency';
 
 /* ── Types ──────────────────────────────────────────────── */
 interface CreateCompanyModalProps {
@@ -27,11 +28,6 @@ const STAGES: CompanyStage[] = [
 ];
 
 const MODELS: BusinessModel[] = ['B2B', 'B2C', 'B2B2C', 'Marketplace', 'SaaS', 'D2C', 'Other'];
-
-const COUNTRIES = [
-  'India', 'USA', 'UK', 'Germany', 'France', 'Singapore',
-  'Australia', 'Canada', 'Brazil', 'UAE', 'Other',
-];
 
 /* ── Field helpers ───────────────────────────────────────── */
 function Field({ label, children }: { label: string; children: React.ReactNode }) {

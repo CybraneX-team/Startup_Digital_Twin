@@ -39,6 +39,7 @@ export interface CreateCompanyInput {
   subdomain_id?: string;
   stage: CompanyStage;
   country: string;
+  currency?: string;
   founded_year?: number;
   description?: string;
   website?: string;

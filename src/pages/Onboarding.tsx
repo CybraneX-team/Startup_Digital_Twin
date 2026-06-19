@@ -10,6 +10,7 @@ import type { BusinessModel, CompanyStage } from '../lib/supabase';
 import { submitJoinRequest, listJoinableCompanies } from '../lib/db/team';
 import type { JoinableCompany } from '../lib/db/team';
 import { api } from '../lib/api';
+import { COUNTRIES, getCurrencyCodeForCountry } from '../lib/currency';
 
 /* ──────────────────────────────────────────────────
    Step definitions
@@ -29,11 +30,6 @@ const STAGES: CompanyStage[] = [
 ];
 
 const BUSINESS_MODELS: BusinessModel[] = ['B2B', 'B2C', 'B2B2C', 'Marketplace', 'SaaS', 'D2C', 'Other'];
-
-const COUNTRIES = [
-  'India', 'USA', 'UK', 'Singapore', 'UAE', 'Germany', 'Canada',
-  'Australia', 'Japan', 'Brazil', 'Indonesia', 'Nigeria', 'Other',
-];
 
 const JOIN_PAGE_SIZE = 4;
 
@@ -324,6 +320,7 @@ export default function Onboarding() {
       subdomain_id: form.subdomain_id || undefined,
       stage: form.stage,
       country: form.country,
+      currency: getCurrencyCodeForCountry(form.country),
       founded_year: form.founded_year ? parseInt(form.founded_year) : undefined,
       description: form.description.trim() || undefined,
       website: form.website.trim() || undefined,
@@ -849,7 +846,7 @@ export default function Onboarding() {
                     onChange={e => update('employees', e.target.value)}
                   />
                 </Field>
-                <Field label="Monthly Revenue (USD)">
+                <Field label={`Monthly Revenue (${getCurrencyCodeForCountry(form.country)})`}>
                   <Input
                     type="number" min={0}
                     placeholder="50000"
@@ -859,7 +856,7 @@ export default function Onboarding() {
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Monthly Burn Rate (USD)">
+                <Field label={`Monthly Burn Rate (${getCurrencyCodeForCountry(form.country)})`}>
                   <Input
                     type="number" min={0}
                     placeholder="30000"
@@ -877,7 +874,7 @@ export default function Onboarding() {
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-4">
-                <Field label="Customer Lifetime Value / CLTV (USD)" hint="Optional">
+                <Field label={`Customer Lifetime Value / CLTV (${getCurrencyCodeForCountry(form.country)})`} hint="Optional">
                   <Input
                     type="number" min={0}
                     placeholder="1200"
@@ -885,7 +882,7 @@ export default function Onboarding() {
                     onChange={e => update('cltv_usd', e.target.value)}
                   />
                 </Field>
-                <Field label="Customer Acquisition Cost / CAC (USD)" hint="Optional">
+                <Field label={`Customer Acquisition Cost / CAC (${getCurrencyCodeForCountry(form.country)})`} hint="Optional">
                   <Input
                     type="number" min={0}
                     placeholder="95"
