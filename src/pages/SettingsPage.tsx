@@ -19,16 +19,23 @@ const COUNTRIES = [
 ];
 
 interface DeptConfig {
+  id?: string;
   name: string;
   size: number;
   hod: string;
+  access?: {
+    read: boolean;
+    write: boolean;
+    delete: boolean;
+    manage: boolean;
+  };
 }
 
 export default function SettingsPage() {
   const { user, profile, refreshProfile, canWrite, role } = useAuth();
   const { company, loading: companyLoading } = useCompany(profile?.company_id);
   const canEditSettings = canWrite('settings');
-  const canEditDepartments = canWrite('twin');
+  const canCreateDepartments = canWrite('twin') && canWrite('team');
   const departmentStore = usePolytopeStore('bdt');
 
   // Company config — populated from real data
@@ -70,9 +77,11 @@ export default function SettingsPage() {
   const displayDepts: DeptConfig[] = departmentStore.departments
     .filter(d => d.domain !== 'inactive' && !d.isDraft)
     .map(d => ({
+      id: d.id,
       name: d.label,
       size: (d as any).memberCount ?? 0,
       hod: d.cluster || 'Unassigned',
+      access: d.access,
     }));
 
   // Load real data from company + profile
@@ -145,6 +154,7 @@ export default function SettingsPage() {
   }
 
   const addDept = () => {
+    if (!canCreateDepartments) return;
     if (!newDept.trim()) return;
     void departmentStore.addDepartment({
       label: newDept.trim(),
@@ -158,7 +168,7 @@ export default function SettingsPage() {
 
   const removeDept = (idx: number) => {
     const dept = departmentStore.departments.filter(d => d.domain !== 'inactive' && !d.isDraft)[idx];
-    if (dept) void departmentStore.deleteDepartment(dept.id);
+    if (dept?.access?.delete) void departmentStore.deleteDepartment(dept.id);
   };
 
   const updateDept = (idx: number, field: keyof DeptConfig, value: string | number) => {
@@ -441,7 +451,7 @@ export default function SettingsPage() {
                     placeholder="HOD"
                     className="w-28 bg-transparent text-xs text-gray-400 outline-none border-b border-gray-800 focus:border-sky-500 disabled:opacity-50"
                   />
-                  {canEditDepartments && displayDepts.length > 0 && (
+                  {d.access?.delete && displayDepts.length > 0 && (
                     <button
                       onClick={() => removeDept(i)}
                       className="text-gray-600 hover:text-red-400 transition-colors"
@@ -452,7 +462,7 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-            {canEditDepartments && (
+            {canCreateDepartments && (
               <div className="flex gap-2">
                 <input
                   type="text"

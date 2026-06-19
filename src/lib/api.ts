@@ -52,5 +52,10 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify(body ?? {}),
     }),
+  put:    <T>(path: string, body?: object) =>
+    authed<T>(path, {
+      method: 'PUT',
+      body: JSON.stringify(body ?? {}),
+    }),
   delete: <T>(path: string) => authed<T>(path, { method: 'DELETE' }),
 };

@@ -16,15 +16,23 @@ import type { RoleId, SystemRole } from '../lib/supabase';
 import type { TeamMember, JoinRequest } from '../lib/db/team';
 import {
   ACTIONS,
+  DEPARTMENT_ACTIONS,
   MODULES,
   SYSTEM_ROLE_ORDER,
   archiveCustomRole,
   clonePermissions,
   createCustomRole,
+  deleteDepartmentMemberGrant,
+  deleteDepartmentRoleGrant,
+  fetchDepartmentAccess,
   fetchRbacRoles,
   hasPermission,
   isSystemRole,
+  saveDepartmentMemberGrant,
+  saveDepartmentRoleGrant,
   updateCustomRole,
+  type DepartmentAccess,
+  type DepartmentAccessResponse,
   type ExpandedPermissions,
   type RoleDefinition,
 } from '../lib/db/rbac';
@@ -83,7 +91,7 @@ export default function RBAC() {
   const [roles, setRoles] = useState<RoleDefinition[]>([]);
   const [loadingRoles, setLoadingRoles] = useState(true);
   const [selectedRoleId, setSelectedRoleId] = useState<RoleId>('founder');
-  const [tab, setTab] = useState<'members' | 'requests' | 'invites' | 'permissions'>('members');
+  const [tab, setTab] = useState<'members' | 'requests' | 'invites' | 'permissions' | 'departmentAccess'>('members');
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [approveRole, setApproveRole] = useState<Record<string, RoleId>>({});
   const [inviteEmail, setInviteEmail] = useState('');
@@ -92,6 +100,9 @@ export default function RBAC() {
   const [editingRoleId, setEditingRoleId] = useState<RoleId | 'new' | null>(null);
   const [draft, setDraft] = useState<RoleDraft | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
+  const [departmentAccess, setDepartmentAccess] = useState<DepartmentAccessResponse | null>(null);
+  const [loadingDepartmentAccess, setLoadingDepartmentAccess] = useState(false);
+  const [departmentAccessError, setDepartmentAccessError] = useState<string | null>(null);
 
   const loadRoles = useCallback(async () => {
     setLoadingRoles(true);
@@ -113,6 +124,25 @@ export default function RBAC() {
     if (!companyId) return;
     void loadRoles();
   }, [companyId, loadRoles]);
+
+  const loadDepartmentAccess = useCallback(async () => {
+    if (!companyId) return;
+    setLoadingDepartmentAccess(true);
+    setDepartmentAccessError(null);
+    try {
+      setDepartmentAccess(await fetchDepartmentAccess());
+    } catch (error) {
+      console.error('[rbac] fetch department access', error);
+      setDepartmentAccess(null);
+      setDepartmentAccessError(error instanceof Error ? error.message : 'Department access load failed.');
+    } finally {
+      setLoadingDepartmentAccess(false);
+    }
+  }, [companyId]);
+
+  useEffect(() => {
+    if (tab === 'departmentAccess') void loadDepartmentAccess();
+  }, [tab, loadDepartmentAccess]);
 
   const roleById = useMemo(() => new Map(roles.map(r => [r.id, r])), [roles]);
   const sortedRoles = useMemo(() => {
@@ -260,6 +290,53 @@ export default function RBAC() {
     }
   }
 
+  function emptyDepartmentAccess(): DepartmentAccess {
+    return { read: false, write: false, delete: false, manage: false };
+  }
+
+  async function toggleRoleDepartmentGrant(departmentId: string, roleId: RoleId, action: keyof DepartmentAccess) {
+    if (!departmentAccess) return;
+    const existing = departmentAccess.roleGrants.find(g => g.department_id === departmentId && g.role_id === roleId) ?? {
+      department_id: departmentId,
+      role_id: roleId,
+      ...emptyDepartmentAccess(),
+    };
+    const next = { read: existing.read, write: existing.write, delete: existing.delete, manage: existing.manage, [action]: !existing[action] };
+    const hasAny = DEPARTMENT_ACTIONS.some(a => next[a]);
+    setActionLoading(`${departmentId}:${roleId}:${action}`);
+    try {
+      if (hasAny) await saveDepartmentRoleGrant(departmentId, roleId, next);
+      else await deleteDepartmentRoleGrant(departmentId, roleId);
+      await loadDepartmentAccess();
+      await refetchMembers();
+    } catch (error) {
+      setDepartmentAccessError(error instanceof Error ? error.message : 'Grant update failed.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
+  async function toggleMemberDepartmentGrant(departmentId: string, memberId: string, action: keyof DepartmentAccess) {
+    if (!departmentAccess) return;
+    const existing = departmentAccess.memberGrants.find(g => g.department_id === departmentId && g.member_id === memberId) ?? {
+      department_id: departmentId,
+      member_id: memberId,
+      ...emptyDepartmentAccess(),
+    };
+    const next = { read: existing.read, write: existing.write, delete: existing.delete, manage: existing.manage, [action]: !existing[action] };
+    const hasAny = DEPARTMENT_ACTIONS.some(a => next[a]);
+    setActionLoading(`${departmentId}:${memberId}:${action}`);
+    try {
+      if (hasAny) await saveDepartmentMemberGrant(departmentId, memberId, next);
+      else await deleteDepartmentMemberGrant(departmentId, memberId);
+      await loadDepartmentAccess();
+    } catch (error) {
+      setDepartmentAccessError(error instanceof Error ? error.message : 'Grant update failed.');
+    } finally {
+      setActionLoading(null);
+    }
+  }
+
   const selectedMeta = roleMeta(selectedRole, selectedRoleId);
   const SelectedIcon = selectedMeta.icon;
 
@@ -291,6 +368,7 @@ export default function RBAC() {
           { key: 'requests',    label: 'Join Requests', count: pendingCount, alert: pendingCount > 0, show: canManage },
           { key: 'invites',     label: 'Invite',        count: null,                                  show: canManage },
           { key: 'permissions', label: 'Permissions',   count: null,                                  show: true },
+          { key: 'departmentAccess', label: 'Dept Access', count: null,                              show: can('team', 'read') },
         ] as const).filter(t => t.show).map(t => (
           <button
             key={t.key}
@@ -677,6 +755,134 @@ export default function RBAC() {
                 );
               })}
             </div>
+          </div>
+        </div>
+      )}
+
+      {tab === 'departmentAccess' && (
+        <div className="space-y-4">
+          <div className="glass-card p-5">
+            <div className="flex items-center justify-between gap-3 mb-4">
+              <h3 className="text-sm font-medium text-gray-200 flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-sky-400" />
+                Department Access
+              </h3>
+              <button
+                onClick={() => loadDepartmentAccess()}
+                className="text-xs px-3 py-1.5 rounded-lg bg-gray-800 text-gray-300 hover:bg-gray-700 transition-colors"
+              >
+                Refresh
+              </button>
+            </div>
+            {departmentAccessError && <p className="text-xs text-red-400 mb-3">{departmentAccessError}</p>}
+            {loadingDepartmentAccess ? (
+              <div className="p-8 text-center text-gray-500 text-sm">Loading department access...</div>
+            ) : !departmentAccess || departmentAccess.departments.length === 0 ? (
+              <div className="p-8 text-center text-gray-500 text-sm">No departments are accessible to manage.</div>
+            ) : (
+              <div className="space-y-5">
+                {departmentAccess.departments.map(department => {
+                  const canManageDepartment = canManage && department.access.manage;
+                  const roleGrant = (roleId: RoleId) =>
+                    departmentAccess.roleGrants.find(g => g.department_id === department.id && g.role_id === roleId);
+                  const memberGrant = (memberId: string) =>
+                    departmentAccess.memberGrants.find(g => g.department_id === department.id && g.member_id === memberId);
+
+                  return (
+                    <div key={department.id} className="rounded-xl border border-gray-800 bg-gray-950/40 p-4">
+                      <div className="flex items-center justify-between gap-3 mb-3">
+                        <div>
+                          <h4 className="text-sm font-medium text-white">{department.label}</h4>
+                          <p className="text-[10px] text-gray-500">
+                            Your access: {DEPARTMENT_ACTIONS.filter(a => department.access[a]).join(', ') || 'none'}
+                          </p>
+                        </div>
+                        {!canManageDepartment && (
+                          <span className="text-[10px] px-2 py-1 rounded-full bg-gray-800 text-gray-500">read-only</span>
+                        )}
+                      </div>
+
+                      <div className="overflow-x-auto mb-4">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-gray-800">
+                              <th className="text-left py-2 px-3 text-[10px] text-gray-500 uppercase tracking-wider">Role</th>
+                              {DEPARTMENT_ACTIONS.map(action => (
+                                <th key={action} className="text-center py-2 px-3 text-[10px] text-gray-500 uppercase tracking-wider capitalize">{action}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sortedRoles.map(r => {
+                              const grant = roleGrant(r.id);
+                              const locked = r.id === 'founder' || r.id === 'super_admin';
+                              return (
+                                <tr key={r.id} className="border-b border-gray-800/40">
+                                  <td className="py-2 px-3 text-xs text-gray-300">{r.name}{locked ? ' (implicit)' : ''}</td>
+                                  {DEPARTMENT_ACTIONS.map(action => {
+                                    const checked = locked || grant?.[action] === true;
+                                    const disabled = locked || !canManageDepartment || (!checked && !department.access[action]) || actionLoading === `${department.id}:${r.id}:${action}`;
+                                    return (
+                                      <td key={action} className="py-2 px-3 text-center">
+                                        <button
+                                          onClick={() => toggleRoleDepartmentGrant(department.id, r.id, action)}
+                                          disabled={disabled}
+                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold transition-colors ${checked ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-800 text-gray-600'} disabled:opacity-40`}
+                                        >
+                                          {checked ? '✓' : '×'}
+                                        </button>
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      <div className="overflow-x-auto">
+                        <table className="w-full">
+                          <thead>
+                            <tr className="border-b border-gray-800">
+                              <th className="text-left py-2 px-3 text-[10px] text-gray-500 uppercase tracking-wider">Member Exception</th>
+                              {DEPARTMENT_ACTIONS.map(action => (
+                                <th key={action} className="text-center py-2 px-3 text-[10px] text-gray-500 uppercase tracking-wider capitalize">{action}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {activeMembers.map(member => {
+                              const grant = memberGrant(member.id);
+                              return (
+                                <tr key={member.id} className="border-b border-gray-800/40">
+                                  <td className="py-2 px-3 text-xs text-gray-300">{memberName(member)}</td>
+                                  {DEPARTMENT_ACTIONS.map(action => {
+                                    const checked = grant?.[action] === true;
+                                    const disabled = !canManageDepartment || (!checked && !department.access[action]) || actionLoading === `${department.id}:${member.id}:${action}`;
+                                    return (
+                                      <td key={action} className="py-2 px-3 text-center">
+                                        <button
+                                          onClick={() => toggleMemberDepartmentGrant(department.id, member.id, action)}
+                                          disabled={disabled}
+                                          className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold transition-colors ${checked ? 'bg-emerald-500/15 text-emerald-400' : 'bg-gray-800 text-gray-600'} disabled:opacity-40`}
+                                        >
+                                          {checked ? '✓' : '×'}
+                                        </button>
+                                      </td>
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}

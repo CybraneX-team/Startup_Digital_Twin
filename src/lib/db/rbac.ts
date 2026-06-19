@@ -11,6 +11,8 @@ export type SystemRole =
 export type RoleId = string;
 export type PermissionSet = Record<Action, boolean>;
 export type ExpandedPermissions = Record<Module, PermissionSet>;
+export type DepartmentAction = 'read' | 'write' | 'delete' | 'manage';
+export type DepartmentAccess = Record<DepartmentAction, boolean>;
 
 export interface RoleDefinition {
   id: RoleId;
@@ -22,6 +24,28 @@ export interface RoleDefinition {
   baseRoleId: RoleId | null;
   permissions: ExpandedPermissions;
   assignable: boolean;
+}
+
+export interface DepartmentAccessDepartment {
+  id: string;
+  label: string;
+  access: DepartmentAccess;
+}
+
+export interface DepartmentRoleGrant extends DepartmentAccess {
+  department_id: string;
+  role_id: RoleId;
+}
+
+export interface DepartmentMemberGrant extends DepartmentAccess {
+  department_id: string;
+  member_id: string;
+}
+
+export interface DepartmentAccessResponse {
+  departments: DepartmentAccessDepartment[];
+  roleGrants: DepartmentRoleGrant[];
+  memberGrants: DepartmentMemberGrant[];
 }
 
 export const MODULES: Module[] = [
@@ -36,6 +60,7 @@ export const MODULES: Module[] = [
 ];
 
 export const ACTIONS: Action[] = ['read', 'write', 'delete'];
+export const DEPARTMENT_ACTIONS: DepartmentAction[] = ['read', 'write', 'delete', 'manage'];
 
 export const SYSTEM_ROLE_ORDER: SystemRole[] = [
   'super_admin',
@@ -107,4 +132,24 @@ export async function updateCustomRole(
 export async function archiveCustomRole(roleId: RoleId): Promise<boolean> {
   await api.post(`/api/rbac/roles/${roleId}/archive`, {});
   return true;
+}
+
+export async function fetchDepartmentAccess(): Promise<DepartmentAccessResponse> {
+  return api.get<DepartmentAccessResponse>('/api/rbac/department-access');
+}
+
+export async function saveDepartmentRoleGrant(departmentId: string, roleId: RoleId, grant: DepartmentAccess): Promise<void> {
+  await api.put(`/api/rbac/departments/${departmentId}/role-grants/${roleId}`, grant);
+}
+
+export async function deleteDepartmentRoleGrant(departmentId: string, roleId: RoleId): Promise<void> {
+  await api.delete(`/api/rbac/departments/${departmentId}/role-grants/${roleId}`);
+}
+
+export async function saveDepartmentMemberGrant(departmentId: string, memberId: string, grant: DepartmentAccess): Promise<void> {
+  await api.put(`/api/rbac/departments/${departmentId}/member-grants/${memberId}`, grant);
+}
+
+export async function deleteDepartmentMemberGrant(departmentId: string, memberId: string): Promise<void> {
+  await api.delete(`/api/rbac/departments/${departmentId}/member-grants/${memberId}`);
 }

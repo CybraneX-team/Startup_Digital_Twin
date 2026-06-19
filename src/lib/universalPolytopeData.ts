@@ -57,6 +57,12 @@ export interface UExternalNode {
     risk: number;
   };
   internalNodes: UInternalNode[];
+  access?: {
+    read: boolean;
+    write: boolean;
+    delete: boolean;
+    manage: boolean;
+  };
   /** Transient flag — draft nodes are rendered in-scene but not persisted */
   isDraft?: boolean;
 }

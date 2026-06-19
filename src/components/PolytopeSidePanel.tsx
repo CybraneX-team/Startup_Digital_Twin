@@ -30,6 +30,7 @@ export interface PolytopeSidePanelProps {
   onEditMember?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
   onDeleteMemberClick?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
   canEdit?: boolean;
+  canCreateDepartment?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -99,6 +100,7 @@ export function PolytopeSidePanel({
   onEditDepartment,
   onDeleteDepartmentClick,
   canEdit = true,
+  canCreateDepartment = canEdit,
 }: PolytopeSidePanelProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'departments' | 'information'>('departments');
@@ -106,6 +108,8 @@ export function PolytopeSidePanel({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const activeDepts = departments.filter(d => d.domain !== 'inactive');
+  const canWriteDept = (dept: UExternalNode) => canEdit && dept.access?.write === true;
+  const canDeleteDept = (dept: UExternalNode) => canEdit && dept.access?.delete === true;
   const selectedDept = activeDepts.find(d => d.id === selectedDeptId) ?? null;
   // showingNodes is true when: a dept is explicitly selected OR the user has drilled into sub-nodes
   const showingNodes = (selectedDeptId !== null && selectedDept !== null) || selectedInternalPath.length > 0;
@@ -524,35 +528,39 @@ export function PolytopeSidePanel({
 
                     {/* Action buttons (pencil, trash) on hover / Chevron otherwise */}
                     <div className="flex items-center gap-0.5 shrink-0">
-                      {canEdit && (
+                      {(canWriteDept(dept) || canDeleteDept(dept)) && (
                       <div className="hidden group-hover/row:flex items-center gap-0.5">
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onEditDepartment?.(dept);
-                          }}
-                          className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
-                          title="Edit"
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </button>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (onDeleteDepartmentClick) {
-                              onDeleteDepartmentClick(dept);
-                            } else if (window.confirm(`Delete department "${dept.label}"?`)) {
-                              if (selectedDeptId === dept.id) {
-                                onDeptSelect(null);
+                        {canWriteDept(dept) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onEditDepartment?.(dept);
+                            }}
+                            className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+                            title="Edit"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                        )}
+                        {canDeleteDept(dept) && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (onDeleteDepartmentClick) {
+                                onDeleteDepartmentClick(dept);
+                              } else if (window.confirm(`Delete department "${dept.label}"?`)) {
+                                if (selectedDeptId === dept.id) {
+                                  onDeptSelect(null);
+                                }
+                                onDeleteDepartment?.(dept.id);
                               }
-                              onDeleteDepartment?.(dept.id);
-                            }
-                          }}
-                          className="p-1 text-gray-400 hover:text-rose-400 hover:bg-white/10 rounded transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 className="w-3 h-3" />
-                        </button>
+                            }}
+                            className="p-1 text-gray-400 hover:text-rose-400 hover:bg-white/10 rounded transition-colors"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
                       )}
                       <ChevronRight
@@ -583,7 +591,7 @@ export function PolytopeSidePanel({
         </div>
 
         {/* ── Add Department button — only at the top level; per-dept content is data-driven ── */}
-        {canEdit && activeTab === 'departments' && !showingNodes && (
+        {canCreateDepartment && activeTab === 'departments' && !showingNodes && (
         <div
           className="px-3 pb-3 pt-2 shrink-0"
           style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}

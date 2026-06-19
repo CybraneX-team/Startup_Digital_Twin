@@ -108,7 +108,7 @@ interface PolytopeStoreState {
 }
 
 const useGlobalPolytopeStore = create<PolytopeStoreState>((set, get) => ({
-  departments: DEFAULT_NODES,
+  departments: [],
   loading: false,
   loaded: false,
   error: null,
@@ -118,21 +118,11 @@ const useGlobalPolytopeStore = create<PolytopeStoreState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const response = await api.get<{ departments: UExternalNode[] }>('/api/departments');
-      let next = response.departments ?? [];
-
-      if (next.length === 0) {
-        const localDrafts = getLocalDepartmentDrafts();
-        const importResponse = await api.post<{ departments: UExternalNode[] }>('/api/departments/import', {
-          departments: localDrafts ?? [],
-        });
-        next = importResponse.departments ?? [];
-      }
-
-      set({ departments: next.length ? next : DEFAULT_NODES, loading: false, loaded: true });
+      set({ departments: response.departments ?? [], loading: false, loaded: true });
     } catch (err) {
       console.error('[departments] load failed', err);
       set({
-        departments: get().departments.length ? get().departments : DEFAULT_NODES,
+        departments: get().loaded ? get().departments : [],
         loading: false,
         loaded: true,
         error: err instanceof Error ? err.message : 'Failed to load departments',
@@ -245,8 +235,9 @@ const useGlobalPolytopeStore = create<PolytopeStoreState>((set, get) => ({
   },
 
   resetToDefaults: async () => {
-    const response = await api.post<{ departments: UExternalNode[] }>('/api/departments/import', { departments: [] });
-    set({ departments: response.departments.length ? response.departments : DEFAULT_NODES });
+    const localDrafts = getLocalDepartmentDrafts();
+    const response = await api.post<{ departments: UExternalNode[] }>('/api/departments/import', { departments: localDrafts ?? [] });
+    set({ departments: response.departments ?? [] });
   },
 }));
 
