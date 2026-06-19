@@ -13,7 +13,8 @@ export const LABEL_UNITS = new Set(['%', 'people', 'months', '/mo', 'count', 'x'
 
 export function getCurrencySymbol(currencyCode: string | null | undefined): string {
   if (!currencyCode) return '$';
-  return CURRENCY_SYMBOLS[currencyCode] ?? currencyCode;
+  const normalized = currencyCode.trim().toUpperCase();
+  return CURRENCY_SYMBOLS[normalized] ?? normalized;
 }
 
 /** True if the unit string should be displayed as a prefix (before the number). */
