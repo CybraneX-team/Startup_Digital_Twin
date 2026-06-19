@@ -203,6 +203,9 @@ export default function Universe3DPage() {
 
   // ── Polytope sidebar state (shown when insideBH) ──────────────────────────
   const polytopeStore = usePolytopeStore('twin');
+  useEffect(() => {
+    void polytopeStore.loadDepartments();
+  }, [polytopeStore.loadDepartments]);
   const [polytopeDeptId, setPolytopeDeptId] = useState<string | null>(null);
   const [polytopeInternalPath, setPolytopeInternalPath] = useState<string[]>([]);
   const [polytopeManagerOpen, setPolytopeManagerOpen] = useState(false);
@@ -1160,7 +1163,7 @@ export default function Universe3DPage() {
             setPolytopeDeptId(null);
             setPolytopeRequestSelectDeptId(null);
           }
-          polytopeStore.deleteDepartment(id);
+          void polytopeStore.deleteDepartment(id);
           controllerRef.current?.syncCompanyDepartments(polytopeStore.departments);
         }}
         onAddNode={polytopeStore.addNode}
@@ -1185,8 +1188,8 @@ export default function Universe3DPage() {
               setPolytopeDraftResetTrigger(c => c + 1);
             }
           }}
-          onCreated={(data) => {
-            const saved = polytopeStore.addDepartment(data as Omit<UExternalNode, 'id' | 'internalNodes' | 'isDraft'>);
+          onCreated={async (data) => {
+            const saved = await polytopeStore.addDepartment(data as Omit<UExternalNode, 'id' | 'internalNodes' | 'isDraft'>);
             setPolytopeDraftDept(null);
             setPolytopeDraftResetTrigger(c => c + 1);
             setPolytopeDeptId(saved.id);
@@ -1210,10 +1213,10 @@ export default function Universe3DPage() {
                 setPolytopeDraftInternalNode(null);
               }
             }}
-            onCreated={(data) => {
+            onCreated={async (data) => {
               const deptId = polytopeDraftInternalNode.deptId;
               const path = polytopeInternalPath;
-              polytopeStore.addNode(deptId, data as Omit<UInternalNode, 'id' | 'children'>, path);
+              await polytopeStore.addNode(deptId, data as Omit<UInternalNode, 'id' | 'children'>, path);
               setPolytopeDraftInternalNode(null);
               setPolytopeDeptId(deptId);
             }}
@@ -1253,7 +1256,7 @@ export default function Universe3DPage() {
               const targetNode = findNode(deptToUpdate.internalNodes, nodeId);
               if (targetNode && targetNode.type === 'team') {
                 const newMembers = [...(targetNode.members || []), data];
-                polytopeStore.updateNode(deptId, nodeId, { members: newMembers, memberCount: newMembers.length });
+                void polytopeStore.updateNode(deptId, nodeId, { members: newMembers, memberCount: newMembers.length });
               }
               setPolytopeDraftMember(null);
               setPolytopeDeptId(deptId);

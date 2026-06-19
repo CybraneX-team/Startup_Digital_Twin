@@ -338,6 +338,7 @@ export default function Onboarding() {
       competitors: form.competitors
         ? form.competitors.split(',').map(s => s.trim()).filter(Boolean)
         : undefined,
+      departments: selectedDepartments,
       profile: {
         first_name: form.first_name.trim() || undefined,
         last_name: form.last_name.trim() || undefined,

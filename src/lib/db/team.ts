@@ -14,6 +14,7 @@ export interface TeamMember {
   user_id: string;
   company_id: string;
   role: RoleId;
+  department_id: string | null;
   role_name: string;
   is_system_role: boolean;
   is_protected_role: boolean;
@@ -254,6 +255,19 @@ export async function changeMemberRole(
     return true;
   } catch (error) {
     console.error('[team] changeMemberRole', error);
+    return false;
+  }
+}
+
+export async function changeMemberDepartment(
+  memberId: string,
+  departmentId: string | null,
+): Promise<boolean> {
+  try {
+    await api.patch(`/api/team/members/${memberId}/department`, { departmentId });
+    return true;
+  } catch (error) {
+    console.error('[team] changeMemberDepartment', error);
     return false;
   }
 }

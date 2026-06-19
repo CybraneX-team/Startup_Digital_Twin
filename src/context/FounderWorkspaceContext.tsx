@@ -1,4 +1,7 @@
-import { createContext, useContext, useState, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useAuth } from '../lib/auth';
+import { usePolytopeStore } from '../lib/usePolytopeStore';
+import { useTeamMembers } from '../lib/db/team';
 
 export interface OKRGoal {
   id: string;
@@ -351,6 +354,14 @@ Happy coding!
 ];
 
 export function FounderWorkspaceProvider({ children }: { children: ReactNode }) {
+  const { profile } = useAuth();
+  const polytopeStore = usePolytopeStore('bdt');
+  const { members } = useTeamMembers(profile?.company_id);
+
+  useEffect(() => {
+    if (profile?.company_id) void polytopeStore.loadDepartments();
+  }, [profile?.company_id, polytopeStore.loadDepartments]);
+
   // Multi-workspace state initialization
   const [workspaces, setWorkspaces] = useState<WorkspaceState[]>(() => [
     {
@@ -406,7 +417,25 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
   const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId) || workspaces[0];
 
   const goals = activeWorkspace.goals;
-  const departments = activeWorkspace.departments;
+  const canonicalDepartments = useMemo<DepartmentFTE[]>(() => {
+    if (!polytopeStore.departments.length || !profile?.company_id) return [];
+    return polytopeStore.departments
+      .filter(d => d.domain !== 'inactive' && !d.isDraft)
+      .map(d => {
+        const assignedMembers = members.filter(m => m.department_id === d.id && m.status === 'active');
+        const roles = assignedMembers
+          .map(m => m.title || m.role_name || m.role)
+          .filter(Boolean);
+        return {
+          id: d.id,
+          name: d.label,
+          fte: assignedMembers.length,
+          roles: roles.length ? roles : ['No assigned members'],
+        };
+      });
+  }, [members, polytopeStore.departments, profile?.company_id]);
+
+  const departments = canonicalDepartments.length ? canonicalDepartments : activeWorkspace.departments;
   const risks = activeWorkspace.risks;
   const gtmChannels = activeWorkspace.gtmChannels;
   const tasks = activeWorkspace.tasks;
@@ -531,18 +560,12 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
 
   const hireHeadcount = (deptId: string, role: string) => {
     updateActiveWorkspace(w => {
-      const updatedDeps = w.departments.map(d => d.id === deptId ? {
-        ...d,
-        fte: d.fte + 1,
-        roles: [...d.roles, role],
-      } : d);
-
       const updatedTasks = [
-        { id: `t_${Date.now()}`, label: `Onboard new hire for ${role}`, done: false },
+        { id: `t_${Date.now()}`, label: `Invite or assign ${role} to ${departments.find(d => d.id === deptId)?.name ?? 'a department'}`, done: false },
         ...w.tasks,
       ];
 
-      return { departments: updatedDeps, tasks: updatedTasks };
+      return { tasks: updatedTasks };
     });
   };
 

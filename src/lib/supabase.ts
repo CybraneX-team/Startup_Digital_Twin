@@ -100,6 +100,7 @@ export interface DbCompanyMember {
   company_id: string;
   user_id: string;
   role: RoleId;
+  department_id: string | null;
   invited_by: string | null;
   joined_at: string;
 }

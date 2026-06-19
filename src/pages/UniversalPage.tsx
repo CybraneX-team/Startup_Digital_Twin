@@ -58,6 +58,10 @@ export default function UniversalPage() {
   const [managerOpen, setManagerOpen] = useState(false);
   const [managerView, setManagerView] = useState<any>({ type: 'home' });
 
+  useEffect(() => {
+    void store.loadDepartments();
+  }, [store.loadDepartments]);
+
   const handleEditDepartment = (dept: UExternalNode) => {
     if (!canEditTwin) return;
     setManagerView({ type: 'editDept', dept });
@@ -177,8 +181,8 @@ export default function UniversalPage() {
     }
   };
 
-  const handleDraftDeptCreated = (data: Omit<UExternalNode, 'id' | 'internalNodes' | 'isDraft'>) => {
-    const saved = store.addDepartment(data);
+  const handleDraftDeptCreated = async (data: Omit<UExternalNode, 'id' | 'internalNodes' | 'isDraft'>) => {
+    const saved = await store.addDepartment(data);
     setDraftDept(null);
     setPolytopeResetTrigger(c => c + 1);
     // Select the newly created real dept
@@ -215,10 +219,10 @@ export default function UniversalPage() {
     }
   };
 
-  const handleDraftNodeCreated = (data: Omit<UInternalNode, 'id' | 'children'>) => {
+  const handleDraftNodeCreated = async (data: Omit<UInternalNode, 'id' | 'children'>) => {
     if (!draftInternalNode) return;
     const deptId = draftInternalNode.deptId;
-    store.addNode(deptId, data, internalPath);
+    await store.addNode(deptId, data, internalPath);
     setDraftInternalNode(null);
     setSelectedDeptId(deptId);
   };
@@ -267,7 +271,7 @@ export default function UniversalPage() {
     const targetNode = findNode(dept.internalNodes, nodeId);
     if (targetNode && targetNode.type === 'team') {
       const newMembers = [...(targetNode.members || []), data];
-      store.updateNode(deptId, nodeId, { members: newMembers, memberCount: newMembers.length });
+      void store.updateNode(deptId, nodeId, { members: newMembers, memberCount: newMembers.length });
     }
     setDraftMember(null);
     setSelectedDeptId(deptId);
@@ -451,7 +455,7 @@ export default function UniversalPage() {
             setSelectedDeptId(null);
             setRequestSelectDeptId(null);
           }
-          store.deleteDepartment(id);
+          void store.deleteDepartment(id);
         }}
         onAddNode={store.addNode}
         onUpdateNode={store.updateNode}

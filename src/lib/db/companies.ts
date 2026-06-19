@@ -51,6 +51,7 @@ export interface CreateCompanyInput {
   problem_solved?: string;
   usp?: string;
   competitors?: string[];
+  departments?: string[];
   profile?: {
     first_name?: string;
     last_name?: string;

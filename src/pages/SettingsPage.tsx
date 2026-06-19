@@ -6,6 +6,7 @@ import { useCompany } from '../lib/db/companies';
 import { INDUSTRIES } from '../db/industries';
 import type { CompanyStage } from '../lib/supabase';
 import { api } from '../lib/api';
+import { usePolytopeStore } from '../lib/usePolytopeStore';
 
 const STAGES: CompanyStage[] = [
   'Idea', 'Pre-seed', 'Seed', 'Series A', 'Series B',
@@ -27,6 +28,8 @@ export default function SettingsPage() {
   const { user, profile, refreshProfile, canWrite, role } = useAuth();
   const { company, loading: companyLoading } = useCompany(profile?.company_id);
   const canEditSettings = canWrite('settings');
+  const canEditDepartments = canWrite('twin');
+  const departmentStore = usePolytopeStore('bdt');
 
   // Company config — populated from real data
   const [config, setConfig] = useState({
@@ -59,6 +62,18 @@ export default function SettingsPage() {
   const [newDept, setNewDept] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (profile?.company_id) void departmentStore.loadDepartments();
+  }, [profile?.company_id, departmentStore.loadDepartments]);
+
+  const displayDepts: DeptConfig[] = departmentStore.departments
+    .filter(d => d.domain !== 'inactive' && !d.isDraft)
+    .map(d => ({
+      name: d.label,
+      size: (d as any).memberCount ?? 0,
+      hod: d.cluster || 'Unassigned',
+    }));
 
   // Load real data from company + profile
   useEffect(() => {
@@ -131,12 +146,19 @@ export default function SettingsPage() {
 
   const addDept = () => {
     if (!newDept.trim()) return;
-    setDepts((prev) => [...prev, { name: newDept.trim(), size: 1, hod: 'Unassigned' }]);
+    void departmentStore.addDepartment({
+      label: newDept.trim(),
+      domain: 'build',
+      cluster: 'Build',
+      score: 80,
+      metrics: { performance: 80, efficiency: 80, capacity: 80, alignment: 80, risk: 20 },
+    });
     setNewDept('');
   };
 
   const removeDept = (idx: number) => {
-    setDepts((prev) => prev.filter((_, i) => i !== idx));
+    const dept = departmentStore.departments.filter(d => d.domain !== 'inactive' && !d.isDraft)[idx];
+    if (dept) void departmentStore.deleteDepartment(dept.id);
   };
 
   const updateDept = (idx: number, field: keyof DeptConfig, value: string | number) => {
@@ -389,7 +411,7 @@ export default function SettingsPage() {
               <Layers className="w-4 h-4" /> Departments
             </h3>
             <div className="space-y-2 mb-4">
-              {depts.map((d, i) => (
+              {(displayDepts.length ? displayDepts : depts).map((d, i) => (
                 <div
                   key={i}
                   className="flex items-center gap-3 py-2.5 px-3 rounded-lg bg-gray-900/50 border border-gray-800/50"
@@ -398,7 +420,7 @@ export default function SettingsPage() {
                     type="text"
                     value={d.name}
                     onChange={(e) => updateDept(i, 'name', e.target.value)}
-                    disabled={!canEditSettings}
+                    disabled
                     className="flex-1 bg-transparent text-sm text-white outline-none disabled:opacity-50"
                   />
                   <div className="flex items-center gap-1">
@@ -406,7 +428,7 @@ export default function SettingsPage() {
                       type="number"
                       value={d.size}
                       onChange={(e) => updateDept(i, 'size', Number(e.target.value))}
-                      disabled={!canEditSettings}
+                      disabled
                       className="w-12 bg-gray-800 rounded px-1.5 py-0.5 text-xs text-gray-300 text-center outline-none border border-gray-700 disabled:opacity-50"
                     />
                     <span className="text-[10px] text-gray-500">ppl</span>
@@ -415,11 +437,11 @@ export default function SettingsPage() {
                     type="text"
                     value={d.hod}
                     onChange={(e) => updateDept(i, 'hod', e.target.value)}
-                    disabled={!canEditSettings}
+                    disabled
                     placeholder="HOD"
                     className="w-28 bg-transparent text-xs text-gray-400 outline-none border-b border-gray-800 focus:border-sky-500 disabled:opacity-50"
                   />
-                  {canEditSettings && (
+                  {canEditDepartments && displayDepts.length > 0 && (
                     <button
                       onClick={() => removeDept(i)}
                       className="text-gray-600 hover:text-red-400 transition-colors"
@@ -430,7 +452,7 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-            {canEditSettings && (
+            {canEditDepartments && (
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -449,7 +471,7 @@ export default function SettingsPage() {
               </div>
             )}
             <p className="text-[10px] text-gray-600 mt-2">
-              Total team: {depts.reduce((s, d) => s + d.size, 0)} across {depts.length} departments
+              Total team: {(displayDepts.length ? displayDepts : depts).reduce((s, d) => s + d.size, 0)} across {(displayDepts.length ? displayDepts : depts).length} departments
             </p>
           </div>
 
