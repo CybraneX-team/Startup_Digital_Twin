@@ -1,22 +1,22 @@
 import { create } from 'zustand';
 import { U_NODES as TWIN_DEFAULT_NODES } from './universalPolytopeData';
-import { U_NODES as BDT_SEED_NODES } from './bdtPolytopeData';
 import type { UExternalNode, UInternalNode, UDomain } from './bdtPolytopeData';
-import { U_DOMAIN_COLOR } from './bdtPolytopeData';
+import { U_DOMAIN_COLOR, isActionLeafNode } from './bdtPolytopeData';
 import { api } from './api';
 
 /** Twin (/3d company polytope) and BDT (/universal) use separate graphs and caches. */
 export type PolytopeStoreScope = 'twin' | 'bdt';
 
 const TWIN_CACHE_KEY = 'polytope_departments_twin_v2';
-const BDT_CACHE_KEY = 'polytope_departments_bdt_v2';
+const BDT_CACHE_KEY = 'polytope_departments_bdt_v3';
 const LEGACY_STORAGE_KEY = 'polytope_departments_v1';
 
 export type { UExternalNode, UInternalNode, UDomain };
-export { U_DOMAIN_COLOR };
+export { U_DOMAIN_COLOR, isActionLeafNode };
 
 const TWIN_DEFAULT_DEPARTMENTS = TWIN_DEFAULT_NODES.filter(n => n.domain !== 'inactive');
-const BDT_DEFAULT_DEPARTMENTS = BDT_SEED_NODES.filter(n => n.domain !== 'inactive');
+/** Rich Teams / Projects / Processes trees (pre–injectLeaves BDT layout). */
+const BDT_DEFAULT_DEPARTMENTS = TWIN_DEFAULT_DEPARTMENTS;
 
 function persistCache(storageKey: string, departments: UExternalNode[]) {
   try {
@@ -121,6 +121,10 @@ function findSeedDepartment(dept: UExternalNode, seedActive: UExternalNode[]): U
   );
 }
 
+function countInternalTree(nodes: UInternalNode[]): number {
+  return nodes.reduce((sum, n) => sum + 1 + countInternalTree(n.children ?? []), 0);
+}
+
 function enrichDepartmentsFromSeed(
   departments: UExternalNode[],
   seed: UExternalNode[],
@@ -130,8 +134,8 @@ function enrichDepartmentsFromSeed(
   return departments.map(dept => {
     const match = findSeedDepartment(dept, seedActive);
     if (!match?.internalNodes?.length) return dept;
-    const apiCount = dept.internalNodes?.length ?? 0;
-    const seedCount = match.internalNodes.length;
+    const apiCount = countInternalTree(dept.internalNodes ?? []);
+    const seedCount = countInternalTree(match.internalNodes);
     if (apiCount === 0 || seedCount > apiCount) {
       return { ...dept, internalNodes: match.internalNodes };
     }

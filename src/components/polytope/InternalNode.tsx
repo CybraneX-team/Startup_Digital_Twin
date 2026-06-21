@@ -4,6 +4,7 @@ import { Text, Billboard, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { gsap } from 'gsap';
 import type { UInternalNode } from '../../lib/universalPolytopeData';
+import { isActionLeafNode } from '../../lib/universalPolytopeData';
 import { PlasmaSphere } from '../PolytopeShared';
 import { useDragWorkspaceStore } from '../../lib/useDragWorkspaceStore';
 
@@ -343,7 +344,7 @@ export function InternalNode({
 
   const handlePointerDown = (e: any) => {
     e.stopPropagation();
-    if (isDraft) return;
+    if (isDraft || !isActionLeafNode(node)) return;
     startPosClient.current = { x: e.clientX, y: e.clientY };
     dragTimer.current = setTimeout(() => {
       startDrag(node, color, e.clientX, e.clientY);

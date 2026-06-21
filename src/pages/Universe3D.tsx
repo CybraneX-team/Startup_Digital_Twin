@@ -603,6 +603,61 @@ export default function Universe3DPage() {
 
   useEffect(() => () => clearPlanetRestoreTimers(), [clearPlanetRestoreTimers]);
 
+  // Allow planet-state hydration when returning to /3d from another route (e.g. BDT).
+  useEffect(() => {
+    if (pathname !== '/3d') {
+      planetSessionRestoredRef.current = false;
+    }
+  }, [pathname]);
+
+  // BDT zoom-out → open this company's planet root map on 3D Twin (not back to BDT).
+  useEffect(() => {
+    const payload = (state as { enterPlanetRootsFromBdt?: {
+      companyId: string;
+      companyName: string;
+      role: UserPlanetRole;
+      industryColor?: string;
+    } })?.enterPlanetRootsFromBdt;
+    if (pathname !== '/3d' || !payload) return;
+
+    clearPlanetRestoreTimers();
+    pendingPlanetRestoreRef.current = null;
+    isPlanetRestoringRef.current = false;
+    setSessionRestoreActive(false);
+    setRestoreInternalPath([]);
+
+    setInsideBH(false);
+    setInsideCompanyInterior(false);
+    setInsideRootPolytope(false);
+    setRootPolytopeDeptId(null);
+    setRootPolytopeInternalPath([]);
+    setRootPolytopeBackStep(0);
+    setActionWorkspace(null);
+
+    const ctx = getPlanetRootsForCompany(payload.companyId, payload.companyName, payload.role);
+    setPlanetContext(ctx);
+    setInsidePlanetRoots(true);
+    if (payload.industryColor) {
+      setPlanetIndustryColor(payload.industryColor);
+    }
+
+    savePlanetState({
+      companyId: payload.companyId,
+      companyName: payload.companyName,
+      role: payload.role,
+      insideRootPolytope: false,
+      rootPolytopeDeptId: null,
+      rootPolytopeInternalPath: [],
+      industryColor: payload.industryColor,
+    });
+
+    sessionStorage.setItem('company_entered_in_3d', '1');
+    window.dispatchEvent(new Event('company_entered_in_3d'));
+    planetSessionRestoredRef.current = true;
+
+    navigate('/3d', { replace: true, state: {} });
+  }, [pathname, state, navigate, clearPlanetRestoreTimers]);
+
   const handleExitPlanetRoots = useCallback(() => {
     clearPlanetRestoreTimers();
     pendingPlanetRestoreRef.current = null;

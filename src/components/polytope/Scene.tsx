@@ -4,7 +4,7 @@ import { OrbitControls, Stars, Sparkles, Billboard, Text } from '@react-three/dr
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three-stdlib';
 import { gsap } from 'gsap';
-import { U_DOMAIN_COLOR } from '../../lib/universalPolytopeData';
+import { U_DOMAIN_COLOR, isActionLeafNode } from '../../lib/universalPolytopeData';
 import type { UExternalNode, UInternalNode } from '../../lib/universalPolytopeData';
 import { OrgCore, PlasmaSphere } from '../PolytopeShared';
 import { symmetricDirs, seededShuffle } from './geometry';
@@ -23,6 +23,10 @@ import {
 import type { CoreWorkspacePhase } from '../../lib/coreWorkspaceTransition';
 import { CORE_DIVE_DURATION_S, CORE_SURFACE_DURATION_S } from '../../lib/coreWorkspaceTransition';
 import { useDragWorkspaceStore } from '../../lib/useDragWorkspaceStore';
+import {
+  CORE_AI_MAX_CAMERA_DISTANCE,
+  POLYTOPE_EXIT_SCROLL_DELTA,
+} from './constants';
 
 const DEPT_ZOOM_DISTANCE = 10;
 
@@ -123,7 +127,7 @@ function findChildNodePosition(
 }
 
 function isLeafInternalNode(node: UInternalNode | null | undefined): boolean {
-  return !!node && (!node.children || node.children.length === 0);
+  return isActionLeafNode(node);
 }
 
 // ── Scene ────────────────────────────────────────────────────────────────────
@@ -195,45 +199,40 @@ export function Scene({
   const orbitRef = useRef<any>(null);
   const { camera, gl } = useThree();
 
-  // ── Exit intent (universe BH overlay only — not used for BDT workspace) ───
+  // ── Exit intent (zoom out from overview → parent view e.g. planet roots) ──
   const onExitIntentRef = useRef(onExitIntent);
   onExitIntentRef.current = onExitIntent;
-  const scrollAccumulatorRef = useRef(0);
+  const exitScrollDeltaRef = useRef(0);
+  const selectedInternalPathRef = useRef<string[]>([]);
 
   useEffect(() => {
-    scrollAccumulatorRef.current = 0;
+    exitScrollDeltaRef.current = 0;
   }, [selectedId]);
 
   useEffect(() => {
     if (!onExitIntentRef.current) return;
     const handleWheel = (e: WheelEvent) => {
       if (e.deltaY <= 0) {
-        scrollAccumulatorRef.current = 0;
+        exitScrollDeltaRef.current = 0;
         return;
       }
-      if (selectedId !== null) return; // Only allow exit from overview
+      if (selectedId !== null) return;
+      if (selectedInternalPathRef.current.length > 0) return;
 
-      if (orbitRef.current) {
-        const dist = camera.position.distanceTo(orbitRef.current.target);
-        const maxDist = orbitRef.current.maxDistance || 65;
-        if (dist >= maxDist - 2.5) {
-          scrollAccumulatorRef.current += e.deltaY;
-          if (scrollAccumulatorRef.current >= 300) {
-            onExitIntentRef.current?.();
-          }
-        } else {
-          scrollAccumulatorRef.current = 0;
-        }
-      } else {
-        const currentDist = camera.position.length();
-        if (currentDist >= INITIAL_CAMERA_DISTANCE - 2.5) {
-          scrollAccumulatorRef.current += e.deltaY;
-          if (scrollAccumulatorRef.current >= 300) {
-            onExitIntentRef.current?.();
-          }
-        } else {
-          scrollAccumulatorRef.current = 0;
-        }
+      const dist = orbitRef.current
+        ? camera.position.distanceTo(orbitRef.current.target)
+        : camera.position.length();
+
+      // Count zoom-out only once camera is at or past the default overview distance
+      if (dist < INITIAL_CAMERA_DISTANCE - 2) {
+        exitScrollDeltaRef.current = 0;
+        return;
+      }
+
+      exitScrollDeltaRef.current += e.deltaY;
+      if (exitScrollDeltaRef.current >= POLYTOPE_EXIT_SCROLL_DELTA) {
+        exitScrollDeltaRef.current = 0;
+        onExitIntentRef.current?.();
       }
     };
     gl.domElement.addEventListener('wheel', handleWheel, { passive: true });
@@ -404,12 +403,6 @@ export function Scene({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coreWorkspacePhase]);
 
-  const handleCoreClick = () => {
-    if (!enableCoreWorkspace || coreWorkspacePhase !== 'idle') return;
-    if (selectedId || isDeepDrillDown || draftDept) return;
-    onCoreClickIntent?.();
-  };
-
   // ── Camera history for sidebar back-step navigation ───────────────────────
   const cameraHistoryRef = useRef<Array<{
     path: string[];
@@ -419,7 +412,24 @@ export function Scene({
   const prevBackStepRef = useRef(0);
 
   const [selectedInternalPath, setSelectedInternalPath] = useState<string[]>([]);
+  selectedInternalPathRef.current = selectedInternalPath;
   const isDeepDrillDown = selectedInternalPath.length > 0;
+
+  const [isCoreZoomedIn, setIsCoreZoomedIn] = useState(false);
+
+  useFrame(() => {
+    if (!orbitRef.current) return;
+    const dist = camera.position.distanceTo(orbitRef.current.target);
+    const zoomedIn = dist <= CORE_AI_MAX_CAMERA_DISTANCE;
+    setIsCoreZoomedIn(prev => (prev !== zoomedIn ? zoomedIn : prev));
+  });
+
+  const handleCoreClick = () => {
+    if (!enableCoreWorkspace || coreWorkspacePhase !== 'idle') return;
+    if (selectedId || isDeepDrillDown || draftDept) return;
+    if (!isCoreZoomedIn) return;
+    onCoreClickIntent?.();
+  };
 
   const prevPathPropsRef = useRef<string[]>([]);
   useEffect(() => {
@@ -754,7 +764,7 @@ export function Scene({
     const parentNode = findNodeAtPath(dept.internalNodes, validatedPath);
     if (!targetPos) return;
     const dir = targetPos.clone().normalize();
-    const isLeaf = parentNode && ['metric', 'signal', 'decision', 'action'].includes(parentNode.type);
+        const isLeaf = isActionLeafNode(parentNode);
     const shift = isLeaf ? 2.5 : 0.0;
     const zoom = isLeaf ? 4.0 : deptZoomDistance(dept.internalNodes.length, DEPT_ZOOM_DISTANCE);
     const { camPos, orbitTarget } = computeCameraFraming(
@@ -840,11 +850,13 @@ export function Scene({
             isDeepDrillDown={isDeepDrillDown}
             showWorkspaceCta={
               enableCoreWorkspace &&
+              isCoreZoomedIn &&
               coreWorkspacePhase === 'idle' &&
               !selectedId &&
               !isDeepDrillDown &&
               !draftDept
             }
+            coreClickEnabled={isCoreZoomedIn}
             onClick={enableCoreWorkspace ? handleCoreClick : undefined}
             voiceIntensityRef={voiceIntensityRef}
             hideCompanyName={coreWorkspacePhase !== 'idle'}

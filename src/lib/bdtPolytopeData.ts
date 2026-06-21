@@ -52,6 +52,14 @@ export interface UInternalNode {
   interrelatedDepartments?: string[];
 }
 
+/** Leaf types that open the BDT action workspace — not team/project/process containers. */
+export const BDT_ACTION_LEAF_TYPES = ['metric', 'signal', 'decision', 'action'] as const;
+
+export function isActionLeafNode(node: Pick<UInternalNode, 'type'> | null | undefined): boolean {
+  if (!node) return false;
+  return (BDT_ACTION_LEAF_TYPES as readonly string[]).includes(node.type);
+}
+
 export interface UExternalNode {
   id: string;
   label: string;

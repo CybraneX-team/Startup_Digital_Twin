@@ -14,7 +14,7 @@ export type {
   UExternalNode,
 } from './bdtPolytopeData';
 
-export { U_DOMAIN_COLOR, resolvePolytopeNodeCount, getExternalNodeColor } from './bdtPolytopeData';
+export { U_DOMAIN_COLOR, resolvePolytopeNodeCount, getExternalNodeColor, isActionLeafNode, BDT_ACTION_LEAF_TYPES } from './bdtPolytopeData';
 
 import type { UDomain, UExternalNode, UInternalNode, TeamMember, ProjectDetails } from './bdtPolytopeData';
 import { resolvePolytopeNodeCount } from './bdtPolytopeData';

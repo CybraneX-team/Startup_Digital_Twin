@@ -1,4 +1,4 @@
-import { useRef, useMemo } from 'react';
+import { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import { Text, Billboard } from '@react-three/drei';
 import * as THREE from 'three';
@@ -16,6 +16,7 @@ export function OrgCore({
   industryName: _industryName,
   isDeepDrillDown = false,
   showWorkspaceCta = false,
+  coreClickEnabled = true,
   voiceIntensityRef,
   onClick,
   hideCompanyName = false,
@@ -29,44 +30,49 @@ export function OrgCore({
   onClick?: () => void;
   /** BDT: static CTA on core — click to dive into workspace */
   showWorkspaceCta?: boolean;
+  /** When false, core is visible but not clickable (e.g. camera too far) */
+  coreClickEnabled?: boolean;
   voiceIntensityRef?: React.MutableRefObject<number> | undefined;
   hideCompanyName?: boolean;
   coreWorkspacePhase?: string;
 }) {
   const meshRef  = useRef<THREE.Group>(null);
-  const ringMat  = useRef<THREE.MeshBasicMaterial>(null);
+  const isHoveringCoreRef = useRef(false);
+
+  const canClickCore = Boolean(onClick) && coreClickEnabled;
 
   useFrame(({ clock }) => {
-    const t = clock.elapsedTime;
-    if (meshRef.current)  meshRef.current.rotation.y  = t * 0.08;
-    if (ringMat.current)  ringMat.current.opacity = dimmed ? 0.04 : 0.22 + Math.sin(t * 0.9) * 0.06;
+    if (meshRef.current) meshRef.current.rotation.y = clock.elapsedTime * 0.08;
   });
 
+  useEffect(() => {
+    if (isHoveringCoreRef.current) {
+      document.body.style.cursor = canClickCore ? 'pointer' : 'auto';
+    }
+  }, [canClickCore]);
 
   return (
-    <group 
-      onClick={(e) => {
-        e.stopPropagation();
-        onClick?.();
-      }}
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        onClick?.();
-      }}
-      onPointerOver={() => { document.body.style.cursor = 'pointer'; }}
-      onPointerOut={() => { document.body.style.cursor = 'auto'; }}
-    >
+    <group>
       {/* Plasma Sphere Core — click or zoom to open workspace (BDT) */}
       <group ref={meshRef}>
         <mesh
           onPointerOver={(e) => {
             e.stopPropagation();
+            isHoveringCoreRef.current = true;
+            if (canClickCore) document.body.style.cursor = 'pointer';
           }}
           onPointerOut={(e) => {
             e.stopPropagation();
+            isHoveringCoreRef.current = false;
+            document.body.style.cursor = 'auto';
           }}
           onClick={(e) => {
             e.stopPropagation();
+            if (canClickCore) onClick?.();
+          }}
+          onDoubleClick={(e) => {
+            e.stopPropagation();
+            if (canClickCore) onClick?.();
           }}
         >
           <sphereGeometry args={[1.35, 32, 32]} />
@@ -76,8 +82,8 @@ export function OrgCore({
           <StarSphere 
              radius={1.2} 
              color="#1e3a8a" // Navy blue core
-             opacity={dimmed ? 0.08 : 0.85} 
-             glowIntensity={0.8}
+             opacity={dimmed ? 0.08 : 1.0} 
+             glowIntensity={1.0}
              uAudio={voiceIntensityRef?.current ?? 0}
              coreWorkspacePhase={coreWorkspacePhase}
           />
@@ -109,18 +115,6 @@ export function OrgCore({
               outlineOpacity={isDeepDrillDown ? 0 : dimmed ? 0.35 : 0.6}
             >
               {companyName}
-            </Text>
-            <Text
-              position={[0, -0.35, 0]}
-              color="#94a3b8"
-              fontSize={0.1}
-              letterSpacing={0.4}
-              textAlign="center"
-              anchorX="center"
-              anchorY="middle"
-              fillOpacity={isDeepDrillDown ? 0 : dimmed ? 0.4 : 0.65}
-            >
-              CORE
             </Text>
           </group>
         </Billboard>
@@ -443,7 +437,12 @@ export function StarSphere({
       }
       opacityFactorRef.current += (targetFactor - opacityFactorRef.current) * 0.04;
 
-      materialRef.current.uniforms.uIntensity.value = opacity * glowIntensity * opacityFactorRef.current;
+      const effectiveOpacity = opacity * glowIntensity * opacityFactorRef.current;
+      materialRef.current.uniforms.uIntensity.value = effectiveOpacity;
+
+      const isOpaque = effectiveOpacity >= 0.98;
+      materialRef.current.transparent = !isOpaque;
+      materialRef.current.depthWrite = isOpaque ? true : depthWrite;
       
       // Smoothly approach the target audio level for fluid visualizer effect
       const currentAudio = materialRef.current.uniforms.uAudio.value;
@@ -465,7 +464,7 @@ export function StarSphere({
             uIntensity: { value: opacity * glowIntensity },
             uAudio: { value: 0 }
           }}
-          transparent 
+          transparent={opacity < 0.98}
           depthWrite={depthWrite} 
         />
       </mesh>

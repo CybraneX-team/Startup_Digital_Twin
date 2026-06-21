@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Search, Command, ArrowLeft, Plus, ChevronRight, Pencil, Trash2, Target, Database, Activity, Users, BarChart2, UserPlus, Plug } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
-import { getExternalNodeColor } from '../lib/universalPolytopeData';
+import { getExternalNodeColor, isActionLeafNode } from '../lib/universalPolytopeData';
 
 export interface PolytopeSidePanelProps {
   departments: UExternalNode[];
@@ -209,7 +209,7 @@ export function PolytopeSidePanel({
   const deptColor = effectiveDept ? getExternalNodeColor(effectiveDept) : '#C1AEFF';
   const canWriteEffectiveDept = effectiveDept ? canWriteDept(effectiveDept) : false;
   const canDeleteEffectiveDept = effectiveDept ? canDeleteDept(effectiveDept) : false;
-  const isLeafInternalNode = (node: UInternalNode) => !node.children || node.children.length === 0;
+  const isLeafInternalNode = (node: UInternalNode) => isActionLeafNode(node);
   const selectInternalNode = (node: UInternalNode) => {
     onNodeSelect?.([...selectedInternalPath, node.id]);
   };
@@ -804,7 +804,7 @@ export function PolytopeSidePanel({
         </div>
         )}
 
-        {activeTab === 'departments' && showingNodes && effectiveDept && canWriteEffectiveDept && (
+        {activeTab === 'departments' && showingNodes && effectiveDept && canWriteEffectiveDept && !isShowingMembers && (
         <div
           className="px-3 pb-3 pt-2 shrink-0"
           style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}

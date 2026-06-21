@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useLayoutEffect, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import UniversalPolytope from '../components/UniversalPolytope';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
@@ -13,9 +14,12 @@ import { getAllIndustries } from '../lib/db/industries';
 import { getAllSubdomains } from '../lib/db/subdomains';
 import { useVoice } from '../context/VoiceContext';
 import { BdtActionWorkspace } from '../components/workspace/BdtActionWorkspace';
+import { isActionLeafNode } from '../lib/usePolytopeStore';
+import type { UserPlanetRole } from '../data/companyPlanetRoots';
 
 export default function UniversalPage() {
-  const { profile, canWrite } = useAuth();
+  const navigate = useNavigate();
+  const { profile, canWrite, role: authRole } = useAuth();
   const canCreateDepartments = canWrite('twin') && canWrite('team');
   const { company } = useCompany(profile?.company_id);
   const store = usePolytopeStore('bdt');
@@ -81,7 +85,7 @@ export default function UniversalPage() {
     return targetNode;
   };
   const selectedNode = getSelectedInternalNode();
-  const isLeafNode = !!selectedNode && (!selectedNode.children || selectedNode.children.length === 0);
+  const isLeafNode = !!selectedNode && isActionLeafNode(selectedNode);
 
   const handleEditDepartment = (dept: UExternalNode) => {
     if (!canWriteDept(dept)) return;
@@ -147,12 +151,22 @@ export default function UniversalPage() {
 
   const [industryName, setIndustryName] = useState('');
   const [subdomainName, setSubdomainName] = useState('');
+  const [planetIndustryColor, setPlanetIndustryColor] = useState('#C1AEFF');
+
+  const resolvePlanetRole = useCallback((): UserPlanetRole => {
+    if (localStorage.getItem('active_role') === 'vc') return 'vc';
+    if (authRole === 'founder' || authRole === 'co_founder' || authRole === 'admin') return 'founder';
+    return 'career';
+  }, [authRole]);
 
   useEffect(() => {
     if (company) {
       getAllIndustries().then(inds => {
         const ind = inds.find(i => i.id === company.industry_id);
-        if (ind) setIndustryName(ind.label);
+        if (ind) {
+          setIndustryName(ind.label);
+          setPlanetIndustryColor(ind.color);
+        }
       });
       getAllSubdomains().then(subs => {
         const sub = subs.find(s => s.id === company.subdomain_id);
@@ -354,6 +368,20 @@ export default function UniversalPage() {
     }
   }, [corePhase]);
 
+  const handlePolytopeExitIntent = useCallback(() => {
+    if (!profile?.company_id) return;
+    navigate('/3d', {
+      state: {
+        enterPlanetRootsFromBdt: {
+          companyId: profile.company_id,
+          companyName,
+          role: resolvePlanetRole(),
+          industryColor: planetIndustryColor,
+        },
+      },
+    });
+  }, [profile?.company_id, companyName, resolvePlanetRole, planetIndustryColor, navigate]);
+
   return (
     <div className="fixed inset-0 bg-black overflow-hidden z-40">
       {/* ── 3D Polytope Canvas ── */}
@@ -371,6 +399,7 @@ export default function UniversalPage() {
             companyName={companyName}
             industryName={industryName}
             subdomainName={subdomainName}
+            onExitIntent={handlePolytopeExitIntent}
             onDepartmentChange={handleDepartmentChange}
             onInternalPathChange={setInternalPath}
             requestSelectDeptId={requestSelectDeptId}
