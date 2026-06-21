@@ -651,8 +651,9 @@ export function resolvePlanetRestoreTarget(
   }
 
   let branch = root.branches.find(b => b.id === savedPath[0]);
-  if (!branch && saved.internalPathLabels?.[0]) {
-    branch = root.branches.find(b => b.label === saved.internalPathLabels[0]);
+  const branchLabel = saved.internalPathLabels?.[0];
+  if (!branch && branchLabel) {
+    branch = root.branches.find(b => b.label === branchLabel);
   }
   if (!branch) {
     return { rootId: root.id, internalPath: [] };
@@ -663,8 +664,9 @@ export function resolvePlanetRestoreTarget(
   }
 
   let action = branch.actions.find(a => a.id === savedPath[1]);
-  if (!action && saved.internalPathLabels?.[1]) {
-    action = branch.actions.find(a => a.label === saved.internalPathLabels[1]);
+  const actionLabel = saved.internalPathLabels?.[1];
+  if (!action && actionLabel) {
+    action = branch.actions.find(a => a.label === actionLabel);
   }
 
   return {
@@ -782,6 +784,7 @@ export function rootsToPolytopeDepartments(roots: PlanetRootNode[]): UExternalNo
       id: root.id,
       label: root.label,
       domain: ROOT_DOMAINS[i % ROOT_DOMAINS.length],
+      color: root.color,
       cluster: 'Root',
       score,
       metrics: {

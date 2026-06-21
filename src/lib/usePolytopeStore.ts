@@ -1,33 +1,42 @@
 import { create } from 'zustand';
+import { U_NODES as TWIN_DEFAULT_NODES } from './universalPolytopeData';
 import { U_NODES as BDT_SEED_NODES } from './bdtPolytopeData';
 import type { UExternalNode, UInternalNode, UDomain } from './bdtPolytopeData';
 import { U_DOMAIN_COLOR } from './bdtPolytopeData';
 import { api } from './api';
 
-/** Twin (/3d) and BDT (/universal) share one canonical company graph from the backend. */
+/** Twin (/3d company polytope) and BDT (/universal) use separate graphs and caches. */
 export type PolytopeStoreScope = 'twin' | 'bdt';
 
-const CACHE_STORAGE_KEY = 'polytope_departments_bdt_v2';
+const TWIN_CACHE_KEY = 'polytope_departments_twin_v2';
+const BDT_CACHE_KEY = 'polytope_departments_bdt_v2';
 const LEGACY_STORAGE_KEY = 'polytope_departments_v1';
 
 export type { UExternalNode, UInternalNode, UDomain };
 export { U_DOMAIN_COLOR };
 
-const DEFAULT_DEPARTMENTS = BDT_SEED_NODES.filter(n => n.domain !== 'inactive');
+const TWIN_DEFAULT_DEPARTMENTS = TWIN_DEFAULT_NODES.filter(n => n.domain !== 'inactive');
+const BDT_DEFAULT_DEPARTMENTS = BDT_SEED_NODES.filter(n => n.domain !== 'inactive');
 
-function persistCache(departments: UExternalNode[]) {
+function persistCache(storageKey: string, departments: UExternalNode[]) {
   try {
-    localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(departments));
+    localStorage.setItem(storageKey, JSON.stringify(departments));
   } catch (err) {
     console.warn('[departments] cache write failed', err);
   }
 }
 
-function loadCachedDepartments(): UExternalNode[] | null {
+function loadCachedDepartments(
+  storageKey: string,
+  defaults: UExternalNode[],
+  options?: { onboardingFallback?: boolean },
+): UExternalNode[] | null {
   try {
-    let raw = localStorage.getItem(CACHE_STORAGE_KEY);
+    let raw = localStorage.getItem(storageKey);
     if (!raw) raw = localStorage.getItem(LEGACY_STORAGE_KEY);
     if (raw) return JSON.parse(raw) as UExternalNode[];
+
+    if (!options?.onboardingFallback) return null;
 
     const onboardingRaw = localStorage.getItem('onboarding_departments');
     if (!onboardingRaw) return null;
@@ -38,7 +47,7 @@ function loadCachedDepartments(): UExternalNode[] | null {
     return selectedNames
       .filter((name): name is string => typeof name === 'string' && name.trim().length > 0)
       .map((name, index) => {
-        const matched = DEFAULT_DEPARTMENTS.find(n =>
+        const matched = defaults.find(n =>
           n.label.toLowerCase() === name.toLowerCase() ||
           n.label.toLowerCase().includes(name.toLowerCase()) ||
           name.toLowerCase().includes(n.label.toLowerCase())
@@ -114,170 +123,282 @@ export interface PolytopeStoreState {
   resetToDefaults: () => Promise<void>;
 }
 
-const useGlobalPolytopeStore = create<PolytopeStoreState>((set, get) => ({
-  departments: loadCachedDepartments() ?? DEFAULT_DEPARTMENTS,
-  loading: false,
-  loaded: false,
-  error: null,
+interface StoreConfig {
+  storageKey: string;
+  defaultDepartments: UExternalNode[];
+  onboardingFallback?: boolean;
+}
 
-  loadDepartments: async () => {
-    if (get().loading) return;
-    set({ loading: true, error: null });
-    try {
-      const response = await api.get<{ departments: UExternalNode[] }>('/api/departments');
-      const departments = response.departments ?? [];
-      persistCache(departments);
+function createLocalPolytopeStore({ storageKey, defaultDepartments, onboardingFallback }: StoreConfig) {
+  return create<PolytopeStoreState>((set, get) => ({
+    departments: loadCachedDepartments(storageKey, defaultDepartments, { onboardingFallback }) ?? defaultDepartments,
+    loading: false,
+    loaded: false,
+    error: null,
+
+    loadDepartments: async () => {
+      if (get().loading) return;
+      set({ loading: true, error: null });
+      const cached = loadCachedDepartments(storageKey, defaultDepartments, { onboardingFallback });
+      const departments = cached ?? (get().departments.length ? get().departments : defaultDepartments);
+      persistCache(storageKey, departments);
       set({ departments, loading: false, loaded: true, error: null });
-    } catch (err) {
-      console.error('[departments] load failed', err);
-      const cached = loadCachedDepartments();
-      const fallback = cached ?? (get().departments.length ? get().departments : DEFAULT_DEPARTMENTS);
-      set({
-        departments: fallback,
-        loading: false,
-        loaded: true,
-        error: err instanceof Error ? err.message : 'Failed to load departments',
-      });
-    }
-  },
+    },
 
-  addDepartment: async (dept) => {
-    const optimistic: UExternalNode = {
-      ...dept,
-      id: `pending_dept_${Date.now()}`,
-      internalNodes: [],
-    };
-    set(state => ({ departments: [...state.departments, optimistic] }));
-    try {
-      const response = await api.post<{ department: UExternalNode }>('/api/departments', dept);
-      const saved = response.department;
+    addDepartment: async (dept) => {
+      const newDept: UExternalNode = {
+        ...dept,
+        id: `dept_${Date.now()}`,
+        internalNodes: [],
+      };
       set(state => {
-        const next = state.departments.map(d => d.id === optimistic.id ? saved : d);
-        persistCache(next);
+        const next = [...state.departments, newDept];
+        persistCache(storageKey, next);
         return { departments: next };
       });
-      return saved;
-    } catch (err) {
-      set(state => ({ departments: state.departments.filter(d => d.id !== optimistic.id) }));
-      throw err;
-    }
-  },
+      return newDept;
+    },
 
-  updateDepartment: async (id, updates) => {
-    const previous = get().departments;
-    set(state => ({ departments: state.departments.map(d => d.id === id ? { ...d, ...updates } : d) }));
-    try {
-      const response = await api.patch<{ department: UExternalNode }>(`/api/departments/${id}`, updates);
+    updateDepartment: async (id, updates) => {
       set(state => {
-        const next = state.departments.map(d => d.id === id ? response.department : d);
-        persistCache(next);
+        const next = state.departments.map(d => d.id === id ? { ...d, ...updates } : d);
+        persistCache(storageKey, next);
         return { departments: next };
       });
-    } catch (err) {
-      set({ departments: previous });
-      throw err;
-    }
-  },
+    },
 
-  deleteDepartment: async (id) => {
-    const previous = get().departments;
-    set(state => ({ departments: state.departments.filter(d => d.id !== id) }));
-    try {
-      await api.delete(`/api/departments/${id}`);
-      persistCache(get().departments);
-    } catch (err) {
-      set({ departments: previous });
-      throw err;
-    }
-  },
-
-  addNode: async (deptId, node, path = []) => {
-    const dept = get().departments.find(d => d.id === deptId);
-    const optimistic: UInternalNode = { ...node, id: `pending_node_${Date.now()}`, children: [] };
-    set(state => ({
-      departments: state.departments.map(d =>
-        d.id === deptId ? { ...d, internalNodes: addNodeToTree(d.internalNodes, path, optimistic) } : d
-      ),
-    }));
-
-    try {
-      const response = await api.post<{ departments: UExternalNode[] }>(`/api/departments/${deptId}/nodes`, {
-        ...node,
-        parentNodeId: findPathParentNodeId(dept, path),
+    deleteDepartment: async (id) => {
+      set(state => {
+        const next = state.departments.filter(d => d.id !== id);
+        persistCache(storageKey, next);
+        return { departments: next };
       });
-      persistCache(response.departments);
-      set({ departments: response.departments });
-      const savedDept = response.departments.find(d => d.id === deptId);
-      return flattenNodes(savedDept?.internalNodes ?? []).find(n => n.label === node.label && n.type === node.type) ?? optimistic;
-    } catch (err) {
+    },
+
+    addNode: async (deptId, node, path = []) => {
+      const newNode: UInternalNode = { ...node, id: `node_${Date.now()}`, children: [] };
+      set(state => {
+        const next = state.departments.map(d =>
+          d.id === deptId ? { ...d, internalNodes: addNodeToTree(d.internalNodes, path, newNode) } : d
+        );
+        persistCache(storageKey, next);
+        return { departments: next };
+      });
+      return newNode;
+    },
+
+    updateNode: async (deptId, nodeId, updates) => {
+      set(state => {
+        const next = state.departments.map(d =>
+          d.id === deptId ? { ...d, internalNodes: updateNodeInTree(d.internalNodes, nodeId, updates) } : d
+        );
+        persistCache(storageKey, next);
+        return { departments: next };
+      });
+    },
+
+    deleteNode: async (deptId, nodeId) => {
+      set(state => {
+        const next = state.departments.map(d =>
+          d.id === deptId ? { ...d, internalNodes: deleteNodeFromTree(d.internalNodes, nodeId) } : d
+        );
+        persistCache(storageKey, next);
+        return { departments: next };
+      });
+    },
+
+    resetToDefaults: async () => {
+      persistCache(storageKey, defaultDepartments);
+      set({ departments: defaultDepartments });
+    },
+  }));
+}
+
+function createApiPolytopeStore({ storageKey, defaultDepartments }: StoreConfig) {
+  return create<PolytopeStoreState>((set, get) => ({
+    departments: loadCachedDepartments(storageKey, defaultDepartments) ?? defaultDepartments,
+    loading: false,
+    loaded: false,
+    error: null,
+
+    loadDepartments: async () => {
+      if (get().loading) return;
+      set({ loading: true, error: null });
+      try {
+        const response = await api.get<{ departments: UExternalNode[] }>('/api/departments');
+        const departments = response.departments ?? [];
+        persistCache(storageKey, departments);
+        set({ departments, loading: false, loaded: true, error: null });
+      } catch (err) {
+        console.error('[departments] load failed', err);
+        const cached = loadCachedDepartments(storageKey, defaultDepartments);
+        const fallback = cached ?? (get().departments.length ? get().departments : defaultDepartments);
+        set({
+          departments: fallback,
+          loading: false,
+          loaded: true,
+          error: err instanceof Error ? err.message : 'Failed to load departments',
+        });
+      }
+    },
+
+    addDepartment: async (dept) => {
+      const optimistic: UExternalNode = {
+        ...dept,
+        id: `pending_dept_${Date.now()}`,
+        internalNodes: [],
+      };
+      set(state => ({ departments: [...state.departments, optimistic] }));
+      try {
+        const response = await api.post<{ department: UExternalNode }>('/api/departments', dept);
+        const saved = response.department;
+        set(state => {
+          const next = state.departments.map(d => d.id === optimistic.id ? saved : d);
+          persistCache(storageKey, next);
+          return { departments: next };
+        });
+        return saved;
+      } catch (err) {
+        set(state => ({ departments: state.departments.filter(d => d.id !== optimistic.id) }));
+        throw err;
+      }
+    },
+
+    updateDepartment: async (id, updates) => {
+      const previous = get().departments;
+      set(state => ({ departments: state.departments.map(d => d.id === id ? { ...d, ...updates } : d) }));
+      try {
+        const response = await api.patch<{ department: UExternalNode }>(`/api/departments/${id}`, updates);
+        set(state => {
+          const next = state.departments.map(d => d.id === id ? response.department : d);
+          persistCache(storageKey, next);
+          return { departments: next };
+        });
+      } catch (err) {
+        set({ departments: previous });
+        throw err;
+      }
+    },
+
+    deleteDepartment: async (id) => {
+      const previous = get().departments;
+      set(state => ({ departments: state.departments.filter(d => d.id !== id) }));
+      try {
+        await api.delete(`/api/departments/${id}`);
+        persistCache(storageKey, get().departments);
+      } catch (err) {
+        set({ departments: previous });
+        throw err;
+      }
+    },
+
+    addNode: async (deptId, node, path = []) => {
+      const dept = get().departments.find(d => d.id === deptId);
+      const optimistic: UInternalNode = { ...node, id: `pending_node_${Date.now()}`, children: [] };
       set(state => ({
         departments: state.departments.map(d =>
-          d.id === deptId ? { ...d, internalNodes: deleteNodeFromTree(d.internalNodes, optimistic.id) } : d
+          d.id === deptId ? { ...d, internalNodes: addNodeToTree(d.internalNodes, path, optimistic) } : d
         ),
       }));
-      throw err;
-    }
-  },
 
-  updateNode: async (deptId, nodeId, updates) => {
-    const previous = get().departments;
-    const currentNode = flattenNodes(previous.find(d => d.id === deptId)?.internalNodes ?? []).find(n => n.id === nodeId);
-    const payload = currentNode ? { ...currentNode, ...updates } : updates;
-    set(state => ({
-      departments: state.departments.map(d =>
-        d.id === deptId ? { ...d, internalNodes: updateNodeInTree(d.internalNodes, nodeId, updates) } : d
-      ),
-    }));
-    try {
-      const response = await api.patch<{ departments: UExternalNode[] }>(`/api/departments/nodes/${nodeId}`, payload);
-      persistCache(response.departments);
-      set({ departments: response.departments });
-    } catch (err) {
-      set({ departments: previous });
-      throw err;
-    }
-  },
+      try {
+        const response = await api.post<{ departments: UExternalNode[] }>(`/api/departments/${deptId}/nodes`, {
+          ...node,
+          parentNodeId: findPathParentNodeId(dept, path),
+        });
+        persistCache(storageKey, response.departments);
+        set({ departments: response.departments });
+        const savedDept = response.departments.find(d => d.id === deptId);
+        return flattenNodes(savedDept?.internalNodes ?? []).find(n => n.label === node.label && n.type === node.type) ?? optimistic;
+      } catch (err) {
+        set(state => ({
+          departments: state.departments.map(d =>
+            d.id === deptId ? { ...d, internalNodes: deleteNodeFromTree(d.internalNodes, optimistic.id) } : d
+          ),
+        }));
+        throw err;
+      }
+    },
 
-  deleteNode: async (deptId, nodeId) => {
-    const previous = get().departments;
-    set(state => ({
-      departments: state.departments.map(d =>
-        d.id === deptId ? { ...d, internalNodes: deleteNodeFromTree(d.internalNodes, nodeId) } : d
-      ),
-    }));
-    try {
-      await api.delete(`/api/departments/nodes/${nodeId}`);
-      persistCache(get().departments);
-    } catch (err) {
-      set({ departments: previous });
-      throw err;
-    }
-  },
+    updateNode: async (deptId, nodeId, updates) => {
+      const previous = get().departments;
+      const currentNode = flattenNodes(previous.find(d => d.id === deptId)?.internalNodes ?? []).find(n => n.id === nodeId);
+      const payload = currentNode ? { ...currentNode, ...updates } : updates;
+      set(state => ({
+        departments: state.departments.map(d =>
+          d.id === deptId ? { ...d, internalNodes: updateNodeInTree(d.internalNodes, nodeId, updates) } : d
+        ),
+      }));
+      try {
+        const response = await api.patch<{ departments: UExternalNode[] }>(`/api/departments/nodes/${nodeId}`, payload);
+        persistCache(storageKey, response.departments);
+        set({ departments: response.departments });
+      } catch (err) {
+        set({ departments: previous });
+        throw err;
+      }
+    },
 
-  resetToDefaults: async () => {
-    const localDrafts = loadCachedDepartments();
-    const response = await api.post<{ departments: UExternalNode[] }>('/api/departments/import', {
-      departments: localDrafts ?? DEFAULT_DEPARTMENTS,
-    });
-    const departments = response.departments ?? [];
-    persistCache(departments);
-    set({ departments });
-  },
-}));
+    deleteNode: async (deptId, nodeId) => {
+      const previous = get().departments;
+      set(state => ({
+        departments: state.departments.map(d =>
+          d.id === deptId ? { ...d, internalNodes: deleteNodeFromTree(d.internalNodes, nodeId) } : d
+        ),
+      }));
+      try {
+        await api.delete(`/api/departments/nodes/${nodeId}`);
+        persistCache(storageKey, get().departments);
+      } catch (err) {
+        set({ departments: previous });
+        throw err;
+      }
+    },
 
-/** Scope is kept for call-site clarity; twin and BDT read the same backend graph. */
-export function usePolytopeStore(_scope?: PolytopeStoreScope) {
-  return useGlobalPolytopeStore();
+    resetToDefaults: async () => {
+      const localDrafts = loadCachedDepartments(storageKey, defaultDepartments);
+      const response = await api.post<{ departments: UExternalNode[] }>('/api/departments/import', {
+        departments: localDrafts ?? defaultDepartments,
+      });
+      const departments = response.departments ?? [];
+      persistCache(storageKey, departments);
+      set({ departments });
+    },
+  }));
+}
+
+const useTwinPolytopeStore = createLocalPolytopeStore({
+  storageKey: TWIN_CACHE_KEY,
+  defaultDepartments: TWIN_DEFAULT_DEPARTMENTS,
+  onboardingFallback: true,
+});
+
+const useBdtPolytopeStore = createApiPolytopeStore({
+  storageKey: BDT_CACHE_KEY,
+  defaultDepartments: BDT_DEFAULT_DEPARTMENTS,
+});
+
+export function usePolytopeStore(scope: PolytopeStoreScope = 'bdt') {
+  return scope === 'twin' ? useTwinPolytopeStore() : useBdtPolytopeStore();
 }
 
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (event) => {
-    if (event.key !== CACHE_STORAGE_KEY && event.key !== LEGACY_STORAGE_KEY) return;
-    try {
-      const next = event.newValue ? JSON.parse(event.newValue) : null;
-      useGlobalPolytopeStore.setState({ departments: next ?? DEFAULT_DEPARTMENTS });
-    } catch (e) {
-      console.error('Error syncing department cache:', e);
+    if (event.key === TWIN_CACHE_KEY || event.key === LEGACY_STORAGE_KEY) {
+      try {
+        const next = event.newValue ? JSON.parse(event.newValue) : null;
+        useTwinPolytopeStore.setState({ departments: next ?? TWIN_DEFAULT_DEPARTMENTS });
+      } catch (e) {
+        console.error('Error syncing twin department cache:', e);
+      }
+    }
+    if (event.key === BDT_CACHE_KEY) {
+      try {
+        const next = event.newValue ? JSON.parse(event.newValue) : null;
+        useBdtPolytopeStore.setState({ departments: next ?? BDT_DEFAULT_DEPARTMENTS });
+      } catch (e) {
+        console.error('Error syncing BDT department cache:', e);
+      }
     }
   });
 }

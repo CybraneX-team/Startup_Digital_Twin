@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { Search, Command, ArrowLeft, Plus, ChevronRight, Pencil, Trash2, Target, Database, Activity, Users, BarChart2, Plug } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
-import { U_DOMAIN_COLOR } from '../lib/universalPolytopeData';
+import { getExternalNodeColor } from '../lib/universalPolytopeData';
 
 export interface PolytopeSidePanelProps {
   departments: UExternalNode[];
@@ -146,7 +146,7 @@ export function PolytopeSidePanel({
 
   const internalNodeResults: InternalNodeResult[] = (isSearchActive && !showingNodes)
     ? activeDepts.flatMap(dept => {
-      const color = U_DOMAIN_COLOR[dept.domain] ?? '#6366f1';
+      const color = getExternalNodeColor(dept);
       return collectAllInternalNodes(dept.internalNodes, dept, color)
         .map(r => ({
           result: r,
@@ -195,7 +195,7 @@ export function PolytopeSidePanel({
         .sort((a, b) => b.score - a.score)
         .map(x => x.node)
     : allVisibleNodes;
-  const deptColor = effectiveDept ? (U_DOMAIN_COLOR[effectiveDept.domain] ?? '#6366f1') : '#C1AEFF';
+  const deptColor = effectiveDept ? getExternalNodeColor(effectiveDept) : '#C1AEFF';
 
   // Dynamic back button logic based on drill-down level
   let backLabel: string | null = null;
@@ -410,7 +410,7 @@ export function PolytopeSidePanel({
               <>
                 {/* Matching departments */}
                 {deptResults.map((dept, i) => {
-                  const color = U_DOMAIN_COLOR[dept.domain] ?? '#6366f1';
+                  const color = getExternalNodeColor(dept);
                   return (
                     <button
                       key={dept.id}
@@ -486,7 +486,7 @@ export function PolytopeSidePanel({
               </div>
             ) : (
               deptResults.map((dept, i) => {
-                const color = U_DOMAIN_COLOR[dept.domain] ?? '#6366f1';
+                const color = getExternalNodeColor(dept);
                 const isActiveDept = dept.id === selectedDeptId;
                 return (
                   <div

@@ -14,7 +14,7 @@ import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
 import { PolytopeManager } from '../components/PolytopeManager';
 import CreateDepartmentPanel from '../components/CreateDepartmentPanel';
 import CompanyPlanet3DView from '../components/CompanyPlanet3DView';
-import { EXPAND_SETTLE_MS, RESTORE_CANVAS_READY_MS } from '../lib/planetRootAnimation';
+import { EXPAND_SETTLE_MS } from '../lib/planetRootAnimation';
 import { CompanyPlanetSidePanel } from '../components/CompanyPlanetSidePanel';
 import {
   getPlanetRootsForCompany,
@@ -24,7 +24,6 @@ import {
   type UserPlanetRole,
   type CompanyPlanetContext,
 } from '../data/companyPlanetRoots';
-import type { PersistedPlanetState } from '../lib/universeNavPersistence';
 import { OpenWorkspaceCue } from '../components/OpenWorkspaceCue';
 import { UniverseGalaxySidebar } from '../components/universe/UniverseGalaxySidebar';
 import { TwinWorkspaceLayout } from '../components/twin/TwinWorkspaceLayout';
@@ -421,6 +420,7 @@ export default function Universe3DPage() {
   const [rootPolytopeInternalPath, setRootPolytopeInternalPath] = useState<string[]>([]);
   const [rootPolytopeBackStep, setRootPolytopeBackStep] = useState(0);
   const [rootPolytopeSwitchKey, setRootPolytopeSwitchKey] = useState(0);
+  const [polytopeEntryMode, setPolytopeEntryMode] = useState<'animate' | 'snap'>('animate');
   const [requestFocusRootId, setRequestFocusRootId] = useState<string | null>(null);
   const [zoomOutFromRootId, setZoomOutFromRootId] = useState<string | null>(null);
   const [isZoomingOut, setIsZoomingOut] = useState(false);
@@ -521,6 +521,7 @@ export default function Universe3DPage() {
 
   const handleOpenRootPolytope = useCallback((rootId: string) => {
     if (!planetContext) return;
+    setPolytopeEntryMode('animate');
     setRootPolytopeDepts(rootsToPolytopeDepartments(planetContext.roots));
     setRootPolytopeDeptId(rootId);
     setRootPolytopeInternalPath([]);
@@ -540,17 +541,24 @@ export default function Universe3DPage() {
     rootId: string,
     internalPath: string[],
   ) => {
+    setPolytopeEntryMode('snap');
     setRootPolytopeDepts(rootsToPolytopeDepartments(ctx.roots));
     setRootPolytopeDeptId(rootId);
     setRootPolytopeInternalPath(internalPath);
+    setRootPolytopeSwitchKey(k => k + 1);
     setInsideRootPolytope(true);
     setRequestFocusRootId(null);
+    setSessionRestoreActive(false);
+    setRestoreInternalPath([]);
+    pendingPlanetRestoreRef.current = null;
     if (internalPath.length === 2) {
       setActionWorkspace({
         rootId,
         branchId: internalPath[0],
         actionId: internalPath[1],
       });
+    } else {
+      setActionWorkspace(null);
     }
   }, []);
 
@@ -592,44 +600,6 @@ export default function Universe3DPage() {
     }
     handleRestoreComplete();
   }, [planetContext, restoreInternalPath, snapRestoreToTarget, handleRestoreComplete]);
-
-  const handleRestoreFocusMissRef = useRef(handleRestoreFocusMiss);
-  handleRestoreFocusMissRef.current = handleRestoreFocusMiss;
-
-  const scheduleRestoreFocus = useCallback((
-    ctx: CompanyPlanetContext,
-    saved: Pick<
-      PersistedPlanetState,
-      'rootPolytopeDeptId' | 'rootPolytopeInternalPath' | 'rootLabel' | 'internalPathLabels'
-    >,
-  ) => {
-    const { rootId, internalPath } = resolvePlanetRestoreTarget(ctx, saved);
-    if (!rootId) {
-      finishPlanetRestore();
-      return;
-    }
-
-    clearPlanetRestoreTimers();
-    setSessionRestoreActive(true);
-    setRestoreInternalPath(internalPath);
-    pendingPlanetRestoreRef.current = {
-      rootId,
-      internalPath,
-      rootLabel: saved.rootLabel,
-      internalPathLabels: saved.internalPathLabels,
-    };
-    restoreFocusTimerRef.current = window.setTimeout(() => {
-      restoreFocusTimerRef.current = null;
-      setRequestFocusRootId(rootId);
-    }, RESTORE_CANVAS_READY_MS);
-
-    restoreWatchdogTimerRef.current = window.setTimeout(() => {
-      restoreWatchdogTimerRef.current = null;
-      if (isPlanetRestoringRef.current) {
-        handleRestoreFocusMissRef.current();
-      }
-    }, RESTORE_CANVAS_READY_MS + 9000);
-  }, [clearPlanetRestoreTimers, finishPlanetRestore]);
 
   useEffect(() => () => clearPlanetRestoreTimers(), [clearPlanetRestoreTimers]);
 
@@ -685,11 +655,18 @@ export default function Universe3DPage() {
       setInsidePlanetRoots(true);
 
       isPlanetRestoringRef.current = true;
-      setRootPolytopeDepts(rootsToPolytopeDepartments(ctx.roots));
-      scheduleRestoreFocus(ctx, {
+      const { rootId, internalPath } = resolvePlanetRestoreTarget(ctx, {
         rootPolytopeDeptId: item.rootId,
         rootPolytopeInternalPath: [item.branchId, item.actionId],
       });
+      if (rootId) {
+        snapRestoreToTarget(
+          ctx,
+          rootId,
+          internalPath.length >= 2 ? internalPath : [item.branchId, item.actionId],
+        );
+      }
+      requestAnimationFrame(() => finishPlanetRestore());
 
       // Clear state so it doesn't reopen if navigating back
       navigate('/3d', { replace: true, state: {} });
@@ -714,17 +691,20 @@ export default function Universe3DPage() {
     sessionStorage.setItem('company_entered_in_3d', '1');
 
     if (pState.insideRootPolytope && (pState.rootPolytopeDeptId || pState.rootLabel)) {
-      setRootPolytopeDepts(rootsToPolytopeDepartments(ctx.roots));
-      scheduleRestoreFocus(ctx, pState);
-    } else {
-      finishPlanetRestore();
+      const { rootId, internalPath } = resolvePlanetRestoreTarget(ctx, pState);
+      if (rootId) {
+        snapRestoreToTarget(ctx, rootId, internalPath);
+      }
     }
+
+    // Defer until React commits restored state — prevents persist effect from clearing sessionStorage first.
+    requestAnimationFrame(() => finishPlanetRestore());
 
     return () => {
       planetSessionRestoredRef.current = false;
       clearPlanetRestoreTimers();
     };
-  }, [pathname, state, navigate, finishPlanetRestore, scheduleRestoreFocus]);
+  }, [pathname, state, navigate, finishPlanetRestore, snapRestoreToTarget, clearPlanetRestoreTimers]);
 
   // Persist planet state on change
   useEffect(() => {
@@ -746,6 +726,8 @@ export default function Universe3DPage() {
         industryColor: planetIndustryColor,
       });
     } else if (!insidePlanetRoots && !isPlanetRestoringRef.current) {
+      // Hydrate effect may still be applying saved state on the first paint after refresh.
+      if (pathname === '/3d' && loadPlanetState()) return;
       clearPlanetState();
     }
   }, [
@@ -756,7 +738,14 @@ export default function Universe3DPage() {
     rootPolytopeInternalPath,
     planetIndustryColor,
     planetRestoreDone,
+    pathname,
   ]);
+
+  // Keep polytope dept tree aligned with the live planet context (tag / role changes).
+  useEffect(() => {
+    if (!insideRootPolytope || !planetContext) return;
+    setRootPolytopeDepts(rootsToPolytopeDepartments(planetContext.roots));
+  }, [insideRootPolytope, planetContext]);
 
   // Listen for workflows_updated to refresh planet roots if tag changes
   useEffect(() => {
@@ -1207,6 +1196,8 @@ export default function Universe3DPage() {
             }}
             rootPolytopeBackStep={rootPolytopeBackStep}
             rootSwitchKey={rootPolytopeSwitchKey}
+            polytopeEntryMode={polytopeEntryMode}
+            onPolytopeEntryApplied={() => setPolytopeEntryMode('animate')}
             onBack={handleExitRootPolytope}
             sessionRestoreActive={sessionRestoreActive}
             restoreInternalPath={restoreInternalPath}

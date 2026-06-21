@@ -1,9 +1,9 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// Universal Polytope Data — shared types + twin galaxy defaults
+// Universal Polytope Data — twin (/3d) default department graph only
 //
 // Canonical types & BDT seed data live in bdtPolytopeData.ts.
-// U_NODES here powers galaxy/twin inactive padding (legacy dept trees).
-// Runtime department graph is loaded from the backend via usePolytopeStore.
+// U_NODES here is the twin default (team/project/process trees + inactive padding).
+// Runtime twin graph: usePolytopeStore('twin') → localStorage, not the BDT backend.
 // ─────────────────────────────────────────────────────────────────────────────
 
 export type {
@@ -14,7 +14,7 @@ export type {
   UExternalNode,
 } from './bdtPolytopeData';
 
-export { U_DOMAIN_COLOR, resolvePolytopeNodeCount } from './bdtPolytopeData';
+export { U_DOMAIN_COLOR, resolvePolytopeNodeCount, getExternalNodeColor } from './bdtPolytopeData';
 
 import type { UDomain, UExternalNode, UInternalNode, TeamMember, ProjectDetails } from './bdtPolytopeData';
 import { resolvePolytopeNodeCount } from './bdtPolytopeData';

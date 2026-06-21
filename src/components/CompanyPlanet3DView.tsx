@@ -12,7 +12,7 @@ import { useSavedWorkflows, COMPANY_TAG_COLORS } from '../lib/useSavedWorkflows'
 import { InternalNode } from './polytope/InternalNode';
 import { computeInternalNodePosition, computeCameraFraming } from './polytope/internalNodeLayout';
 import type { UExternalNode } from '../lib/universalPolytopeData';
-import { U_DOMAIN_COLOR } from '../lib/universalPolytopeData';
+import { getExternalNodeColor } from '../lib/universalPolytopeData';
 import { useDragWorkspaceStore } from '../lib/useDragWorkspaceStore';
 import {
   PLANET_ANIM,
@@ -45,6 +45,9 @@ export interface CompanyPlanet3DViewProps {
   rootPolytopeBackStep?: number;
   onBack?: () => void;
   rootSwitchKey?: number;
+  /** Skip focus/expand animations — used when restoring saved navigation after refresh. */
+  polytopeEntryMode?: 'animate' | 'snap';
+  onPolytopeEntryApplied?: () => void;
   /** True while replaying saved navigation after page refresh. */
   sessionRestoreActive?: boolean;
   /** Saved internal path to replay once the root polytope is open. */
@@ -76,6 +79,9 @@ function SceneContent({
   onInternalPathChange,
   rootPolytopeBackStep = 0,
   onBack,
+  rootSwitchKey = 0,
+  polytopeEntryMode = 'animate',
+  onPolytopeEntryApplied,
   sessionRestoreActive = false,
   restoreInternalPath = [],
   onRestoreDrillPath,
@@ -103,6 +109,8 @@ function SceneContent({
   const restoreDrillStartedRef = useRef(false);
   const restoreReadyTimerRef = useRef<number | null>(null);
   const pendingFocusRootIdRef = useRef<string | null>(null);
+  const polytopeEntryModeRef = useRef(polytopeEntryMode);
+  polytopeEntryModeRef.current = polytopeEntryMode;
 
   // Sync focusRootId state with activeRootDept prop
   useEffect(() => {
@@ -238,51 +246,97 @@ function SceneContent({
 
   // 1. Progress transitions (runs when entering/exiting root polytope)
   useEffect(() => {
-    if (insideRootPolytope && activeRootDept) {
-      if (fadeProgress.current < 0.95) {
-        gsap.to(fadeProgress, {
-          current: 1,
-          duration: PLANET_ANIM.fadeDuration * 0.45,
+    if (!insideRootPolytope || !activeRootDept) {
+      if (!insideRootPolytope) {
+        setInternalNodesVisible(false);
+        gsap.killTweensOf(expandProgress);
+        gsap.killTweensOf(fadeProgress);
+        gsap.killTweensOf(scaleProgress);
+        gsap.to(expandProgress, {
+          current: 0,
+          duration: 0.55,
           ease: PLANET_ANIM.fadeEase,
         });
-      } else {
-        fadeProgress.current = 1;
+        gsap.to(scaleProgress, {
+          current: 1.0,
+          duration: 0.55,
+          ease: PLANET_ANIM.fadeEase,
+        });
       }
-
-      expandProgress.current = 0;
-      const revealTimer = window.setTimeout(() => {
-        setInternalNodesVisible(true);
-      }, Math.round(PLANET_ANIM.expandDelay * 1000));
-
-      gsap.to(expandProgress, {
-        current: 1,
-        duration: PLANET_ANIM.expandDuration,
-        ease: PLANET_ANIM.expandEase,
-        delay: PLANET_ANIM.expandDelay,
-      });
-
-      gsap.to(scaleProgress, {
-        current: 1.0,
-        duration: PLANET_ANIM.expandDuration,
-        ease: PLANET_ANIM.expandEase,
-        delay: PLANET_ANIM.expandDelay,
-      });
-
-      return () => window.clearTimeout(revealTimer);
+      return;
     }
 
-    setInternalNodesVisible(false);
+    gsap.killTweensOf(expandProgress);
+    gsap.killTweensOf(fadeProgress);
+    gsap.killTweensOf(scaleProgress);
+
+    if (polytopeEntryModeRef.current === 'snap') {
+      fadeProgress.current = 1;
+      expandProgress.current = 1;
+      scaleProgress.current = 1;
+      focusZoomActiveRef.current = false;
+      setIsZoomingIn(false);
+      setInternalNodesVisible(true);
+
+      const deptNode = layout.find(n => n.id === activeRootDept.id);
+      if (deptNode) {
+        const { camPos, orbitTarget } = computeFramingForPath(
+          activeRootDept,
+          deptNode.pos,
+          rootPolytopeInternalPath,
+        );
+        gsap.killTweensOf(camera.position);
+        camera.position.copy(camPos);
+        if (orbitRef.current) {
+          gsap.killTweensOf(orbitRef.current.target);
+          orbitRef.current.target.copy(orbitTarget);
+          orbitRef.current.update();
+        }
+        queueMicrotask(() => onPolytopeEntryApplied?.());
+      }
+      return;
+    }
+
+    if (fadeProgress.current < 0.95) {
+      gsap.to(fadeProgress, {
+        current: 1,
+        duration: PLANET_ANIM.fadeDuration * 0.45,
+        ease: PLANET_ANIM.fadeEase,
+      });
+    } else {
+      fadeProgress.current = 1;
+    }
+
+    expandProgress.current = 0;
+    const revealTimer = window.setTimeout(() => {
+      setInternalNodesVisible(true);
+    }, Math.round(PLANET_ANIM.expandDelay * 1000));
+
     gsap.to(expandProgress, {
-      current: 0,
-      duration: 0.55,
-      ease: PLANET_ANIM.fadeEase,
+      current: 1,
+      duration: PLANET_ANIM.expandDuration,
+      ease: PLANET_ANIM.expandEase,
+      delay: PLANET_ANIM.expandDelay,
     });
+
     gsap.to(scaleProgress, {
       current: 1.0,
-      duration: 0.55,
-      ease: PLANET_ANIM.fadeEase,
+      duration: PLANET_ANIM.expandDuration,
+      ease: PLANET_ANIM.expandEase,
+      delay: PLANET_ANIM.expandDelay,
     });
-  }, [insideRootPolytope, !!activeRootDept]);
+
+    return () => window.clearTimeout(revealTimer);
+  }, [
+    insideRootPolytope,
+    activeRootDept?.id,
+    rootSwitchKey,
+    rootPolytopeInternalPath,
+    layout,
+    camera,
+    computeFramingForPath,
+    onPolytopeEntryApplied,
+  ]);
 
   // 2. Camera framing on internal drill-down
   useEffect(() => {
@@ -302,6 +356,7 @@ function SceneContent({
   // 2b. Smooth pull-back when internal ring opens after focus zoom
   useEffect(() => {
     if (!insideRootPolytope || !activeRootDept || rootPolytopeInternalPath.length > 0) return;
+    if (polytopeEntryModeRef.current === 'snap') return;
 
     const deptNode = layout.find(n => n.id === activeRootDept.id);
     if (!deptNode) return;
@@ -700,7 +755,7 @@ function SceneContent({
           const deptNode = layout.find(n => n.id === activeRootDept.id);
           if (!deptNode) return null;
           const ROOT_POS = deptNode.pos;
-          const color = U_DOMAIN_COLOR[activeRootDept.domain] ?? '#8b5cf6';
+          const color = getExternalNodeColor(activeRootDept);
           
           // Calculate positions for the active root's internal nodes
           const n = activeRootDept.internalNodes.length;
@@ -721,7 +776,7 @@ function SceneContent({
           })();
 
           return (
-            <group>
+            <group key={`${activeRootDept.id}:${rootSwitchKey}`}>
               {edgesGeo && (
                 <lineSegments geometry={edgesGeo}>
                   <lineBasicMaterial
@@ -758,8 +813,9 @@ function SceneContent({
                     onNodeFocus={() => {}}
                     rootPos={ROOT_POS}
                     revealDelayMs={PLANET_ANIM.internalNodeRevealDelayMs + i * 70}
-                    entryDuration={PLANET_ANIM.internalNodeDuration}
+                    entryDuration={polytopeEntryMode === 'snap' ? 0 : PLANET_ANIM.internalNodeDuration}
                     entryEase={PLANET_ANIM.nodeEase}
+                    skipEntryAnimation={polytopeEntryMode === 'snap'}
                   />
                 );
               })}

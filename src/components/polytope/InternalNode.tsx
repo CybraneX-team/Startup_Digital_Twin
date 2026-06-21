@@ -101,6 +101,8 @@ interface InternalNodeProps {
   revealDelayMs?: number;
   entryDuration?: number;
   entryEase?: string;
+  /** When true, place the node at its target immediately (session restore). */
+  skipEntryAnimation?: boolean;
 }
 
 
@@ -126,6 +128,7 @@ export function InternalNode({
   revealDelayMs = 320,
   entryDuration = 1.1,
   entryEase = 'power3.out',
+  skipEntryAnimation = false,
 }: InternalNodeProps) {
   const groupRef = useRef<THREE.Group>(null);
   const currentPos = useRef(startPos.clone());
@@ -230,6 +233,23 @@ export function InternalNode({
       return;
     }
 
+    let targetScale = 0.0;
+    if (isHiddenParent) {
+      targetScale = 0.0;
+    } else if (isVisible) {
+      targetScale = isMeActiveCenter ? 1.5 : 1.0;
+    }
+
+    if (skipEntryAnimation) {
+      setEntryAnimDone(true);
+      if (groupRef.current) {
+        currentPos.current.copy(targetPos);
+        groupRef.current.position.copy(targetPos);
+        groupRef.current.scale.setScalar(targetScale);
+      }
+      return;
+    }
+
     setEntryAnimDone(false);
     if (groupRef.current) {
       currentPos.current.copy(startPos);
@@ -238,13 +258,6 @@ export function InternalNode({
     }
 
     const revealDelay = revealDelayMs / 1000;
-
-    let targetScale = 0.0;
-    if (isHiddenParent) {
-      targetScale = 0.0;
-    } else if (isVisible) {
-      targetScale = isMeActiveCenter ? 1.5 : 1.0;
-    }
 
     const posTween = gsap.to(groupRef.current!.position, {
       x: targetPos.x,
@@ -276,7 +289,12 @@ export function InternalNode({
       posTween.kill();
       scaleTween.kill();
     };
-  }, [startPos.x, startPos.y, startPos.z, targetPos.x, targetPos.y, targetPos.z, isDraft, entryDuration, entryEase, revealDelayMs]);
+  }, [
+    startPos.x, startPos.y, startPos.z,
+    targetPos.x, targetPos.y, targetPos.z,
+    isDraft, entryDuration, entryEase, revealDelayMs,
+    isVisible, isHiddenParent, isMeActiveCenter, skipEntryAnimation,
+  ]);
 
   useEffect(() => {
     if (isMeActiveCenter) {

@@ -4,7 +4,7 @@ import { OrbitControls, Stars, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { gsap } from 'gsap';
 import type { UExternalNode } from '../../lib/universalPolytopeData';
-import { U_DOMAIN_COLOR } from '../../lib/universalPolytopeData';
+import { getExternalNodeColor } from '../../lib/universalPolytopeData';
 import { PlasmaSphere, GlowRing } from '../PolytopeShared';
 import { InternalNode } from '../polytope/InternalNode';
 import { computeInternalNodePosition, computeCameraFraming } from '../polytope/internalNodeLayout';
@@ -32,7 +32,7 @@ export function RootInternalNodeScene({
   rootSwitchKey = 0,
   onBack,
 }: RootInternalNodeSceneProps) {
-  const color = U_DOMAIN_COLOR[root.domain] ?? '#8b5cf6';
+  const color = getExternalNodeColor(root);
   const isDragging = useDragWorkspaceStore(s => s.isDragging);
   const { camera } = useThree();
   const orbitRef = useRef<any>(null);

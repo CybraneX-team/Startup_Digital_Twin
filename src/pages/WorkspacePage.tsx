@@ -41,6 +41,7 @@ export default function WorkspacePage() {
     const branch: PlanetBranchNode = {
       id: item.branchId ?? `${item.actionId}_branch`,
       label: item.branchLabel ?? '',
+      nodeType: 'decision',
       actions: [action],
     };
     const root: PlanetRootNode = {

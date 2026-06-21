@@ -83,6 +83,7 @@ function buildNodesFromSaved(item: SavedWorkflowItem) {
   const branch: PlanetBranchNode = {
     id: item.branchId ?? `${item.actionId}_branch`,
     label: item.branchLabel ?? '',
+    nodeType: 'decision',
     actions: [action],
   };
   const root: PlanetRootNode = {

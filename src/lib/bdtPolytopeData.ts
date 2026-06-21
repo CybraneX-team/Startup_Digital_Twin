@@ -14,6 +14,12 @@ export const U_DOMAIN_COLOR: Record<UDomain, string> = {
   inactive:  '#334155',
 };
 
+/** Accent color for a department/root — prefers explicit color, then domain palette. */
+export function getExternalNodeColor(dept: Pick<UExternalNode, 'domain' | 'color'>): string {
+  if (dept.color) return dept.color;
+  return U_DOMAIN_COLOR[dept.domain] ?? '#8b5cf6';
+}
+
 export interface TeamMember {
   name: string;
   role: string;
@@ -60,6 +66,8 @@ export interface UExternalNode {
     risk: number;
   };
   internalNodes: UInternalNode[];
+  /** Planet root accent — when set, overrides U_DOMAIN_COLOR for visualization. */
+  color?: string;
   access?: {
     read: boolean;
     write: boolean;
@@ -135,9 +143,9 @@ const ALL_DEPTS = [
   'dept_design', 'dept_security', 'dept_customer_success', 'dept_legal', 'dept_strategy'
 ];
 
-function getRandomDepts(currentDept, count) {
+function getRandomDepts(currentDept: string, count: number): string[] {
   const others = ALL_DEPTS.filter(d => d !== currentDept);
-  const picked = [];
+  const picked: string[] = [];
   for(let i=0; i<count; i++) {
     const idx = Math.floor(Math.random() * others.length);
     picked.push(others[idx]);
@@ -147,8 +155,8 @@ function getRandomDepts(currentDept, count) {
 }
 
 // 8 leaf nodes per department: 2 metric, 2 signal, 2 decision, 2 action
-function injectLeaves(deptId, branches) {
-  const leavesToDistribute = [
+function injectLeaves(deptId: string, branches: InternalDef[]): InternalDef[] {
+  const leavesToDistribute: Pick<InternalDef, 'type' | 'label'>[] = [
     { type: 'metric',   label: 'Key KPI Metric' },
     { type: 'decision', label: 'Approve Strategy' },
     { type: 'signal',   label: 'Anomaly Alert' },
