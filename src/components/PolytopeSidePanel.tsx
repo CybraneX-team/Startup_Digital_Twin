@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Command, ArrowLeft, Plus, ChevronRight, Pencil, Trash2, Target, Database, Activity, Users, BarChart2, Plug } from 'lucide-react';
+import { Search, Command, ArrowLeft, Plus, ChevronRight, Pencil, Trash2, Target, Database, Activity, Users, BarChart2, UserPlus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
 import { getExternalNodeColor } from '../lib/universalPolytopeData';
@@ -83,6 +83,9 @@ const TYPE_COLORS: Record<string, string> = {
   decision: '#f472b6',
   risk: '#f87171',
   metric: '#22d3ee',
+  branch: '#818cf8',
+  action: '#fb7185',
+  signal: '#2dd4bf',
 };
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -93,12 +96,20 @@ export function PolytopeSidePanel({
   onDeptSelect,
   selectedInternalPath,
   onAddDepartment,
+  onAddNode,
+  onAddMember,
   onInternalBack,
   onExitToSubdomain,
   exitToSubdomainLabel,
   onDeleteDepartment,
+  onDeleteNode,
+  onNodeSelect,
   onEditDepartment,
+  onEditNode,
   onDeleteDepartmentClick,
+  onDeleteNodeClick,
+  onEditMember,
+  onDeleteMemberClick,
   canEdit = true,
   canCreateDepartment = canEdit,
 }: PolytopeSidePanelProps) {
@@ -109,7 +120,7 @@ export function PolytopeSidePanel({
 
   const activeDepts = departments.filter(d => d.domain !== 'inactive');
   const canWriteDept = (dept: UExternalNode) => canEdit && dept.access?.write === true;
-  const canDeleteDept = (dept: UExternalNode) => canEdit && dept.access?.delete === true;
+  const canDeleteDept = (dept: UExternalNode) => dept.access?.delete === true;
   const selectedDept = activeDepts.find(d => d.id === selectedDeptId) ?? null;
   // showingNodes is true when: a dept is explicitly selected OR the user has drilled into sub-nodes
   const showingNodes = (selectedDeptId !== null && selectedDept !== null) || selectedInternalPath.length > 0;
@@ -196,6 +207,12 @@ export function PolytopeSidePanel({
         .map(x => x.node)
     : allVisibleNodes;
   const deptColor = effectiveDept ? getExternalNodeColor(effectiveDept) : '#C1AEFF';
+  const canWriteEffectiveDept = effectiveDept ? canWriteDept(effectiveDept) : false;
+  const canDeleteEffectiveDept = effectiveDept ? canDeleteDept(effectiveDept) : false;
+  const isLeafInternalNode = (node: UInternalNode) => !node.children || node.children.length === 0;
+  const selectInternalNode = (node: UInternalNode) => {
+    onNodeSelect?.([...selectedInternalPath, node.id]);
+  };
 
   // Dynamic back button logic based on drill-down level
   let backLabel: string | null = null;
@@ -447,8 +464,8 @@ export function PolytopeSidePanel({
                     <button
                       key={result.node.id}
                       onClick={() => {
-                        // Select the parent department → triggers camera fly in 3D
                         onDeptSelect(result.dept.id);
+                        onNodeSelect?.(result.path);
                       }}
                       className="panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group"
                       style={{ animationDelay: `${(deptResults.length + i) * 22}ms` }}
@@ -573,24 +590,179 @@ export function PolytopeSidePanel({
               })
             )
           ) : (
-            /* ── No real data connected for this department yet ── */
-            <div className="px-4 py-8 flex flex-col items-center text-center gap-3">
-              <Plug className="w-6 h-6" style={{ color: deptColor }} />
-              <p className="text-[11px] text-gray-400">
-                No connected data for {effectiveDept?.label ?? 'this department'} yet.
-              </p>
-              <button
-                onClick={() => navigate('/twin/data?tab=integrations')}
-                className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all hover:opacity-90"
-                style={{ background: `${deptColor}18`, border: `1px solid ${deptColor}35`, color: deptColor }}
-              >
-                Connect your data
-              </button>
-            </div>
+            /* ── INTERNAL NODES list ── */
+            isShowingMembers && activeNode && effectiveDept ? (
+              <div className="p-2 space-y-1">
+                {activeNode.members && activeNode.members.length > 0 ? (
+                  activeNode.members.map((member, index) => (
+                    <div
+                      key={`${activeNode.id}-${index}`}
+                      className="panel-item-in flex items-center gap-2.5 px-2 py-2 rounded-xl transition-colors hover:bg-white/[0.06] group/member"
+                      style={{ animationDelay: `${index * 22}ms` }}
+                    >
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center shrink-0 text-[10px] font-bold"
+                        style={{ background: `${deptColor}18`, border: `1px solid ${deptColor}35`, color: deptColor }}
+                      >
+                        {member.name?.slice(0, 1).toUpperCase() || 'M'}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[12px] text-gray-300 truncate leading-tight">{member.name}</p>
+                        <p className="text-[9px] text-gray-500 truncate leading-tight mt-0.5">{member.role}</p>
+                      </div>
+                      {canWriteEffectiveDept && (
+                        <div className="hidden group-hover/member:flex items-center gap-0.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => onEditMember?.(effectiveDept, activeNode, index)}
+                            className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+                            title="Edit teammate"
+                          >
+                            <Pencil className="w-3 h-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onDeleteMemberClick?.(effectiveDept, activeNode, index)}
+                            className="p-1 text-gray-400 hover:text-rose-400 hover:bg-white/10 rounded transition-colors"
+                            title="Delete teammate"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <div className="px-3 py-6 text-[11px] text-center" style={{ color: '#4b5563' }}>
+                    No teammates added yet
+                  </div>
+                )}
+                {canWriteEffectiveDept && (
+                  <button
+                    type="button"
+                    onClick={() => onAddMember?.(effectiveDept.id, activeNode.id)}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-semibold transition-all hover:opacity-90 active:scale-95"
+                    style={{ background: `${deptColor}16`, border: `1px solid ${deptColor}35`, color: deptColor }}
+                  >
+                    <UserPlus className="w-3.5 h-3.5" />
+                    Add Teammate
+                  </button>
+                )}
+              </div>
+            ) : visibleNodes.length === 0 ? (
+              <div className="px-4 py-8 flex flex-col items-center text-center gap-3">
+                <p className="text-[11px] text-gray-400">
+                  {isSearchActive ? 'No internal nodes found.' : `No internal nodes in ${effectiveDept?.label ?? 'this department'} yet.`}
+                </p>
+                {effectiveDept && canWriteEffectiveDept && (
+                  <button
+                    type="button"
+                    onClick={() => onAddNode?.(effectiveDept.id)}
+                    className="px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-all hover:opacity-90"
+                    style={{ background: `${deptColor}18`, border: `1px solid ${deptColor}35`, color: deptColor }}
+                  >
+                    Add Node
+                  </button>
+                )}
+              </div>
+            ) : (
+              visibleNodes.map((node, i) => {
+                const typeColor = TYPE_COLORS[node.type] ?? '#94a3b8';
+                const childCount = node.children?.length ?? 0;
+                const isLeaf = isLeafInternalNode(node);
+                const memberCount = node.memberCount ?? node.members?.length ?? 0;
+                return (
+                  <div
+                    key={node.id}
+                    className="panel-item-in w-full flex items-center gap-2.5 px-3 py-2 text-left transition-colors hover:bg-white/[0.06] group/row"
+                    style={{ animationDelay: `${i * 22}ms` }}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0 transition-transform group-hover/row:scale-125"
+                      style={{ background: typeColor, boxShadow: `0 0 8px ${typeColor}70` }}
+                    />
+
+                    <div
+                      onClick={() => selectInternalNode(node)}
+                      className="flex-1 min-w-0 cursor-pointer"
+                    >
+                      <span className="block text-[12px] text-gray-300 group-hover/row:text-white transition-colors leading-tight truncate">
+                        {node.label}
+                      </span>
+                      <span className="flex items-center gap-1 mt-0.5 min-w-0">
+                        <span
+                          className="text-[9px] font-semibold px-1.5 py-0.5 rounded capitalize shrink-0"
+                          style={{ background: `${typeColor}18`, color: typeColor, border: `1px solid ${typeColor}30` }}
+                        >
+                          {node.type}
+                        </span>
+                        <span className="text-[9px] truncate" style={{ color: '#4b5563' }}>
+                          {isLeaf ? (node.type === 'team' ? `${memberCount} teammate${memberCount === 1 ? '' : 's'}` : 'dashboard') : `${childCount} node${childCount === 1 ? '' : 's'}`}
+                        </span>
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-0.5 shrink-0">
+                      {effectiveDept && (canWriteEffectiveDept || canDeleteEffectiveDept) && (
+                        <div className="hidden group-hover/row:flex items-center gap-0.5">
+                          {canWriteEffectiveDept && node.type === 'team' && isLeaf && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onAddMember?.(effectiveDept.id, node.id);
+                              }}
+                              className="p-1 text-gray-400 hover:text-sky-300 hover:bg-white/10 rounded transition-colors"
+                              title="Add teammate"
+                            >
+                              <UserPlus className="w-3 h-3" />
+                            </button>
+                          )}
+                          {canWriteEffectiveDept && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditNode?.(effectiveDept, node);
+                              }}
+                              className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
+                              title="Edit"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
+                          )}
+                          {canDeleteEffectiveDept && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onDeleteNodeClick) {
+                                  onDeleteNodeClick(effectiveDept, node);
+                                } else if (window.confirm(`Delete node "${node.label}"?`)) {
+                                  onDeleteNode?.(effectiveDept.id, node.id);
+                                }
+                              }}
+                              className="p-1 text-gray-400 hover:text-rose-400 hover:bg-white/10 rounded transition-colors"
+                              title="Delete"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
+                      )}
+                      <ChevronRight
+                        className="w-3 h-3 shrink-0 transition-all group-hover/row:hidden"
+                        style={{ color: typeColor, opacity: 0.55 }}
+                      />
+                    </div>
+                  </div>
+                );
+              })
+            )
           )}
         </div>
 
-        {/* ── Add Department button — only at the top level; per-dept content is data-driven ── */}
+        {/* ── Add controls ── */}
         {canCreateDepartment && activeTab === 'departments' && !showingNodes && (
         <div
           className="px-3 pb-3 pt-2 shrink-0"
@@ -608,6 +780,28 @@ export function PolytopeSidePanel({
           >
             <Plus className="w-3.5 h-3.5" />
             Add Department
+          </button>
+        </div>
+        )}
+
+        {activeTab === 'departments' && showingNodes && effectiveDept && canWriteEffectiveDept && (
+        <div
+          className="px-3 pb-3 pt-2 shrink-0"
+          style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}
+        >
+          <button
+            type="button"
+            onClick={() => onAddNode?.(effectiveDept.id)}
+            className="w-full flex items-center justify-center gap-1.5 py-2 rounded-xl text-[11px] font-semibold transition-all hover:opacity-90 active:scale-95"
+            style={{
+              background: `${deptColor}16`,
+              border: `1px solid ${deptColor}35`,
+              color: deptColor,
+              transition: 'all 0.15s ease',
+            }}
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add Node
           </button>
         </div>
         )}

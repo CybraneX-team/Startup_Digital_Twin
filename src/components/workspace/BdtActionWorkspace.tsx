@@ -2,7 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Text, Billboard } from '@react-three/drei';
 import { PlasmaSphere } from '../PolytopeShared';
-import { X, ChevronRight, Zap, Briefcase, Activity, Bookmark, BookmarkCheck, ExternalLink } from 'lucide-react';
+import { X, ChevronRight, Zap, Briefcase, Activity, Bookmark, BookmarkCheck, ExternalLink, Users, UserPlus, Pencil, Trash2 } from 'lucide-react';
 import type { UInternalNode, UExternalNode } from '../../lib/usePolytopeStore';
 import { U_DOMAIN_COLOR } from '../../lib/usePolytopeStore';
 import { useSavedWorkflows } from '../../lib/useSavedWorkflows';
@@ -14,6 +14,10 @@ export interface BdtActionWorkspaceProps {
   onClose: () => void;
   onDepartmentClick: (deptId: string) => void;
   isOpen?: boolean;
+  canEdit?: boolean;
+  onAddMember?: (deptId: string, nodeId: string) => void;
+  onEditMember?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
+  onDeleteMember?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
 }
 
 function SectionTitle({ children, icon: Icon }: { children: React.ReactNode; icon?: any }) {
@@ -33,8 +37,22 @@ function GlassCard({ children, className = '', style = {} }: { children: React.R
   );
 }
 
-export function BdtActionWorkspace({ node, department, allDepartments, onClose, onDepartmentClick, isOpen = true }: BdtActionWorkspaceProps) {
+export function BdtActionWorkspace({
+  node,
+  department,
+  allDepartments,
+  onClose,
+  onDepartmentClick,
+  isOpen = true,
+  canEdit = false,
+  onAddMember,
+  onEditMember,
+  onDeleteMember,
+}: BdtActionWorkspaceProps) {
   const primaryColor = U_DOMAIN_COLOR[department.domain] || '#8b5cf6';
+  const isTeamNode = node.type === 'team';
+  const teamMembers = node.members ?? [];
+  const teamMemberCount = node.memberCount ?? teamMembers.length;
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('workspace_toggled', { detail: isOpen }));
@@ -258,6 +276,80 @@ export function BdtActionWorkspace({ node, department, allDepartments, onClose, 
         {/* Right Content Area (Dynamic Panels) */}
         <div className="flex-1 overflow-y-auto p-6 lg:p-10 scrollbar-hide relative">
           <div className="max-w-5xl mx-auto flex flex-col gap-5">
+            {isTeamNode && (
+              <GlassCard>
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div>
+                    <SectionTitle icon={Users}>TEAM ROSTER</SectionTitle>
+                    <p className="text-sm text-white/55">
+                      {teamMemberCount} teammate{teamMemberCount === 1 ? '' : 's'} attached to this BDT node.
+                    </p>
+                  </div>
+                  {canEdit && onAddMember && (
+                    <button
+                      type="button"
+                      onClick={() => onAddMember(department.id, node.id)}
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold transition-all hover:brightness-110 shrink-0"
+                      style={{ background: `${primaryColor}18`, color: primaryColor, border: `1px solid ${primaryColor}40` }}
+                    >
+                      <UserPlus className="w-3.5 h-3.5" />
+                      Add Teammate
+                    </button>
+                  )}
+                </div>
+
+                {teamMembers.length === 0 ? (
+                  <div className="rounded-xl border border-white/5 bg-[#111] px-4 py-5 text-sm text-white/40">
+                    No teammates added yet.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {teamMembers.map((member, index) => (
+                      <div
+                        key={`${node.id}-member-${index}`}
+                        className="flex items-center gap-3 rounded-xl border border-white/5 bg-[#111] p-3 group/member"
+                      >
+                        <div
+                          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 text-xs font-bold"
+                          style={{ background: `${primaryColor}18`, border: `1px solid ${primaryColor}35`, color: primaryColor }}
+                        >
+                          {member.name?.slice(0, 1).toUpperCase() || 'M'}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-white/90 truncate">{member.name}</p>
+                          <p className="text-xs text-white/40 truncate">{member.role}</p>
+                        </div>
+                        {canEdit && (
+                          <div className="flex items-center gap-1 opacity-0 group-hover/member:opacity-100 transition-opacity shrink-0">
+                            {onEditMember && (
+                              <button
+                                type="button"
+                                onClick={() => onEditMember(department, node, index)}
+                                className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded transition-colors"
+                                title="Edit teammate"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            {onDeleteMember && (
+                              <button
+                                type="button"
+                                onClick={() => onDeleteMember(department, node, index)}
+                                className="p-1.5 text-white/40 hover:text-rose-300 hover:bg-white/10 rounded transition-colors"
+                                title="Delete teammate"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </GlassCard>
+            )}
+
             <GlassCard>
               <SectionTitle icon={Zap}>WORKFLOW & DETAILS</SectionTitle>
               <h3 className="text-lg font-semibold text-white mb-4" style={{ color: primaryColor }}>{department.label}</h3>

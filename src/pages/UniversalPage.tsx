@@ -79,7 +79,7 @@ export default function UniversalPage() {
     return targetNode;
   };
   const selectedNode = getSelectedInternalNode();
-  const isLeafNode = !!selectedNode && ['metric', 'signal', 'decision', 'action'].includes(selectedNode.type);
+  const isLeafNode = !!selectedNode && (!selectedNode.children || selectedNode.children.length === 0);
 
   const handleEditDepartment = (dept: UExternalNode) => {
     if (!canWriteDept(dept)) return;
@@ -478,6 +478,10 @@ export default function UniversalPage() {
           node={selectedNode}
           department={selectedDept}
           allDepartments={store.departments}
+          canEdit={canWriteDept(selectedDept)}
+          onAddMember={handleAddMember}
+          onEditMember={handleEditMember}
+          onDeleteMember={handleDeleteMemberClick}
           onClose={() => {
             // go up one level
             setInternalPath(prev => prev.slice(0, -1));

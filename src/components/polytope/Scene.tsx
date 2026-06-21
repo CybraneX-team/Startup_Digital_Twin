@@ -118,6 +118,10 @@ function findChildNodePosition(
   return findChildNodePosition(node, childPos, path.slice(1), depth + 1);
 }
 
+function isLeafInternalNode(node: UInternalNode | null | undefined): boolean {
+  return !!node && (!node.children || node.children.length === 0);
+}
+
 // ── Scene ────────────────────────────────────────────────────────────────────
 
 export function Scene({
@@ -458,7 +462,7 @@ export function Scene({
       const parentNode = findNodeAtPath(ACTIVE_NODES[deptIdx].internalNodes, nextPath);
       if (targetPos && orbitRef.current) {
         const dir = targetPos.clone().normalize();
-        const isLeaf = parentNode && ['metric', 'signal', 'decision', 'action'].includes(parentNode.type);
+        const isLeaf = isLeafInternalNode(parentNode);
         const shift = isLeaf ? 2.5 : 0.0;
         const zoom = isLeaf ? 4.0 : 10;
         const { camPos, orbitTarget } = computeCameraFraming(targetPos, dir, parentNode?.children?.length ?? 0, zoom, shift);
@@ -514,9 +518,10 @@ export function Scene({
         const extNodeIdx = ACTIVE_NODES.findIndex(n => n.id === parentId);
         const parentNode = findNodeAtPath(ACTIVE_NODES[extNodeIdx].internalNodes, path);
         const dir = pos.clone().normalize();
-        const isLeaf = parentNode && ['metric', 'signal', 'decision', 'action'].includes(parentNode.type);
+        const isLeaf = isLeafInternalNode(parentNode);
         const shift = isLeaf ? 2.5 : 0.0;
-        const { camPos, orbitTarget } = computeCameraFraming(pos, dir, parentNode?.children?.length ?? 0, 10, shift);
+        const zoom = isLeaf ? 4.0 : 10;
+        const { camPos, orbitTarget } = computeCameraFraming(pos, dir, parentNode?.children?.length ?? 0, zoom, shift);
         gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.0, ease: 'power2.inOut' });
         gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.0, ease: 'power2.inOut' });
       }
