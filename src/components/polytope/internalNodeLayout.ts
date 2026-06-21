@@ -86,7 +86,8 @@ export function computeCameraFraming(
   targetPos: THREE.Vector3,
   dir: THREE.Vector3,
   childrenCount: number,
-  baseZoomDist: number
+  baseZoomDist: number,
+  shiftRightAmount: number = 0
 ): { camPos: THREE.Vector3; orbitTarget: THREE.Vector3 } {
   let camPos = targetPos.clone().add(dir.clone().multiplyScalar(baseZoomDist));
   let orbitTarget = targetPos.clone();
@@ -108,6 +109,16 @@ export function computeCameraFraming(
       .add(up.clone().multiplyScalar(upShift));
     
     orbitTarget = targetPos.clone().add(up.clone().multiplyScalar(orbitUp));
+  }
+
+  if (shiftRightAmount !== 0) {
+    const localUp = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(dir.dot(localUp)) > 0.99) localUp.set(1, 0, 0);
+    const right = new THREE.Vector3().crossVectors(dir, localUp).normalize();
+    
+    const shiftVec = right.clone().multiplyScalar(shiftRightAmount);
+    camPos.add(shiftVec);
+    orbitTarget.add(shiftVec);
   }
 
   return { camPos, orbitTarget };

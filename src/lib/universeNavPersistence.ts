@@ -18,6 +18,10 @@ export type PersistedPlanetState = {
   insideRootPolytope: boolean;
   rootPolytopeDeptId: string | null;
   rootPolytopeInternalPath: string[];
+  /** Stable fallback when root ids shift after template changes. */
+  rootLabel?: string;
+  internalPathLabels?: string[];
+  industryColor?: string;
 };
 
 const STORAGE_KEY = 'universe3d_nav_state';

@@ -388,7 +388,9 @@ export function ActionNodeWorkspace({ actionNode, branchNode, rootNode, context,
               borderLeft: '1px solid rgba(255,255,255,0.1)',
               boxShadow: '-10px 0 40px rgba(0,0,0,0.5)',
               transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
-              transition: 'transform 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
+              opacity: isOpen ? 1 : 0,
+              pointerEvents: isOpen ? 'auto' : 'none',
+              transition: 'transform 0.6s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1)'
             }
       }
     >

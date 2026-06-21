@@ -1,24 +1,31 @@
 import { create } from 'zustand';
-import { U_NODES, U_DOMAIN_COLOR } from './universalPolytopeData';
-import type { UExternalNode, UInternalNode, UDomain } from './universalPolytopeData';
+import { U_NODES as BDT_SEED_NODES } from './bdtPolytopeData';
+import type { UExternalNode, UInternalNode, UDomain } from './bdtPolytopeData';
+import { U_DOMAIN_COLOR } from './bdtPolytopeData';
 import { api } from './api';
 
-/** Twin (/3d) and BDT (/universal) now share the same canonical company graph. */
+/** Twin (/3d) and BDT (/universal) share one canonical company graph from the backend. */
 export type PolytopeStoreScope = 'twin' | 'bdt';
 
-const SHARED_STORAGE_KEY = 'polytope_departments_bdt_v1';
-const FALLBACK_TWIN_KEY = 'polytope_departments_twin_v1';
+const CACHE_STORAGE_KEY = 'polytope_departments_bdt_v2';
 const LEGACY_STORAGE_KEY = 'polytope_departments_v1';
 
 export type { UExternalNode, UInternalNode, UDomain };
 export { U_DOMAIN_COLOR };
 
-const DEFAULT_NODES = U_NODES.filter(n => n.domain !== 'inactive');
+const DEFAULT_DEPARTMENTS = BDT_SEED_NODES.filter(n => n.domain !== 'inactive');
 
-function getLocalDepartmentDrafts(): UExternalNode[] | null {
+function persistCache(departments: UExternalNode[]) {
   try {
-    let raw = localStorage.getItem(SHARED_STORAGE_KEY);
-    if (!raw) raw = localStorage.getItem(FALLBACK_TWIN_KEY);
+    localStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(departments));
+  } catch (err) {
+    console.warn('[departments] cache write failed', err);
+  }
+}
+
+function loadCachedDepartments(): UExternalNode[] | null {
+  try {
+    let raw = localStorage.getItem(CACHE_STORAGE_KEY);
     if (!raw) raw = localStorage.getItem(LEGACY_STORAGE_KEY);
     if (raw) return JSON.parse(raw) as UExternalNode[];
 
@@ -31,7 +38,7 @@ function getLocalDepartmentDrafts(): UExternalNode[] | null {
     return selectedNames
       .filter((name): name is string => typeof name === 'string' && name.trim().length > 0)
       .map((name, index) => {
-        const matched = DEFAULT_NODES.find(n =>
+        const matched = DEFAULT_DEPARTMENTS.find(n =>
           n.label.toLowerCase() === name.toLowerCase() ||
           n.label.toLowerCase().includes(name.toLowerCase()) ||
           name.toLowerCase().includes(n.label.toLowerCase())
@@ -49,7 +56,7 @@ function getLocalDepartmentDrafts(): UExternalNode[] | null {
         };
       });
   } catch (err) {
-    console.error('Failed to parse local department drafts', err);
+    console.error('Failed to load cached departments', err);
     return null;
   }
 }
@@ -92,7 +99,7 @@ function flattenNodes(nodes: UInternalNode[]): UInternalNode[] {
   return nodes.flatMap(node => [node, ...flattenNodes(node.children ?? [])]);
 }
 
-interface PolytopeStoreState {
+export interface PolytopeStoreState {
   departments: UExternalNode[];
   loading: boolean;
   loaded: boolean;
@@ -108,7 +115,7 @@ interface PolytopeStoreState {
 }
 
 const useGlobalPolytopeStore = create<PolytopeStoreState>((set, get) => ({
-  departments: [],
+  departments: loadCachedDepartments() ?? DEFAULT_DEPARTMENTS,
   loading: false,
   loaded: false,
   error: null,
@@ -118,11 +125,15 @@ const useGlobalPolytopeStore = create<PolytopeStoreState>((set, get) => ({
     set({ loading: true, error: null });
     try {
       const response = await api.get<{ departments: UExternalNode[] }>('/api/departments');
-      set({ departments: response.departments ?? [], loading: false, loaded: true });
+      const departments = response.departments ?? [];
+      persistCache(departments);
+      set({ departments, loading: false, loaded: true, error: null });
     } catch (err) {
       console.error('[departments] load failed', err);
+      const cached = loadCachedDepartments();
+      const fallback = cached ?? (get().departments.length ? get().departments : DEFAULT_DEPARTMENTS);
       set({
-        departments: get().loaded ? get().departments : [],
+        departments: fallback,
         loading: false,
         loaded: true,
         error: err instanceof Error ? err.message : 'Failed to load departments',
@@ -140,9 +151,11 @@ const useGlobalPolytopeStore = create<PolytopeStoreState>((set, get) => ({
     try {
       const response = await api.post<{ department: UExternalNode }>('/api/departments', dept);
       const saved = response.department;
-      set(state => ({
-        departments: state.departments.map(d => d.id === optimistic.id ? saved : d),
-      }));
+      set(state => {
+        const next = state.departments.map(d => d.id === optimistic.id ? saved : d);
+        persistCache(next);
+        return { departments: next };
+      });
       return saved;
     } catch (err) {
       set(state => ({ departments: state.departments.filter(d => d.id !== optimistic.id) }));
@@ -155,7 +168,11 @@ const useGlobalPolytopeStore = create<PolytopeStoreState>((set, get) => ({
     set(state => ({ departments: state.departments.map(d => d.id === id ? { ...d, ...updates } : d) }));
     try {
       const response = await api.patch<{ department: UExternalNode }>(`/api/departments/${id}`, updates);
-      set(state => ({ departments: state.departments.map(d => d.id === id ? response.department : d) }));
+      set(state => {
+        const next = state.departments.map(d => d.id === id ? response.department : d);
+        persistCache(next);
+        return { departments: next };
+      });
     } catch (err) {
       set({ departments: previous });
       throw err;
@@ -167,6 +184,7 @@ const useGlobalPolytopeStore = create<PolytopeStoreState>((set, get) => ({
     set(state => ({ departments: state.departments.filter(d => d.id !== id) }));
     try {
       await api.delete(`/api/departments/${id}`);
+      persistCache(get().departments);
     } catch (err) {
       set({ departments: previous });
       throw err;
@@ -187,10 +205,10 @@ const useGlobalPolytopeStore = create<PolytopeStoreState>((set, get) => ({
         ...node,
         parentNodeId: findPathParentNodeId(dept, path),
       });
+      persistCache(response.departments);
       set({ departments: response.departments });
       const savedDept = response.departments.find(d => d.id === deptId);
-      const flatten = (nodes: UInternalNode[]): UInternalNode[] => nodes.flatMap(n => [n, ...flatten(n.children ?? [])]);
-      return flatten(savedDept?.internalNodes ?? []).find(n => n.label === node.label && n.type === node.type) ?? optimistic;
+      return flattenNodes(savedDept?.internalNodes ?? []).find(n => n.label === node.label && n.type === node.type) ?? optimistic;
     } catch (err) {
       set(state => ({
         departments: state.departments.map(d =>
@@ -212,6 +230,7 @@ const useGlobalPolytopeStore = create<PolytopeStoreState>((set, get) => ({
     }));
     try {
       const response = await api.patch<{ departments: UExternalNode[] }>(`/api/departments/nodes/${nodeId}`, payload);
+      persistCache(response.departments);
       set({ departments: response.departments });
     } catch (err) {
       set({ departments: previous });
@@ -228,6 +247,7 @@ const useGlobalPolytopeStore = create<PolytopeStoreState>((set, get) => ({
     }));
     try {
       await api.delete(`/api/departments/nodes/${nodeId}`);
+      persistCache(get().departments);
     } catch (err) {
       set({ departments: previous });
       throw err;
@@ -235,12 +255,29 @@ const useGlobalPolytopeStore = create<PolytopeStoreState>((set, get) => ({
   },
 
   resetToDefaults: async () => {
-    const localDrafts = getLocalDepartmentDrafts();
-    const response = await api.post<{ departments: UExternalNode[] }>('/api/departments/import', { departments: localDrafts ?? [] });
-    set({ departments: response.departments ?? [] });
+    const localDrafts = loadCachedDepartments();
+    const response = await api.post<{ departments: UExternalNode[] }>('/api/departments/import', {
+      departments: localDrafts ?? DEFAULT_DEPARTMENTS,
+    });
+    const departments = response.departments ?? [];
+    persistCache(departments);
+    set({ departments });
   },
 }));
 
+/** Scope is kept for call-site clarity; twin and BDT read the same backend graph. */
 export function usePolytopeStore(_scope?: PolytopeStoreScope) {
   return useGlobalPolytopeStore();
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key !== CACHE_STORAGE_KEY && event.key !== LEGACY_STORAGE_KEY) return;
+    try {
+      const next = event.newValue ? JSON.parse(event.newValue) : null;
+      useGlobalPolytopeStore.setState({ departments: next ?? DEFAULT_DEPARTMENTS });
+    } catch (e) {
+      console.error('Error syncing department cache:', e);
+    }
+  });
 }

@@ -12,6 +12,7 @@ import type { CoreWorkspacePhase } from '../lib/coreWorkspaceTransition';
 import { getAllIndustries } from '../lib/db/industries';
 import { getAllSubdomains } from '../lib/db/subdomains';
 import { useVoice } from '../context/VoiceContext';
+import { BdtActionWorkspace } from '../components/workspace/BdtActionWorkspace';
 
 export default function UniversalPage() {
   const { profile, canWrite } = useAuth();
@@ -64,6 +65,21 @@ export default function UniversalPage() {
   useEffect(() => {
     void store.loadDepartments();
   }, [store.loadDepartments]);
+
+  // ── Compute current node for BDT action workspace (leaf drill) ──
+  const selectedDept = selectedDeptId ? store.departments.find(d => d.id === selectedDeptId) : null;
+  const getSelectedInternalNode = () => {
+    if (!selectedDept || internalPath.length === 0) return null;
+    let currentNodes = selectedDept.internalNodes;
+    let targetNode: UInternalNode | null = null;
+    for (const p of internalPath) {
+      targetNode = currentNodes?.find(n => n.id === p) || null;
+      if (targetNode) currentNodes = targetNode.children || [];
+    }
+    return targetNode;
+  };
+  const selectedNode = getSelectedInternalNode();
+  const isLeafNode = !!selectedNode && ['metric', 'signal', 'decision', 'action'].includes(selectedNode.type);
 
   const handleEditDepartment = (dept: UExternalNode) => {
     if (!canWriteDept(dept)) return;
@@ -378,7 +394,7 @@ export default function UniversalPage() {
       )}
 
       {/* ── Left sidebar panel — hidden when create panel is shown ── */}
-      {isPolytopeInteractive && !draftDept && !draftInternalNode && !draftMember && (
+      {isPolytopeInteractive && !isLeafNode && !draftDept && !draftInternalNode && !draftMember && (
         <div className="fixed bottom-6 left-4 z-[60] pointer-events-auto">
           <PolytopeSidePanel
             departments={store.departments}
@@ -454,6 +470,26 @@ export default function UniversalPage() {
           />
         );
       })()}
+
+      {/* ── BDT Action Workspace (Leaf Nodes) ── */}
+      {selectedDept && selectedNode && (
+        <BdtActionWorkspace
+          isOpen={isLeafNode}
+          node={selectedNode}
+          department={selectedDept}
+          allDepartments={store.departments}
+          onClose={() => {
+            // go up one level
+            setInternalPath(prev => prev.slice(0, -1));
+          }}
+          onDepartmentClick={(deptId) => {
+            // Navigate to the interrelated department
+            setInternalPath([]);
+            setSelectedDeptId(deptId);
+            setRequestSelectDeptId(deptId);
+          }}
+        />
+      )}
 
       {/* ── CRUD modal — only for edit/delete flows now ── */}
       {hasWritableDepartment && <PolytopeManager

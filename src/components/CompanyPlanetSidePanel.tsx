@@ -8,7 +8,7 @@ import type {
   PlanetBranchNode,
   UserPlanetRole,
 } from '../data/companyPlanetRoots';
-import { getExploreLevel, getPlanetCoreDetails } from '../data/companyPlanetRoots';
+import { getExploreLevel, getPlanetCoreDetails, PLANET_BRANCH_TYPE_LABELS } from '../data/companyPlanetRoots';
 import { PlanetCoreContextCard } from './planet/PlanetCoreContextCard';
 import { UniverseNavBackButton } from './UniverseNavBackButton';
 
@@ -159,7 +159,7 @@ export function CompanyPlanetSidePanel({
       id: branch.id,
       name: branch.label,
       color: selectedRoot.color,
-      meta: `${branch.actions.length} actions`,
+      meta: `${PLANET_BRANCH_TYPE_LABELS[branch.nodeType]} · ${branch.actions.length} action${branch.actions.length === 1 ? '' : 's'}`,
       onClick: () => onBranchSelect(selectedRoot.id, branch.id),
     }));
   } else if (level === 'actions' && selectedRoot && selectedBranch) {

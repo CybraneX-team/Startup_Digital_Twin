@@ -1,4 +1,4 @@
-import { useRef, useMemo, useState, useEffect } from 'react';
+import { useRef, useMemo, useState, useEffect, useCallback } from 'react';
 import { Canvas, useThree, useFrame } from '@react-three/fiber';
 import { OrbitControls, Stars, Html } from '@react-three/drei';
 import * as THREE from 'three';
@@ -14,6 +14,12 @@ import { computeInternalNodePosition, computeCameraFraming } from './polytope/in
 import type { UExternalNode } from '../lib/universalPolytopeData';
 import { U_DOMAIN_COLOR } from '../lib/universalPolytopeData';
 import { useDragWorkspaceStore } from '../lib/useDragWorkspaceStore';
+import {
+  PLANET_ANIM,
+  ROOT_FOCUS_TOTAL_MS,
+  EXPAND_SETTLE_MS,
+  INTERNAL_DRILL_MS,
+} from '../lib/planetRootAnimation';
 
 export interface CompanyPlanet3DViewProps {
   context: CompanyPlanetContext;
@@ -39,21 +45,20 @@ export interface CompanyPlanet3DViewProps {
   rootPolytopeBackStep?: number;
   onBack?: () => void;
   rootSwitchKey?: number;
+  /** True while replaying saved navigation after page refresh. */
+  sessionRestoreActive?: boolean;
+  /** Saved internal path to replay once the root polytope is open. */
+  restoreInternalPath?: string[];
+  onRestoreDrillPath?: (path: string[]) => void;
+  onRestoreComplete?: () => void;
+  onRestoreFocusMiss?: () => void;
 }
 
 const RING_RADIUS = 7.5;
 const CORE_RADIUS = 1.4;
 const NODE_RADIUS = 0.8;
 
-// Phase 1: camera zooms toward the node (0.8s)
-const ZOOM_IN_DURATION = 0.8;
-// Phase 2: short pause while node is filling view (0.05s)
-const HOLD_DURATION = 0.05;
-// Total time before we signal transition complete
-export const ROOT_FOCUS_TOTAL_MS = (ZOOM_IN_DURATION + HOLD_DURATION) * 1000 + 100;
-
-// Zoom-out timing
-const ZOOM_OUT_DURATION = 0.9;
+const FOCUS_ZOOM_OFFSET = 7.5;
 
 function SceneContent({
   context,
@@ -71,29 +76,125 @@ function SceneContent({
   onInternalPathChange,
   rootPolytopeBackStep = 0,
   onBack,
+  sessionRestoreActive = false,
+  restoreInternalPath = [],
+  onRestoreDrillPath,
+  onRestoreComplete,
+  onRestoreFocusMiss,
 }: CompanyPlanet3DViewProps) {
   const { camera } = useThree();
   const orbitRef = useRef<any>(null);
   const isDragging = useDragWorkspaceStore(s => s.isDragging);
-  
+
   const [hoveredId, setHoveredId] = useState<string | null>(null);
   const [focusRootId, setFocusRootId] = useState<string | null>(null);
-  
+  const [internalNodesVisible, setInternalNodesVisible] = useState(false);
+  const [isZoomingIn, setIsZoomingIn] = useState(false);
+
   // Animated values for smooth fade of non-focused nodes
-  const fadeProgress = useRef(0); // 0 = all visible, 1 = only focused visible
-  const scaleProgress = useRef(1); // scale of the focused node (grows as we zoom in)
-  const expandProgress = useRef(0); // 0 = sub-nodes at center, 1 = fully expanded
+  const fadeProgress = useRef(0);
+  const scaleProgress = useRef(1);
+  const expandProgress = useRef(0);
   const isFirstMountRef = useRef(true);
   const rootEdgesMatRef = useRef<THREE.LineBasicMaterial>(null);
+  const cameraAnimTokenRef = useRef(0);
+  const focusZoomActiveRef = useRef(false);
+  const focusCompleteTimerRef = useRef<number | null>(null);
+  const restoreDrillStartedRef = useRef(false);
+  const restoreReadyTimerRef = useRef<number | null>(null);
+  const pendingFocusRootIdRef = useRef<string | null>(null);
 
   // Sync focusRootId state with activeRootDept prop
   useEffect(() => {
     if (activeRootDept) {
       setFocusRootId(activeRootDept.id);
-    } else {
+    } else if (!sessionRestoreActive) {
       setFocusRootId(null);
     }
-  }, [activeRootDept]);
+  }, [activeRootDept, sessionRestoreActive]);
+
+  const computeFramingForPath = useCallback((
+    dept: UExternalNode,
+    rootPos: THREE.Vector3,
+    internalPath: string[],
+  ) => {
+    let targetPos = rootPos.clone();
+    let childrenCount = dept.internalNodes.length;
+    let baseZoomDist = 14.5;
+
+    if (internalPath.length === 1) {
+      const branchId = internalPath[0];
+      const branchIdx = dept.internalNodes.findIndex(n => n.id === branchId);
+      if (branchIdx !== -1) {
+        targetPos = computeInternalNodePosition(rootPos, branchIdx, dept.internalNodes.length, 'flat');
+        const branch = dept.internalNodes[branchIdx];
+        childrenCount = branch.children?.length ?? 0;
+        baseZoomDist = 10;
+      }
+    } else if (internalPath.length === 2) {
+      const branchId = internalPath[0];
+      const actionId = internalPath[1];
+      const branchIdx = dept.internalNodes.findIndex(n => n.id === branchId);
+      if (branchIdx !== -1) {
+        const branch = dept.internalNodes[branchIdx];
+        const branchPos = computeInternalNodePosition(rootPos, branchIdx, dept.internalNodes.length, 'flat');
+        const actionIdx = branch.children?.findIndex(c => c.id === actionId);
+        if (actionIdx !== -1 && actionIdx !== undefined) {
+          const ringRadius = 1.8;
+          const dir = new THREE.Vector3(0, 0, 1);
+          const right = new THREE.Vector3(1, 0, 0);
+          const up = new THREE.Vector3(0, 1, 0);
+          const depthStep = 0.5;
+          const childCenter = branchPos.clone().add(dir.clone().multiplyScalar(depthStep));
+          const angle = (actionIdx / (branch.children?.length ?? 1)) * Math.PI * 2;
+          targetPos = childCenter.clone()
+            .add(right.clone().multiplyScalar(Math.cos(angle) * ringRadius))
+            .add(up.clone().multiplyScalar(Math.sin(angle) * ringRadius));
+          childrenCount = 0;
+          baseZoomDist = 10;
+        }
+      }
+    }
+
+    const dir = new THREE.Vector3(0, 0, 1);
+    return computeCameraFraming(targetPos, dir, childrenCount, baseZoomDist);
+  }, []);
+
+  const animateCameraToFraming = useCallback((
+    dept: UExternalNode,
+    rootPos: THREE.Vector3,
+    internalPath: string[],
+    duration: number,
+    onComplete?: () => void,
+  ) => {
+    const token = ++cameraAnimTokenRef.current;
+    const { camPos, orbitTarget } = computeFramingForPath(dept, rootPos, internalPath);
+
+    gsap.killTweensOf(camera.position);
+    gsap.to(camera.position, {
+      x: camPos.x,
+      y: camPos.y,
+      z: camPos.z,
+      duration,
+      ease: PLANET_ANIM.cameraEase,
+      onComplete: () => {
+        if (token !== cameraAnimTokenRef.current) return;
+        setIsZoomingIn(false);
+        onComplete?.();
+      },
+    });
+
+    if (orbitRef.current) {
+      gsap.killTweensOf(orbitRef.current.target);
+      gsap.to(orbitRef.current.target, {
+        x: orbitTarget.x,
+        y: orbitTarget.y,
+        z: orbitTarget.z,
+        duration,
+        ease: PLANET_ANIM.cameraEase,
+      });
+    }
+  }, [camera, computeFramingForPath]);
 
   const nodes = useMemo(() => getPlanetNodesAtPath(context, path), [context, path]);
 
@@ -138,105 +239,83 @@ function SceneContent({
   // 1. Progress transitions (runs when entering/exiting root polytope)
   useEffect(() => {
     if (insideRootPolytope && activeRootDept) {
+      if (fadeProgress.current < 0.95) {
+        gsap.to(fadeProgress, {
+          current: 1,
+          duration: PLANET_ANIM.fadeDuration * 0.45,
+          ease: PLANET_ANIM.fadeEase,
+        });
+      } else {
+        fadeProgress.current = 1;
+      }
+
+      expandProgress.current = 0;
+      const revealTimer = window.setTimeout(() => {
+        setInternalNodesVisible(true);
+      }, Math.round(PLANET_ANIM.expandDelay * 1000));
+
       gsap.to(expandProgress, {
         current: 1,
-        duration: 0.8,
-        ease: 'power2.out',
-        delay: 0.4,
+        duration: PLANET_ANIM.expandDuration,
+        ease: PLANET_ANIM.expandEase,
+        delay: PLANET_ANIM.expandDelay,
       });
 
       gsap.to(scaleProgress, {
         current: 1.0,
-        duration: 0.8,
-        ease: 'power2.out',
-        delay: 0.4,
+        duration: PLANET_ANIM.expandDuration,
+        ease: PLANET_ANIM.expandEase,
+        delay: PLANET_ANIM.expandDelay,
       });
-    } else {
-      gsap.to(expandProgress, {
-        current: 0,
-        duration: 0.4,
-        ease: 'power2.out',
-      });
-      gsap.to(scaleProgress, {
-        current: 1.0,
-        duration: 0.4,
-        ease: 'power2.out',
-      });
+
+      return () => window.clearTimeout(revealTimer);
     }
+
+    setInternalNodesVisible(false);
+    gsap.to(expandProgress, {
+      current: 0,
+      duration: 0.55,
+      ease: PLANET_ANIM.fadeEase,
+    });
+    gsap.to(scaleProgress, {
+      current: 1.0,
+      duration: 0.55,
+      ease: PLANET_ANIM.fadeEase,
+    });
   }, [insideRootPolytope, !!activeRootDept]);
 
-  // 2. Camera Focus & Framing transitions (runs on drill-down level/path changes)
+  // 2. Camera framing on internal drill-down
   useEffect(() => {
-    if (!insideRootPolytope || !activeRootDept) return;
+    if (!insideRootPolytope || !activeRootDept || rootPolytopeInternalPath.length === 0) return;
 
     const deptNode = layout.find(n => n.id === activeRootDept.id);
     if (!deptNode) return;
 
-    const ROOT_POS = deptNode.pos;
-    let targetPos = ROOT_POS.clone();
-    let childrenCount = activeRootDept.internalNodes.length;
-    let baseZoomDist = 14.5;
+    animateCameraToFraming(
+      activeRootDept,
+      deptNode.pos,
+      rootPolytopeInternalPath,
+      PLANET_ANIM.internalCameraDuration,
+    );
+  }, [insideRootPolytope, activeRootDept, layout, rootPolytopeInternalPath, animateCameraToFraming]);
 
-    if (rootPolytopeInternalPath.length === 1) {
-      const branchId = rootPolytopeInternalPath[0];
-      const branchIdx = activeRootDept.internalNodes.findIndex(n => n.id === branchId);
-      if (branchIdx !== -1) {
-        targetPos = computeInternalNodePosition(ROOT_POS, branchIdx, activeRootDept.internalNodes.length, 'flat');
-        const branch = activeRootDept.internalNodes[branchIdx];
-        childrenCount = branch.children?.length ?? 0;
-        baseZoomDist = 10;
-      }
-    } else if (rootPolytopeInternalPath.length === 2) {
-      const branchId = rootPolytopeInternalPath[0];
-      const actionId = rootPolytopeInternalPath[1];
-      const branchIdx = activeRootDept.internalNodes.findIndex(n => n.id === branchId);
-      if (branchIdx !== -1) {
-        const branch = activeRootDept.internalNodes[branchIdx];
-        const branchPos = computeInternalNodePosition(ROOT_POS, branchIdx, activeRootDept.internalNodes.length, 'flat');
-        const actionIdx = branch.children?.findIndex(c => c.id === actionId);
-        if (actionIdx !== -1 && actionIdx !== undefined) {
-          const ringRadius = 1.8; // ringRadius at depth = 1
-          const dir = new THREE.Vector3(0, 0, 1);
-          const right = new THREE.Vector3(1, 0, 0);
-          const up = new THREE.Vector3(0, 1, 0);
-          const depthStep = 0.5;
-          const childCenter = branchPos.clone().add(dir.clone().multiplyScalar(depthStep));
-          const angle = (actionIdx / (branch.children?.length ?? 1)) * Math.PI * 2;
-          targetPos = childCenter.clone()
-            .add(right.clone().multiplyScalar(Math.cos(angle) * ringRadius))
-            .add(up.clone().multiplyScalar(Math.sin(angle) * ringRadius));
-          childrenCount = 0;
-          baseZoomDist = 10;
-        }
-      }
-    }
+  // 2b. Smooth pull-back when internal ring opens after focus zoom
+  useEffect(() => {
+    if (!insideRootPolytope || !activeRootDept || rootPolytopeInternalPath.length > 0) return;
 
-    const dir = new THREE.Vector3(0, 0, 1);
-    const { camPos, orbitTarget } = computeCameraFraming(targetPos, dir, childrenCount, baseZoomDist);
+    const deptNode = layout.find(n => n.id === activeRootDept.id);
+    if (!deptNode) return;
 
-    gsap.killTweensOf(camera.position);
-    gsap.to(camera.position, {
-      x: camPos.x,
-      y: camPos.y,
-      z: camPos.z,
-      duration: 1.2,
-      ease: 'power2.inOut',
-      onComplete: () => {
-        setIsZoomingIn(false);
+    animateCameraToFraming(
+      activeRootDept,
+      deptNode.pos,
+      [],
+      PLANET_ANIM.expandDuration + PLANET_ANIM.expandDelay,
+      () => {
+        focusZoomActiveRef.current = false;
       },
-    });
-
-    if (orbitRef.current) {
-      gsap.killTweensOf(orbitRef.current.target);
-      gsap.to(orbitRef.current.target, {
-        x: orbitTarget.x,
-        y: orbitTarget.y,
-        z: orbitTarget.z,
-        duration: 1.2,
-        ease: 'power2.inOut',
-      });
-    }
-  }, [insideRootPolytope, activeRootDept?.id, layout, camera, rootPolytopeInternalPath]);
+    );
+  }, [insideRootPolytope, activeRootDept?.id, layout, rootPolytopeInternalPath.length, animateCameraToFraming]);
 
   // Handle zoom-out animation when returning from inner nodes to company overview
   useEffect(() => {
@@ -252,8 +331,8 @@ function SceneContent({
       // Animate fade: reveal all nodes
       gsap.to(fadeProgress, {
         current: 0,
-        duration: ZOOM_OUT_DURATION * 0.6,
-        ease: 'power2.out',
+        duration: PLANET_ANIM.zoomOutDuration * 0.65,
+        ease: PLANET_ANIM.fadeEase,
       });
 
       // Zoom camera back to default position
@@ -261,15 +340,15 @@ function SceneContent({
         gsap.killTweensOf(orbitRef.current.target);
         gsap.to(orbitRef.current.target, {
           x: 0, y: 0, z: 0,
-          duration: ZOOM_OUT_DURATION,
-          ease: 'power2.inOut',
+          duration: PLANET_ANIM.zoomOutDuration,
+          ease: PLANET_ANIM.cameraEase,
         });
       }
       gsap.killTweensOf(camera.position);
       gsap.to(camera.position, {
         x: 0, y: 0, z: 28,
-        duration: ZOOM_OUT_DURATION,
-        ease: 'power2.inOut',
+        duration: PLANET_ANIM.zoomOutDuration,
+        ease: PLANET_ANIM.cameraEase,
         onComplete: () => {
           onZoomOutComplete?.();
         },
@@ -279,9 +358,65 @@ function SceneContent({
     return () => clearTimeout(startTimeout);
   }, [zoomOutFromRootId, layout, camera, onZoomOutComplete]);
 
-  const [isZoomingIn, setIsZoomingIn] = useState(false);
+  useEffect(() => () => {
+    if (focusCompleteTimerRef.current != null) {
+      window.clearTimeout(focusCompleteTimerRef.current);
+    }
+    if (restoreReadyTimerRef.current != null) {
+      window.clearTimeout(restoreReadyTimerRef.current);
+    }
+  }, []);
 
-  const handleNodeClick = (nodeId: string, _nodePos: THREE.Vector3) => {
+  const runFocusZoom = useCallback((nodeId: string, nodePos: THREE.Vector3) => {
+    if (focusRootId && focusRootId !== nodeId) return;
+
+    setFocusRootId(nodeId);
+    setIsZoomingIn(true);
+    focusZoomActiveRef.current = true;
+
+    gsap.killTweensOf(fadeProgress);
+    gsap.to(fadeProgress, {
+      current: 1,
+      duration: PLANET_ANIM.fadeDuration,
+      ease: PLANET_ANIM.fadeEase,
+    });
+
+    gsap.killTweensOf(scaleProgress);
+    gsap.to(scaleProgress, {
+      current: 1.05,
+      duration: PLANET_ANIM.scalePulseDuration,
+      ease: PLANET_ANIM.cameraEase,
+    });
+
+    gsap.killTweensOf(camera.position);
+    gsap.to(camera.position, {
+      x: nodePos.x,
+      y: nodePos.y,
+      z: nodePos.z + FOCUS_ZOOM_OFFSET,
+      duration: PLANET_ANIM.zoomInDuration,
+      ease: PLANET_ANIM.cameraEase,
+    });
+    if (orbitRef.current) {
+      gsap.killTweensOf(orbitRef.current.target);
+      gsap.to(orbitRef.current.target, {
+        x: nodePos.x,
+        y: nodePos.y,
+        z: nodePos.z,
+        duration: PLANET_ANIM.zoomInDuration,
+        ease: PLANET_ANIM.cameraEase,
+      });
+    }
+
+    if (focusCompleteTimerRef.current != null) {
+      window.clearTimeout(focusCompleteTimerRef.current);
+    }
+    focusCompleteTimerRef.current = window.setTimeout(() => {
+      focusCompleteTimerRef.current = null;
+      onFocusTransitionComplete(nodeId);
+    }, ROOT_FOCUS_TOTAL_MS);
+  }, [camera, focusRootId, onFocusTransitionComplete]);
+
+  const handleNodeClick = (nodeId: string, nodePos: THREE.Vector3) => {
     if (insideRootPolytope && activeRootDept && nodeId === activeRootDept.id) {
       if (rootPolytopeInternalPath.length === 0) {
         onBack?.();
@@ -289,27 +424,10 @@ function SceneContent({
       }
     }
 
-    if (focusRootId) return; // already transitioning
+    if (focusRootId && focusRootId !== nodeId) return;
 
     if (canDrillInto(context, path, nodeId)) {
-      setFocusRootId(nodeId);
-      setIsZoomingIn(true);
-      
-      // Animate fade progress to hide other nodes — smooth
-      gsap.to(fadeProgress, {
-        current: 1,
-        duration: 0.6,
-        ease: 'power2.out',
-      });
-
-      // Grow the circle during the start of the zoom
-      gsap.to(scaleProgress, {
-        current: 1.05,
-        duration: 0.4,
-        ease: 'power2.inOut',
-      });
-
-      onFocusTransitionComplete(nodeId);
+      runFocusZoom(nodeId, nodePos);
     } else {
       onDrillInto(nodeId);
     }
@@ -326,14 +444,86 @@ function SceneContent({
     }
   }, [rootPolytopeBackStep, onInternalPathChange, rootPolytopeInternalPath]);
 
+  // Session-restore focus: wait for canvas, then replay root zoom
   useEffect(() => {
-    if (requestFocusRootId && !focusRootId) {
+    if (!sessionRestoreActive || !requestFocusRootId) return;
+    if (pendingFocusRootIdRef.current === requestFocusRootId) return;
+
+    pendingFocusRootIdRef.current = requestFocusRootId;
+    restoreDrillStartedRef.current = false;
+
+    if (restoreReadyTimerRef.current != null) {
+      window.clearTimeout(restoreReadyTimerRef.current);
+    }
+
+    restoreReadyTimerRef.current = window.setTimeout(() => {
+      restoreReadyTimerRef.current = null;
       const targetNode = layout.find(n => n.id === requestFocusRootId);
       if (targetNode) {
-        handleNodeClick(requestFocusRootId, targetNode.pos);
+        runFocusZoom(requestFocusRootId, targetNode.pos);
+      } else {
+        onRestoreFocusMiss?.();
       }
+    }, 80);
+
+    return () => {
+      if (restoreReadyTimerRef.current != null) {
+        window.clearTimeout(restoreReadyTimerRef.current);
+        restoreReadyTimerRef.current = null;
+      }
+    };
+  }, [sessionRestoreActive, requestFocusRootId, layout, runFocusZoom, onRestoreFocusMiss]);
+
+  useEffect(() => {
+    if (sessionRestoreActive) return;
+    pendingFocusRootIdRef.current = null;
+    restoreDrillStartedRef.current = false;
+  }, [sessionRestoreActive]);
+
+  useEffect(() => {
+    if (sessionRestoreActive) return;
+    if (!requestFocusRootId || focusRootId === requestFocusRootId) return;
+
+    const targetNode = layout.find(n => n.id === requestFocusRootId);
+    if (targetNode) {
+      runFocusZoom(requestFocusRootId, targetNode.pos);
     }
-  }, [requestFocusRootId, layout, focusRootId]);
+  }, [requestFocusRootId, layout, focusRootId, sessionRestoreActive, runFocusZoom]);
+
+  // Staged internal drill during session restore (gsap timeline, not setTimeout chain)
+  useEffect(() => {
+    if (!sessionRestoreActive || !insideRootPolytope || !activeRootDept) return;
+    if (restoreInternalPath.length === 0) {
+      restoreDrillStartedRef.current = true;
+      const tl = gsap.timeline({ onComplete: () => onRestoreComplete?.() });
+      tl.to({}, { duration: EXPAND_SETTLE_MS / 1000 });
+      return;
+    }
+    if (restoreDrillStartedRef.current) return;
+    restoreDrillStartedRef.current = true;
+
+    const path = restoreInternalPath;
+    const tl = gsap.timeline({
+      onComplete: () => {
+        onRestoreComplete?.();
+      },
+    });
+
+    tl.to({}, { duration: EXPAND_SETTLE_MS / 1000 });
+    tl.call(() => onRestoreDrillPath?.([path[0]]));
+
+    if (path.length >= 2) {
+      tl.to({}, { duration: INTERNAL_DRILL_MS / 1000 });
+      tl.call(() => onRestoreDrillPath?.(path));
+    }
+  }, [
+    sessionRestoreActive,
+    insideRootPolytope,
+    activeRootDept?.id,
+    restoreInternalPath,
+    onRestoreDrillPath,
+    onRestoreComplete,
+  ]);
 
   const isTransitioning = focusRootId != null && !insideRootPolytope;
   const isZoomingOut = zoomOutFromRootId != null;
@@ -354,7 +544,10 @@ function SceneContent({
     if (coreRef.current) {
       const coreOpacity = 1 - fp;
       coreRef.current.visible = coreOpacity > 0.01;
-      coreRef.current.scale.setScalar(1 - fp * 0.3);
+      const targetCoreScale = 1 - fp * 0.3;
+      coreRef.current.scale.setScalar(
+        THREE.MathUtils.lerp(coreRef.current.scale.x, targetCoreScale, 0.08),
+      );
     }
 
     // Fade/scale individual nodes
@@ -365,15 +558,15 @@ function SceneContent({
       const isFocused = node.id === focusRootId || node.id === zoomOutFromRootId;
       
       if (isFocused) {
-        // Hide focused department circle when deep drilling down (e.g. at branch/action level)
         const targetScale = isDeepDrillDown ? 0.0 : (focusRootId ? scaleProgress.current : (1 + (1 - fp) * 0));
-        group.scale.setScalar(targetScale);
-        group.visible = targetScale > 0.01;
+        const current = group.scale.x;
+        group.scale.setScalar(THREE.MathUtils.lerp(current, targetScale, 0.08));
+        group.visible = group.scale.x > 0.01;
       } else {
-        // Other nodes scale down smoothly
         const targetScale = 1 - fp;
-        group.scale.setScalar(targetScale);
-        group.visible = targetScale > 0.01;
+        const current = group.scale.x;
+        group.scale.setScalar(THREE.MathUtils.lerp(current, targetScale, 0.08));
+        group.visible = group.scale.x > 0.01;
       }
     });
 
@@ -384,7 +577,7 @@ function SceneContent({
       rootEdgesMatRef.current.opacity = THREE.MathUtils.lerp(
         rootEdgesMatRef.current.opacity,
         targetOpacity * expandProgress.current,
-        0.1
+        0.06,
       );
     }
   });
@@ -503,7 +696,7 @@ function SceneContent({
         })}
 
         {/* Unified BDT internal nodes */}
-        {insideRootPolytope && activeRootDept && (() => {
+        {insideRootPolytope && activeRootDept && internalNodesVisible && (() => {
           const deptNode = layout.find(n => n.id === activeRootDept.id);
           if (!deptNode) return null;
           const ROOT_POS = deptNode.pos;
@@ -564,7 +757,9 @@ function SceneContent({
                     setBackInfo={() => {}}
                     onNodeFocus={() => {}}
                     rootPos={ROOT_POS}
-                    revealDelayMs={400}
+                    revealDelayMs={PLANET_ANIM.internalNodeRevealDelayMs + i * 70}
+                    entryDuration={PLANET_ANIM.internalNodeDuration}
+                    entryEase={PLANET_ANIM.nodeEase}
                   />
                 );
               })}

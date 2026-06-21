@@ -13,14 +13,18 @@ import UniversalPolytope from '../components/UniversalPolytope';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
 import { PolytopeManager } from '../components/PolytopeManager';
 import CreateDepartmentPanel from '../components/CreateDepartmentPanel';
-import CompanyPlanet3DView, { ROOT_FOCUS_TOTAL_MS } from '../components/CompanyPlanet3DView';
+import CompanyPlanet3DView from '../components/CompanyPlanet3DView';
+import { EXPAND_SETTLE_MS, RESTORE_CANVAS_READY_MS } from '../lib/planetRootAnimation';
 import { CompanyPlanetSidePanel } from '../components/CompanyPlanetSidePanel';
 import {
   getPlanetRootsForCompany,
+  getPlanetPathLabels,
+  resolvePlanetRestoreTarget,
   rootsToPolytopeDepartments,
   type UserPlanetRole,
   type CompanyPlanetContext,
 } from '../data/companyPlanetRoots';
+import type { PersistedPlanetState } from '../lib/universeNavPersistence';
 import { OpenWorkspaceCue } from '../components/OpenWorkspaceCue';
 import { UniverseGalaxySidebar } from '../components/universe/UniverseGalaxySidebar';
 import { TwinWorkspaceLayout } from '../components/twin/TwinWorkspaceLayout';
@@ -421,6 +425,41 @@ export default function Universe3DPage() {
   const [zoomOutFromRootId, setZoomOutFromRootId] = useState<string | null>(null);
   const [isZoomingOut, setIsZoomingOut] = useState(false);
 
+  const planetSessionRestoredRef = useRef(false);
+  const isPlanetRestoringRef = useRef(false);
+  const pendingPlanetRestoreRef = useRef<{
+    rootId: string;
+    internalPath: string[];
+    rootLabel?: string;
+    internalPathLabels?: string[];
+  } | null>(null);
+  const planetRestoreTimerRef = useRef<number | null>(null);
+  const [planetRestoreDone, setPlanetRestoreDone] = useState(0);
+  const [sessionRestoreActive, setSessionRestoreActive] = useState(false);
+  const [restoreInternalPath, setRestoreInternalPath] = useState<string[]>([]);
+  const restoreFocusTimerRef = useRef<number | null>(null);
+  const restoreWatchdogTimerRef = useRef<number | null>(null);
+
+  const finishPlanetRestore = useCallback(() => {
+    isPlanetRestoringRef.current = false;
+    setPlanetRestoreDone(n => n + 1);
+  }, []);
+
+  const clearPlanetRestoreTimers = useCallback(() => {
+    if (planetRestoreTimerRef.current != null) {
+      window.clearTimeout(planetRestoreTimerRef.current);
+      planetRestoreTimerRef.current = null;
+    }
+    if (restoreFocusTimerRef.current != null) {
+      window.clearTimeout(restoreFocusTimerRef.current);
+      restoreFocusTimerRef.current = null;
+    }
+    if (restoreWatchdogTimerRef.current != null) {
+      window.clearTimeout(restoreWatchdogTimerRef.current);
+      restoreWatchdogTimerRef.current = null;
+    }
+  }, []);
+
   const activeRootDept = useMemo(
     () => rootPolytopeDepts.find(d => d.id === rootPolytopeDeptId && d.domain !== 'inactive') ?? null,
     [rootPolytopeDepts, rootPolytopeDeptId],
@@ -446,6 +485,11 @@ export default function Universe3DPage() {
   }, [authRole]);
 
   const handleExitRootPolytope = useCallback(() => {
+    clearPlanetRestoreTimers();
+    pendingPlanetRestoreRef.current = null;
+    isPlanetRestoringRef.current = false;
+    setSessionRestoreActive(false);
+    setRestoreInternalPath([]);
     // Start zoom-out animation: hide inner view, show outer view zoomed in, then animate out
     const exitingRootId = rootPolytopeDeptId;
     setInsideRootPolytope(false);
@@ -456,7 +500,7 @@ export default function Universe3DPage() {
       setIsZoomingOut(true);
     }
     setRootPolytopeDeptId(null);
-  }, [rootPolytopeDeptId]);
+  }, [rootPolytopeDeptId, clearPlanetRestoreTimers]);
 
   const handleZoomOutComplete = useCallback(() => {
     setZoomOutFromRootId(null);
@@ -488,17 +532,119 @@ export default function Universe3DPage() {
   const handleRootFocusTransitionComplete = useCallback((rootId: string) => {
     setRequestFocusRootId(null);
     handleOpenRootPolytope(rootId);
+    pendingPlanetRestoreRef.current = null;
   }, [handleOpenRootPolytope]);
 
+  const snapRestoreToTarget = useCallback((
+    ctx: CompanyPlanetContext,
+    rootId: string,
+    internalPath: string[],
+  ) => {
+    setRootPolytopeDepts(rootsToPolytopeDepartments(ctx.roots));
+    setRootPolytopeDeptId(rootId);
+    setRootPolytopeInternalPath(internalPath);
+    setInsideRootPolytope(true);
+    setRequestFocusRootId(null);
+    if (internalPath.length === 2) {
+      setActionWorkspace({
+        rootId,
+        branchId: internalPath[0],
+        actionId: internalPath[1],
+      });
+    }
+  }, []);
 
+  const handleRestoreDrillPath = useCallback((path: string[]) => {
+    setRootPolytopeInternalPath(path);
+    if (path.length === 2 && rootPolytopeDeptId) {
+      setActionWorkspace({
+        rootId: rootPolytopeDeptId,
+        branchId: path[0],
+        actionId: path[1],
+      });
+    } else if (path.length < 2) {
+      setActionWorkspace(null);
+    }
+  }, [rootPolytopeDeptId]);
+
+  const handleRestoreComplete = useCallback(() => {
+    if (restoreWatchdogTimerRef.current != null) {
+      window.clearTimeout(restoreWatchdogTimerRef.current);
+      restoreWatchdogTimerRef.current = null;
+    }
+    setSessionRestoreActive(false);
+    setRestoreInternalPath([]);
+    finishPlanetRestore();
+  }, [finishPlanetRestore]);
+
+  const handleRestoreFocusMiss = useCallback(() => {
+    if (planetContext) {
+      const pending = pendingPlanetRestoreRef.current;
+      const resolved = resolvePlanetRestoreTarget(planetContext, {
+        rootPolytopeDeptId: pending?.rootId ?? null,
+        rootPolytopeInternalPath: pending?.internalPath ?? restoreInternalPath,
+        rootLabel: pending?.rootLabel,
+        internalPathLabels: pending?.internalPathLabels,
+      });
+      if (resolved.rootId) {
+        snapRestoreToTarget(planetContext, resolved.rootId, resolved.internalPath);
+      }
+    }
+    handleRestoreComplete();
+  }, [planetContext, restoreInternalPath, snapRestoreToTarget, handleRestoreComplete]);
+
+  const handleRestoreFocusMissRef = useRef(handleRestoreFocusMiss);
+  handleRestoreFocusMissRef.current = handleRestoreFocusMiss;
+
+  const scheduleRestoreFocus = useCallback((
+    ctx: CompanyPlanetContext,
+    saved: Pick<
+      PersistedPlanetState,
+      'rootPolytopeDeptId' | 'rootPolytopeInternalPath' | 'rootLabel' | 'internalPathLabels'
+    >,
+  ) => {
+    const { rootId, internalPath } = resolvePlanetRestoreTarget(ctx, saved);
+    if (!rootId) {
+      finishPlanetRestore();
+      return;
+    }
+
+    clearPlanetRestoreTimers();
+    setSessionRestoreActive(true);
+    setRestoreInternalPath(internalPath);
+    pendingPlanetRestoreRef.current = {
+      rootId,
+      internalPath,
+      rootLabel: saved.rootLabel,
+      internalPathLabels: saved.internalPathLabels,
+    };
+    restoreFocusTimerRef.current = window.setTimeout(() => {
+      restoreFocusTimerRef.current = null;
+      setRequestFocusRootId(rootId);
+    }, RESTORE_CANVAS_READY_MS);
+
+    restoreWatchdogTimerRef.current = window.setTimeout(() => {
+      restoreWatchdogTimerRef.current = null;
+      if (isPlanetRestoringRef.current) {
+        handleRestoreFocusMissRef.current();
+      }
+    }, RESTORE_CANVAS_READY_MS + 9000);
+  }, [clearPlanetRestoreTimers, finishPlanetRestore]);
+
+  useEffect(() => () => clearPlanetRestoreTimers(), [clearPlanetRestoreTimers]);
 
   const handleExitPlanetRoots = useCallback(() => {
+    clearPlanetRestoreTimers();
+    pendingPlanetRestoreRef.current = null;
+    isPlanetRestoringRef.current = false;
+    setSessionRestoreActive(false);
+    setRestoreInternalPath([]);
     handleExitRootPolytope();
     setInsidePlanetRoots(false);
     setPlanetContext(null);
     setPlanetSearchQuery('');
     controllerRef.current?.goBack();
-  }, [handleExitRootPolytope]);
+  }, [handleExitRootPolytope, clearPlanetRestoreTimers]);
 
   const handlePlanetRootSelect = useCallback((rootId: string) => {
     beginRootFocus(rootId);
@@ -506,7 +652,7 @@ export default function Universe3DPage() {
 
   const handlePlanetBranchSelect = useCallback((rootId: string, branchId: string) => {
     beginRootFocus(rootId);
-    window.setTimeout(() => setRootPolytopeInternalPath([branchId]), ROOT_FOCUS_TOTAL_MS + 450);
+    window.setTimeout(() => setRootPolytopeInternalPath([branchId]), EXPAND_SETTLE_MS);
   }, [beginRootFocus]);
 
   // ── Action Node Workspace ──────────────────────────────────────────────────
@@ -522,51 +668,72 @@ export default function Universe3DPage() {
     if (actionWorkspace) {
       setDelayedActionWorkspace(actionWorkspace);
     } else {
-      const t = setTimeout(() => setDelayedActionWorkspace(null), 500);
+      const t = setTimeout(() => setDelayedActionWorkspace(null), 700);
       return () => clearTimeout(t);
     }
   }, [actionWorkspace]);
 
   useEffect(() => {
-    if (pathname === '/3d' && state?.actionWorkspaceContext) {
+    if (pathname !== '/3d' || planetSessionRestoredRef.current) return;
+
+    if (state?.actionWorkspaceContext) {
+      planetSessionRestoredRef.current = true;
       const item = state.actionWorkspaceContext;
       const ctx = getPlanetRootsForCompany(item.companyId, item.companyName, item.role);
 
       setPlanetContext(ctx);
       setInsidePlanetRoots(true);
 
+      isPlanetRestoringRef.current = true;
       setRootPolytopeDepts(rootsToPolytopeDepartments(ctx.roots));
-      setRootPolytopeDeptId(item.rootId);
-      setRootPolytopeInternalPath([item.branchId, item.actionId]);
-      setInsideRootPolytope(true);
-
-      setActionWorkspace({
-        rootId: item.rootId,
-        branchId: item.branchId,
-        actionId: item.actionId,
+      scheduleRestoreFocus(ctx, {
+        rootPolytopeDeptId: item.rootId,
+        rootPolytopeInternalPath: [item.branchId, item.actionId],
       });
 
       // Clear state so it doesn't reopen if navigating back
       navigate('/3d', { replace: true, state: {} });
-    } else if (pathname === '/3d') {
-      const pState = loadPlanetState();
-      if (pState) {
-        const ctx = getPlanetRootsForCompany(pState.companyId, pState.companyName, pState.role as UserPlanetRole);
-        setPlanetContext(ctx);
-        setInsidePlanetRoots(true);
-        if (pState.insideRootPolytope && pState.rootPolytopeDeptId) {
-          setRootPolytopeDepts(rootsToPolytopeDepartments(ctx.roots));
-          setRootPolytopeDeptId(pState.rootPolytopeDeptId);
-          setRootPolytopeInternalPath(pState.rootPolytopeInternalPath || []);
-          setInsideRootPolytope(true);
-        }
-      }
+      return () => {
+        planetSessionRestoredRef.current = false;
+        clearPlanetRestoreTimers();
+      };
     }
-  }, [pathname, state, navigate]);
+
+    const pState = loadPlanetState();
+    if (!pState) return;
+
+    planetSessionRestoredRef.current = true;
+    isPlanetRestoringRef.current = true;
+
+    const ctx = getPlanetRootsForCompany(pState.companyId, pState.companyName, pState.role as UserPlanetRole);
+    setPlanetContext(ctx);
+    setInsidePlanetRoots(true);
+    if (pState.industryColor) {
+      setPlanetIndustryColor(pState.industryColor);
+    }
+    sessionStorage.setItem('company_entered_in_3d', '1');
+
+    if (pState.insideRootPolytope && (pState.rootPolytopeDeptId || pState.rootLabel)) {
+      setRootPolytopeDepts(rootsToPolytopeDepartments(ctx.roots));
+      scheduleRestoreFocus(ctx, pState);
+    } else {
+      finishPlanetRestore();
+    }
+
+    return () => {
+      planetSessionRestoredRef.current = false;
+      clearPlanetRestoreTimers();
+    };
+  }, [pathname, state, navigate, finishPlanetRestore, scheduleRestoreFocus]);
 
   // Persist planet state on change
   useEffect(() => {
-    if (insidePlanetRoots && planetContext) {
+    if (insidePlanetRoots && planetContext && !isPlanetRestoringRef.current) {
+      const { rootLabel, internalPathLabels } = getPlanetPathLabels(
+        planetContext,
+        rootPolytopeDeptId,
+        rootPolytopeInternalPath,
+      );
       savePlanetState({
         companyId: planetContext.companyId,
         companyName: planetContext.companyName,
@@ -574,8 +741,11 @@ export default function Universe3DPage() {
         insideRootPolytope,
         rootPolytopeDeptId,
         rootPolytopeInternalPath,
+        rootLabel,
+        internalPathLabels,
+        industryColor: planetIndustryColor,
       });
-    } else if (!insidePlanetRoots) {
+    } else if (!insidePlanetRoots && !isPlanetRestoringRef.current) {
       clearPlanetState();
     }
   }, [
@@ -584,6 +754,8 @@ export default function Universe3DPage() {
     insideRootPolytope,
     rootPolytopeDeptId,
     rootPolytopeInternalPath,
+    planetIndustryColor,
+    planetRestoreDone,
   ]);
 
   // Listen for workflows_updated to refresh planet roots if tag changes
@@ -609,7 +781,9 @@ export default function Universe3DPage() {
 
   const handleCloseActionWorkspace = useCallback(() => {
     setActionWorkspace(null);
-    setRootPolytopeBackStep(c => c + 1);
+    setTimeout(() => {
+      setRootPolytopeBackStep(c => c + 1);
+    }, 400);
   }, []);
 
   // Resolve nodes from context for the workspace using delayed state for exit animation
@@ -832,7 +1006,7 @@ export default function Universe3DPage() {
       }
       if (e.key === 'Escape') {
         if (actionWorkspace) {
-          setActionWorkspace(null);
+          handleCloseActionWorkspace();
           return;
         }
         if (isTwinWorkspaceActive(twinWorkspacePhase)) {
@@ -876,6 +1050,7 @@ export default function Universe3DPage() {
     actionWorkspace,
     twinWorkspacePhase,
     handleCloseWorkspace,
+    handleCloseActionWorkspace,
   ]);
 
   if (error) {
@@ -999,8 +1174,8 @@ export default function Universe3DPage() {
           visibility: (insidePlanetRoots && planetContext) || isZoomingOut ? 'visible' : 'hidden',
           pointerEvents: (insidePlanetRoots && planetContext && !isZoomingOut) ? 'auto' : 'none',
           transition: (insidePlanetRoots && planetContext) || isZoomingOut
-            ? 'opacity 0.4s ease-in-out, right 0.5s cubic-bezier(0.16, 1, 0.3, 1)'
-            : 'opacity 0.4s ease-in-out, visibility 0s 0.4s, right 0.5s cubic-bezier(0.16, 1, 0.3, 1)',
+            ? 'opacity 0.4s ease-in-out, right 0.6s cubic-bezier(0.16, 1, 0.3, 1)'
+            : 'opacity 0.4s ease-in-out, visibility 0s 0.4s, right 0.6s cubic-bezier(0.16, 1, 0.3, 1)',
           right: (insideRootPolytope && actionWorkspace) ? '75vw' : '0',
         }}
       >
@@ -1033,6 +1208,11 @@ export default function Universe3DPage() {
             rootPolytopeBackStep={rootPolytopeBackStep}
             rootSwitchKey={rootPolytopeSwitchKey}
             onBack={handleExitRootPolytope}
+            sessionRestoreActive={sessionRestoreActive}
+            restoreInternalPath={restoreInternalPath}
+            onRestoreDrillPath={handleRestoreDrillPath}
+            onRestoreComplete={handleRestoreComplete}
+            onRestoreFocusMiss={handleRestoreFocusMiss}
           />
         )}
       </div>
@@ -1290,7 +1470,7 @@ export default function Universe3DPage() {
       {/* Hover detail panel — right side */}
       {hoverTarget && hoverTarget.type && hoverTarget.type !== 'company' && hoverTarget.type !== 'core' && (
         <div
-          className="absolute top-[4.5rem] right-6 w-60 p-4 z-20 rounded-xl border border-slate-700/40 backdrop-blur-xl"
+          className="absolute top-18 right-6 w-60 p-4 z-20 rounded-xl border border-slate-700/40 backdrop-blur-xl"
           style={{ background: 'rgba(0, 0, 0, 0.75)' }}
         >
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-300 mb-2 inline-block">
@@ -1393,7 +1573,7 @@ export default function Universe3DPage() {
       {insideBH && voiceState !== 'idle' && (
         <button
           onClick={() => toggle()}
-          className="fixed top-20 left-6 z-[60] flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-purple-500/30"
+          className="fixed top-20 left-6 z-60 flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium text-slate-300 border backdrop-blur-md transition-all hover:text-white hover:border-purple-500/30"
           style={{ background: 'rgba(0,0,0,0.55)', borderColor: 'rgba(148,163,184,0.1)' }}
         >
           &larr; Back to Polytope

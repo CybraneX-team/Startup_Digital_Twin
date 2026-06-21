@@ -45,6 +45,21 @@ const MATCHERS: Array<{
   actionLabel?: string;
   variant: WorkspacePanelVariant;
 }> = [
+  // Industry OS company planet — fixed roots
+  { rootLabel: 'Market Position', branchLabel: 'Pricing Model', actionLabel: 'Create pricing benchmark', variant: 'pricing-compare' },
+  { rootLabel: 'Product & Tech', branchLabel: 'Core Offering Map', actionLabel: 'Capture differentiators', variant: 'feature-matrix' },
+  { rootLabel: 'Product Delta', branchLabel: 'Feature Comparison', actionLabel: 'Create battlecard', variant: 'feature-matrix' },
+  { rootLabel: 'Product Delta', branchLabel: 'Pricing Delta', actionLabel: 'Build pricing benchmark', variant: 'pricing-compare' },
+  { rootLabel: 'Buyer Map', branchLabel: 'Stakeholder Map', actionLabel: 'Build stakeholder map', variant: 'contact-map' },
+  { rootLabel: 'Buyer Map', branchLabel: 'Economic Buyer', actionLabel: 'Identify economic buyer', variant: 'contact-map' },
+  { rootLabel: 'Pain & Trigger', branchLabel: 'Validated Pain', actionLabel: 'Run discovery call', variant: 'customer-interview' },
+  { rootLabel: 'People & Access', branchLabel: 'Warm Intro Paths', actionLabel: 'Request intro', variant: 'intro-request' },
+  { rootLabel: 'GTM & Win/Loss', branchLabel: 'Messaging Gap', actionLabel: 'Revise pitch deck', variant: 'gtm-launch' },
+  { rootLabel: 'Commercial Signals', branchLabel: 'Hiring Velocity', actionLabel: 'Track hiring spike', variant: 'growth-tracker' },
+  { rootLabel: 'Velocity & Threat', branchLabel: 'Headcount Growth', actionLabel: 'Add hiring alert', variant: 'growth-tracker' },
+  { rootLabel: 'Stack Intel / Deal Urgency', branchLabel: 'Next Step', actionLabel: 'Schedule next meeting', variant: 'customer-interview' },
+  { rootLabel: 'Integration Fit', branchLabel: 'POC Scope', actionLabel: 'Create integration POC', variant: 'gtm-launch' },
+  { rootLabel: 'Value Split', branchLabel: 'Partner Proposal', actionLabel: 'Send partnership proposal', variant: 'intro-request' },
   // Career — Roles
   { rootLabel: 'Roles', branchLabel: 'Target roles', actionLabel: 'Shortlist 5 roles', variant: 'role-shortlist' },
   { rootLabel: 'Roles', branchLabel: 'Target roles', actionLabel: 'Application plan', variant: 'app-plan' },

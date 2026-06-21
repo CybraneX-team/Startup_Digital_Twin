@@ -6,8 +6,18 @@
 import type { UDomain, UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
 import { resolvePolytopeNodeCount } from '../lib/universalPolytopeData';
 import type { CompanyTag } from '../lib/useSavedWorkflows';
+import type { PersistedPlanetState } from '../lib/universeNavPersistence';
 
 export type UserPlanetRole = 'career' | 'founder' | 'vc' | 'investor';
+
+/** Inner branch node types — see Industry OS Inner Branch & Action Node Framework §3.3 */
+export type PlanetBranchNodeType =
+  | 'information'
+  | 'metric'
+  | 'signal'
+  | 'relationship'
+  | 'evidence'
+  | 'decision';
 
 export interface PlanetActionNode {
   id: string;
@@ -18,11 +28,13 @@ export interface PlanetActionNode {
 export interface PlanetBranchNode {
   id: string;
   label: string;
+  nodeType: PlanetBranchNodeType;
   actions: PlanetActionNode[];
 }
 
 interface PlanetBranchTemplate {
   label: string;
+  nodeType: PlanetBranchNodeType;
   actions: Omit<PlanetActionNode, 'id'>[];
 }
 
@@ -70,29 +82,26 @@ const FIXED_ROOTS_TEMPLATE: PlanetRootTemplate[] = [
     color: '#60a5fa',
     branches: [
       {
-        label: 'Corporate Profile',
-        actions: [
-          { label: 'Basic Info', hint: 'Official name, stage, and sector' },
-          { label: 'Location & HQ', hint: 'Registered office & regional hubs' },
-          { label: 'Web Presence', hint: 'Official site, socials, and traffic' }
-        ]
+        label: 'Company Profile',
+        nodeType: 'information',
+        actions: [{ label: 'Verify company profile', hint: 'Confirm name, HQ, website, and entity status' }],
       },
       {
-        label: 'Executive Summary',
-        actions: [
-          { label: 'Vision & Mission', hint: 'Core purpose and values' },
-          { label: 'Brief History', hint: 'Timeline of major milestones' },
-          { label: 'Key Verticals', hint: 'Primary industries served' }
-        ]
+        label: 'Stage & Maturity',
+        nodeType: 'metric',
+        actions: [{ label: 'Set stage alert', hint: 'Notify when stage or size changes' }],
       },
       {
-        label: 'Legal & Regulatory',
-        actions: [
-          { label: 'Incorporation Detail', hint: 'Entity structure and filing status' },
-          { label: 'IP & Trademarks', hint: 'Registered patents & marks' }
-        ]
-      }
-    ]
+        label: 'Category Tags',
+        nodeType: 'information',
+        actions: [{ label: 'Tag or re-tag company', hint: 'Industry, model, geography, and segment tags' }],
+      },
+      {
+        label: 'Relationship Classification',
+        nodeType: 'decision',
+        actions: [{ label: 'Assign classification', hint: 'Competitor, client, partner, or other lens' }],
+      },
+    ],
   },
   {
     label: 'Product & Tech',
@@ -101,30 +110,26 @@ const FIXED_ROOTS_TEMPLATE: PlanetRootTemplate[] = [
     color: '#a78bfa',
     branches: [
       {
-        label: 'Core Offering',
-        actions: [
-          { label: 'Feature Matrix', hint: 'Breakdown of core capabilities' },
-          { label: 'Pricing & Packaging', hint: 'Tiers, add-ons, and pricing model' },
-          { label: 'Customer Value Prop', hint: 'ROI drivers and benefits' }
-        ]
+        label: 'Core Offering Map',
+        nodeType: 'information',
+        actions: [{ label: 'Capture differentiators', hint: 'What appears unique vs alternatives' }],
       },
       {
-        label: 'Technical Architecture',
-        actions: [
-          { label: 'Frontend Stack', hint: 'Frameworks, UI libraries, and hosting' },
-          { label: 'Backend & Database', hint: 'Languages, servers, and data stores' },
-          { label: 'Security & Compliance', hint: 'SOC2, GDPR, and security protocols' }
-        ]
+        label: 'Tech Stack',
+        nodeType: 'evidence',
+        actions: [{ label: 'Request technical docs', hint: 'Stack, APIs, and platform dependencies' }],
       },
       {
-        label: 'Integration & APIs',
-        actions: [
-          { label: 'API Documentation', hint: 'Public endpoints and webhooks' },
-          { label: 'Native Integrations', hint: 'Pre-built app connectors' },
-          { label: 'SDKs & Dev Tools', hint: 'Developer enablement resources' }
-        ]
-      }
-    ]
+        label: 'API / Integration Surface',
+        nodeType: 'metric',
+        actions: [{ label: 'Run integration assessment', hint: 'APIs, auth methods, and data formats' }],
+      },
+      {
+        label: 'Roadmap Signals',
+        nodeType: 'signal',
+        actions: [{ label: 'Add roadmap alert', hint: 'Releases, hiring roles, and product announcements' }],
+      },
+    ],
   },
   {
     label: 'Market Position',
@@ -133,30 +138,26 @@ const FIXED_ROOTS_TEMPLATE: PlanetRootTemplate[] = [
     color: '#34d399',
     branches: [
       {
-        label: 'Target Market & ICP',
-        actions: [
-          { label: 'Industry Focus', hint: 'Primary and secondary sectors' },
-          { label: 'Buyer Personas', hint: 'Profiles of key decision makers' },
-          { label: 'Account Demographics', hint: 'Ideal company size, geo, and revenue' }
-        ]
+        label: 'ICP Definition',
+        nodeType: 'metric',
+        actions: [{ label: 'Map ICP against ours', hint: 'Segment, size, buyer persona overlap' }],
       },
       {
-        label: 'Go-To-Market (GTM)',
-        actions: [
-          { label: 'Sales Strategy', hint: 'PLG, enterprise sales, or hybrid' },
-          { label: 'Marketing Channels', hint: 'Inbound, outbound, SEO, events' },
-          { label: 'Partner Network', hint: 'Channels, resellers, and affiliates' }
-        ]
+        label: 'GTM Motion',
+        nodeType: 'metric',
+        actions: [{ label: 'Compare GTM motion', hint: 'Self-serve vs sales-led vs partner-led' }],
       },
       {
-        label: 'Competitive Landscape',
-        actions: [
-          { label: 'Primary Competitors', hint: 'Direct alternatives in market' },
-          { label: 'Key Differentiators', hint: 'Unfair advantages and moats' },
-          { label: 'Market Share Analysis', hint: 'Estimated positioning & footprint' }
-        ]
-      }
-    ]
+        label: 'Pricing Model',
+        nodeType: 'metric',
+        actions: [{ label: 'Create pricing benchmark', hint: 'Tiers, packaging, and discount patterns' }],
+      },
+      {
+        label: 'Positioning Statement',
+        nodeType: 'information',
+        actions: [{ label: 'Add positioning note', hint: 'How they describe category and value' }],
+      },
+    ],
   },
   {
     label: 'Commercial Signals',
@@ -165,62 +166,60 @@ const FIXED_ROOTS_TEMPLATE: PlanetRootTemplate[] = [
     color: '#fbbf24',
     branches: [
       {
-        label: 'Funding & Capital',
-        actions: [
-          { label: 'Round History', hint: 'Details of past funding rounds' },
-          { label: 'Cap Table Overview', hint: 'Major shareholders & share classes' },
-          { label: 'Key Investors', hint: 'VCs, angels, and strategic backers' }
-        ]
+        label: 'Funding Signals',
+        nodeType: 'signal',
+        actions: [{ label: 'Add funding alert', hint: 'Rounds, investors, and capital events' }],
       },
       {
-        label: 'Financial Performance',
-        actions: [
-          { label: 'Revenue Streams', hint: 'ARR, NRR, and services revenue' },
-          { label: 'Burn Rate & Runway', hint: 'Capital efficiency metrics' },
-          { label: 'Average Contract Value', hint: 'ACV, LTV, and CAC metrics' }
-        ]
+        label: 'Hiring Velocity',
+        nodeType: 'signal',
+        actions: [{ label: 'Track hiring spike', hint: 'Open roles and headcount growth' }],
       },
       {
-        label: 'Headcount & Hiring',
-        actions: [
-          { label: 'Headcount Growth', hint: 'Historical growth trajectory' },
-          { label: 'Active Job Openings', hint: 'Current open roles by department' },
-          { label: 'Talent Distribution', hint: 'Geographic and functional split' }
-        ]
-      }
-    ]
+        label: 'Press / News Signals',
+        nodeType: 'evidence',
+        actions: [{ label: 'Create market update note', hint: 'Launches, media, and regulatory events' }],
+      },
+      {
+        label: 'Partnership Signals',
+        nodeType: 'signal',
+        actions: [{ label: 'Investigate partner route', hint: 'Integrations, co-sell, and channel deals' }],
+      },
+    ],
   },
-  {
+];
+
+/** Relationship-specific roots — 3 per company tag (+ untagged default). */
+const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
+  'People & Access': {
     label: 'People & Access',
     description: 'Founders, key contacts, warm intro paths',
     relevance: 80,
     color: '#f472b6',
     branches: [
       {
-        label: 'Leadership Team',
-        actions: [
-          { label: 'Founders & C-Suite', hint: 'Profiles of top executives' },
-          { label: 'Board & Advisors', hint: 'Independent directors and key advisors' }
-        ]
+        label: 'Founders / Leadership',
+        nodeType: 'relationship',
+        actions: [{ label: 'Research leader', hint: 'Founders, CEO, and CXOs' }],
       },
       {
-        label: 'Organization Chart',
-        actions: [
-          { label: 'Department Heads', hint: 'Product, Sales, Engineering leads' },
-          { label: 'Key Developers', hint: 'Engineering contributors and architects' }
-        ]
+        label: 'Warm Intro Paths',
+        nodeType: 'relationship',
+        actions: [{ label: 'Request intro', hint: 'Shared investors, alumni, or customers' }],
       },
       {
-        label: 'Network & Intro Paths',
-        actions: [
-          { label: 'Shared Connections', hint: 'Mutual contacts on LinkedIn/CRM' },
-          { label: 'Referral History', hint: 'Past introductions and referrals' },
-          { label: 'Warm Intro Plan', hint: 'Strategy to reach key buyers' }
-        ]
-      }
-    ]
+        label: 'Influence Map',
+        nodeType: 'relationship',
+        actions: [{ label: 'Map stakeholder', hint: 'Who influences budget and adoption' }],
+      },
+      {
+        label: 'Owner / Cadence',
+        nodeType: 'relationship',
+        actions: [{ label: 'Assign relationship owner', hint: 'Internal owner and check-in rhythm' }],
+      },
+    ],
   },
-  {
+  'Engagement History': {
     label: 'Engagement History',
     description: 'Past interactions, deal stage, notes, next action',
     relevance: 75,
@@ -228,60 +227,25 @@ const FIXED_ROOTS_TEMPLATE: PlanetRootTemplate[] = [
     branches: [
       {
         label: 'Interaction Timeline',
-        actions: [
-          { label: 'Meeting Logs', hint: 'Notes and recordings of past calls' },
-          { label: 'Email History', hint: 'Sent/received communication history' },
-          { label: 'Product Usage Logs', hint: 'Trial metrics and feature adoption' }
-        ]
+        nodeType: 'evidence',
+        actions: [{ label: 'Log interaction', hint: 'Calls, meetings, emails, and events' }],
       },
       {
-        label: 'Deal Status',
-        actions: [
-          { label: 'Current Stage', hint: 'Pipeline position and deal value' },
-          { label: 'Historical Proposals', hint: 'Sent quotes and contracts' },
-          { label: 'Win/Loss Reasons', hint: 'Key factors in winning or losing' }
-        ]
+        label: 'Deal / Relationship Stage',
+        nodeType: 'decision',
+        actions: [{ label: 'Move stage', hint: 'Lead, qualified, proposal, closed, or paused' }],
       },
       {
-        label: 'Collaborative Notes',
-        actions: [
-          { label: 'Team Comments', hint: 'Internal notes and tags' },
-          { label: 'Action Items', hint: 'Assigned tasks and deadlines' }
-        ]
-      }
-    ]
-  }
-];
-
-const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
-  'ICP Overlap': {
-    label: 'ICP Overlap',
-    description: 'How much of their ICP maps to yours / fit',
-    relevance: 92,
-    color: '#f97316',
-    branches: [
-      {
-        label: 'Profile Fit',
-        actions: [
-          { label: 'Industry Match', hint: 'Core vertical alignment' },
-          { label: 'Size & Scale Fit', hint: 'Company size & revenue tier match' }
-        ]
+        label: 'Next Action',
+        nodeType: 'decision',
+        actions: [{ label: 'Set next action', hint: 'Specific step, owner, and due date' }],
       },
       {
-        label: 'Audience Fit',
-        actions: [
-          { label: 'Persona Alignment', hint: 'Do we target the same buyers?' },
-          { label: 'Regional Alignment', hint: 'Geographic market overlap' }
-        ]
+        label: 'Follow-up Cadence',
+        nodeType: 'metric',
+        actions: [{ label: 'Schedule follow-up', hint: 'Next touch date and sequence' }],
       },
-      {
-        label: 'Scoring & Grade',
-        actions: [
-          { label: 'Overall ICP Score', hint: 'Weighted rating of fit' },
-          { label: 'Custom Fit Criteria', hint: 'Specific filters and signals' }
-        ]
-      }
-    ]
+    ],
   },
   'Product Delta': {
     label: 'Product Delta',
@@ -290,27 +254,26 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
     color: '#38bdf8',
     branches: [
       {
-        label: 'Core Feature Gap',
-        actions: [
-          { label: 'Missing Features', hint: 'What they have that we lack' },
-          { label: 'Advantage Features', hint: 'What we have that they lack' }
-        ]
+        label: 'Feature Comparison',
+        nodeType: 'metric',
+        actions: [{ label: 'Create battlecard', hint: 'Feature-by-feature comparison' }],
       },
       {
-        label: 'Technology Gap',
-        actions: [
-          { label: 'Tech Stack Comparison', hint: 'Platforms and architectures' },
-          { label: 'Speed & Performance', hint: 'Infrastructure comparative metrics' }
-        ]
+        label: 'Pricing Delta',
+        nodeType: 'metric',
+        actions: [{ label: 'Build pricing benchmark', hint: 'Packaging, discounting, and terms' }],
       },
       {
-        label: 'Roadmap Alignment',
-        actions: [
-          { label: 'Near-Term Gaps', hint: 'Upcoming competitor features' },
-          { label: 'Long-Term Gaps', hint: 'Roadmap divergence' }
-        ]
-      }
-    ]
+        label: 'Differentiation Narrative',
+        nodeType: 'decision',
+        actions: [{ label: 'Draft differentiation copy', hint: 'Why your product wins' }],
+      },
+      {
+        label: 'Roadmap Implication',
+        nodeType: 'decision',
+        actions: [{ label: 'Create roadmap item', hint: 'Build, ignore, or reposition' }],
+      },
+    ],
   },
   'GTM & Win/Loss': {
     label: 'GTM & Win/Loss',
@@ -319,57 +282,54 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
     color: '#a78bfa',
     branches: [
       {
-        label: 'Win/Loss Records',
-        actions: [
-          { label: 'Won Deals', hint: 'Deals won against this competitor' },
-          { label: 'Lost Deals', hint: 'Deals lost to this competitor' }
-        ]
+        label: 'Deal Collision Log',
+        nodeType: 'evidence',
+        actions: [{ label: 'Log competitor deal', hint: 'Deals where both companies appeared' }],
       },
       {
-        label: 'Competitive Factors',
-        actions: [
-          { label: 'Price Sensitivity', hint: 'How price impacted the decision' },
-          { label: 'Feature Capability', hint: 'How features decided the deal' },
-          { label: 'Relationship Factor', hint: 'Influence of sales reps / champions' }
-        ]
+        label: 'Win Reasons',
+        nodeType: 'evidence',
+        actions: [{ label: 'Add win insight', hint: 'Why you won — add to playbook' }],
       },
       {
-        label: 'Sales Plays',
-        actions: [
-          { label: 'De-positioning Playbook', hint: 'How to handle their pitches' },
-          { label: 'Common Objections', hint: 'Handling competitor objections' }
-        ]
-      }
-    ]
+        label: 'Loss Reasons',
+        nodeType: 'evidence',
+        actions: [{ label: 'Create loss review', hint: 'Why you lost and what to fix' }],
+      },
+      {
+        label: 'Messaging Gap',
+        nodeType: 'decision',
+        actions: [{ label: 'Revise pitch deck', hint: 'Where their story is clearer' }],
+      },
+    ],
   },
   'Velocity & Threat': {
     label: 'Velocity & Threat',
-    description: 'Headcount growth rate vs yours',
+    description: 'Headcount growth, funding pace, and threat level',
     relevance: 78,
     color: '#34d399',
     branches: [
       {
-        label: 'Growth Velocity',
-        actions: [
-          { label: 'Headcount Growth Rate', hint: 'Percentage growth over 6-12 months' },
-          { label: 'Funding Velocity', hint: 'Frequency and size of capital raises' }
-        ]
+        label: 'Headcount Growth',
+        nodeType: 'signal',
+        actions: [{ label: 'Add hiring alert', hint: 'Hiring pace by role and function' }],
       },
       {
-        label: 'Threat Assessment',
-        actions: [
-          { label: 'Market Expansion Threat', hint: 'Entering our key sectors' },
-          { label: 'Talent Poaching', hint: 'Team members hired from our team' }
-        ]
+        label: 'Funding Velocity',
+        nodeType: 'signal',
+        actions: [{ label: 'Update threat score', hint: 'Recent funding and investor strength' }],
       },
       {
-        label: 'Market Sentiment',
-        actions: [
-          { label: 'Social Media Momentum', hint: 'LinkedIn/Twitter follower growth' },
-          { label: 'Press & PR Activity', hint: 'Volume of media announcements' }
-        ]
-      }
-    ]
+        label: 'Product Release Velocity',
+        nodeType: 'signal',
+        actions: [{ label: 'Create release watch', hint: 'Launch frequency and roadmap clues' }],
+      },
+      {
+        label: 'Threat Escalation',
+        nodeType: 'decision',
+        actions: [{ label: 'Schedule strategy review', hint: 'Escalate to leadership if needed' }],
+      },
+    ],
   },
   'Buyer Map': {
     label: 'Buyer Map',
@@ -378,27 +338,26 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
     color: '#38bdf8',
     branches: [
       {
-        label: 'Decision Makers',
-        actions: [
-          { label: 'Economic Buyer', hint: 'Budget holder and final approver' },
-          { label: 'Technical Sign-off', hint: 'CTO / Security review Lead' }
-        ]
+        label: 'Economic Buyer',
+        nodeType: 'relationship',
+        actions: [{ label: 'Identify economic buyer', hint: 'Budget owner and final approver' }],
       },
       {
-        label: 'Influencers',
-        actions: [
-          { label: 'Core Champion', hint: 'Our champion inside the prospect company' },
-          { label: 'Business Users', hint: 'Day-to-day operators' }
-        ]
+        label: 'Champion',
+        nodeType: 'relationship',
+        actions: [{ label: 'Activate champion', hint: 'Internal supporter for your solution' }],
       },
       {
-        label: 'Friction Points',
-        actions: [
-          { label: 'Key Blocker', hint: 'Potential detractors and risk profiles' },
-          { label: 'Strategy to Win Blockers', hint: 'Mitigation plan for negative stakeholders' }
-        ]
-      }
-    ]
+        label: 'Blocker',
+        nodeType: 'relationship',
+        actions: [{ label: 'Prepare blocker strategy', hint: 'Stakeholder likely to resist' }],
+      },
+      {
+        label: 'Stakeholder Map',
+        nodeType: 'decision',
+        actions: [{ label: 'Build stakeholder map', hint: 'Influence and decision path' }],
+      },
+    ],
   },
   'Pain & Trigger': {
     label: 'Pain & Trigger',
@@ -407,51 +366,54 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
     color: '#a78bfa',
     branches: [
       {
-        label: 'Customer Pain Points',
-        actions: [
-          { label: 'Operational Inefficiencies', hint: 'Bottlenecks and manual effort' },
-          { label: 'Financial Cost Pain', hint: 'High maintenance / licensing cost' },
-          { label: 'Technical Limitations', hint: 'Legacy tech stack constraints' }
-        ]
+        label: 'Pain Hypothesis',
+        nodeType: 'decision',
+        actions: [{ label: 'Write pain hypothesis', hint: 'Initial assumption about their pain' }],
       },
       {
-        label: 'Buying Triggers',
-        actions: [
-          { label: 'Executive Hires', hint: 'New VP/C-level leader joining' },
-          { label: 'Funding Announcement', hint: 'Fresh capital to deploy' },
-          { label: 'Compliance Mandates', hint: 'New laws/requirements forcing change' }
-        ]
-      }
-    ]
+        label: 'Validated Pain',
+        nodeType: 'evidence',
+        actions: [{ label: 'Run discovery call', hint: 'Evidence from calls, data, or usage' }],
+      },
+      {
+        label: 'Trigger Event',
+        nodeType: 'signal',
+        actions: [{ label: 'Add trigger alert', hint: 'Funding, expansion, renewal, or compliance' }],
+      },
+      {
+        label: 'Urgency Level',
+        nodeType: 'metric',
+        actions: [{ label: 'Create urgency follow-up', hint: 'Low, medium, high, or immediate' }],
+      },
+    ],
   },
   'Stack Intel / Deal Urgency': {
     label: 'Stack Intel / Deal Urgency',
-    description: 'Current tooling, displacement / Compliance, fundraise',
+    description: 'Current tooling, integration fit, and buying window',
     relevance: 78,
     color: '#34d399',
     branches: [
       {
-        label: 'Software Stack',
-        actions: [
-          { label: 'Current Tooling', hint: 'Key software currently installed' },
-          { label: 'Vendor Spend Estimate', hint: 'Calculated annual spend on stack' }
-        ]
+        label: 'Current Tools',
+        nodeType: 'information',
+        actions: [{ label: 'Map current stack', hint: 'Software, platforms, and manual tools' }],
       },
       {
-        label: 'Displacement Risk',
-        actions: [
-          { label: 'Contract Expirations', hint: 'Expected renewal/expiration dates' },
-          { label: 'Integration Friction', hint: 'Trouble with existing workflows' }
-        ]
+        label: 'Integration Requirements',
+        nodeType: 'metric',
+        actions: [{ label: 'Request technical requirements', hint: 'APIs, auth, security, compliance' }],
       },
       {
-        label: 'Urgency Drivers',
-        actions: [
-          { label: 'Security Gaps', hint: 'Known vulnerabilities or compliance needs' },
-          { label: 'Scale Limits', hint: 'Current tool crashing under load' }
-        ]
-      }
-    ]
+        label: 'Buying Window',
+        nodeType: 'signal',
+        actions: [{ label: 'Create deal timeline', hint: 'When they are likely to decide' }],
+      },
+      {
+        label: 'Next Step',
+        nodeType: 'decision',
+        actions: [{ label: 'Schedule next meeting', hint: 'Demo, proposal, or pilot discussion' }],
+      },
+    ],
   },
   'Integration Fit': {
     label: 'Integration Fit',
@@ -460,27 +422,26 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
     color: '#38bdf8',
     branches: [
       {
-        label: 'Data Model Alignment',
-        actions: [
-          { label: 'Entity Mapping', hint: 'Matching schema fields and types' },
-          { label: 'Sync Frequency', hint: 'Realtime vs batch synchronization' }
-        ]
+        label: 'API Compatibility',
+        nodeType: 'metric',
+        actions: [{ label: 'Request API docs', hint: 'APIs, webhooks, and SDK availability' }],
       },
       {
-        label: 'Technical Fit',
-        actions: [
-          { label: 'Authentication Protocol', hint: 'OAuth, SAML, API Key compatibility' },
-          { label: 'API Rate Limits', hint: 'Handling volume and throughput limits' }
-        ]
+        label: 'Data Model Overlap',
+        nodeType: 'metric',
+        actions: [{ label: 'Map data model', hint: 'Object and field alignment' }],
       },
       {
-        label: 'Effort Estimation',
-        actions: [
-          { label: 'Core Integration Cost', hint: 'Estimated engineering hours' },
-          { label: 'Maintenance Overhead', hint: 'Long-term upkeep cost' }
-        ]
-      }
-    ]
+        label: 'Workflow Fit',
+        nodeType: 'decision',
+        actions: [{ label: 'Draw workflow map', hint: 'How workflows connect end-to-end' }],
+      },
+      {
+        label: 'POC Scope',
+        nodeType: 'decision',
+        actions: [{ label: 'Create integration POC', hint: 'Minimum proof to validate partnership' }],
+      },
+    ],
   },
   'Value Split': {
     label: 'Value Split',
@@ -489,67 +450,47 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
     color: '#a78bfa',
     branches: [
       {
-        label: 'Commercial Model',
-        actions: [
-          { label: 'Revenue Share Scheme', hint: 'Percentage share on co-sell deals' },
-          { label: 'Referral Fees', hint: 'One-time bonus for passed leads' },
-          { label: 'Wholesale Pricing', hint: 'Discounted reseller rates' }
-        ]
+        label: 'Revenue Model',
+        nodeType: 'decision',
+        actions: [{ label: 'Select partnership model', hint: 'Referral, rev share, reseller, or white-label' }],
       },
       {
-        label: 'Partnerships Plan',
-        actions: [
-          { label: 'Co-Marketing Agreement', hint: 'Joint webinars, press releases, etc.' },
-          { label: 'Joint Account Mapping', hint: 'Shared target accounts list' }
-        ]
+        label: 'Customer Ownership',
+        nodeType: 'decision',
+        actions: [{ label: 'Define customer ownership', hint: 'Who owns relationship, billing, support' }],
       },
       {
-        label: 'Legal Terms',
-        actions: [
-          { label: 'SLA Agreement', hint: 'Service level requirements' },
-          { label: 'Data Sharing Policy', hint: 'Compliance and privacy constraints' }
-        ]
-      }
-    ]
+        label: 'Commercial Terms',
+        nodeType: 'decision',
+        actions: [{ label: 'Draft term sheet', hint: 'Margins, exclusivity, and minimums' }],
+      },
+      {
+        label: 'Partner Proposal',
+        nodeType: 'decision',
+        actions: [{ label: 'Send partnership proposal', hint: 'Concise offer to send to partner' }],
+      },
+    ],
   },
-  'Joint Champion / Conflict Risk': {
-    label: 'Joint Champion / Conflict Risk',
-    description: 'Internal sponsor / Roadmap overlap',
-    relevance: 78,
-    color: '#34d399',
-    branches: [
-      {
-        label: 'Joint Champion Strategy',
-        actions: [
-          { label: 'Shared Sponsor Profile', hint: 'Key contact driving partnership' },
-          { label: 'Co-selling Strategy', hint: 'Enabling sponsor to pitch both products' }
-        ]
-      },
-      {
-        label: 'Product Overlap Risk',
-        actions: [
-          { label: 'Feature Conflicts', hint: 'Areas where product roadmaps compete' },
-          { label: 'Customer Base Overlap', hint: 'Risk of cannibalizing sales' }
-        ]
-      },
-      {
-        label: 'Mitigation Plan',
-        actions: [
-          { label: 'Rules of Engagement', hint: 'Protocol for conflict resolution' },
-          { label: 'Product Boundaries', hint: 'Defined API boundaries and scopes' }
-        ]
-      }
-    ]
-  }
+};
+
+/** Short labels for branch node types (side panel + 3D hints). */
+export const PLANET_BRANCH_TYPE_LABELS: Record<PlanetBranchNodeType, string> = {
+  information: 'Info',
+  metric: 'Metric',
+  signal: 'Signal',
+  relationship: 'People',
+  evidence: 'Evidence',
+  decision: 'Decision',
 };
 
 const DYNAMIC_SETS: Record<CompanyTag, string[]> = {
-  competitor: ['ICP Overlap', 'Product Delta', 'GTM & Win/Loss', 'Velocity & Threat'],
-  potential_client: ['ICP Overlap', 'Buyer Map', 'Pain & Trigger', 'Stack Intel / Deal Urgency'],
-  partner: ['Product Delta', 'Integration Fit', 'Value Split', 'Joint Champion / Conflict Risk']
+  competitor: ['Velocity & Threat', 'Product Delta', 'GTM & Win/Loss'],
+  potential_client: ['Stack Intel / Deal Urgency', 'Buyer Map', 'Pain & Trigger'],
+  partner: ['Product Delta', 'Integration Fit', 'Value Split'],
 };
 
-const ALL_DYNAMIC_KEYS = Object.keys(DYNAMIC_NODES);
+/** 3 dynamic roots when the company has no tag. */
+const UNTAGGED_DYNAMIC_SET = ['Buyer Map', 'People & Access', 'Engagement History'] as const;
 
 function expandTemplate(
   companyId: string,
@@ -560,8 +501,9 @@ function expandTemplate(
     ...t,
     id: `${companyId}_${prefix}_root_${ri}`,
     branches: t.branches.map((b, bi) => ({
-      ...b,
       id: `${companyId}_${prefix}_branch_${ri}_${bi}`,
+      label: b.label,
+      nodeType: b.nodeType,
       actions: b.actions.map((a, ai) => ({
         ...a,
         id: `${companyId}_${prefix}_action_${ri}_${bi}_${ai}`,
@@ -598,26 +540,6 @@ function getTagForCompany(companyId: string, role: string): CompanyTag | undefin
   }
 }
 
-// Simple seeded PRNG
-function seedRandom(seed: number) {
-  let s = seed % 2147483647;
-  if (s <= 0) s += 2147483646;
-  return () => {
-    s = s * 16807 % 2147483647;
-    return (s - 1) / 2147483646;
-  };
-}
-
-function hashString(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return hash;
-}
-
 export function getPlanetCoreDetails(ctx: CompanyPlanetContext): PlanetCoreDetails {
   const rootCount = ctx.roots.length;
   const sorted = [...ctx.roots].sort((a, b) => b.relevance - a.relevance);
@@ -650,8 +572,15 @@ export function getPlanetCoreDetails(ctx: CompanyPlanetContext): PlanetCoreDetai
       { label: 'Top signal', value: topRoot?.label ?? '—' },
       { label: 'Avg relevance', value: `${avgRel}%` },
     ],
-    focusHint: 'Identity · Product · Positioning · Commercial · People',
+    focusHint: 'Identity · Product · Market · Commercial + 3 context roots',
   };
+}
+
+function resolveDynamicRootKeys(tag: CompanyTag | undefined): string[] {
+  if (tag && DYNAMIC_SETS[tag]) {
+    return DYNAMIC_SETS[tag];
+  }
+  return [...UNTAGGED_DYNAMIC_SET];
 }
 
 export function getPlanetRootsForCompany(
@@ -660,22 +589,8 @@ export function getPlanetRootsForCompany(
   role: UserPlanetRole,
 ): CompanyPlanetContext {
   const tag = getTagForCompany(companyId, role);
-
-  let dynamicTemplates: PlanetRootTemplate[] = [];
-
-  if (tag && DYNAMIC_SETS[tag]) {
-    dynamicTemplates = DYNAMIC_SETS[tag].map(key => DYNAMIC_NODES[key]);
-  } else {
-    // 4 random nodes based on companyId
-    const rand = seedRandom(hashString(companyId));
-    // Provide a stable sort so that random shuffle is deterministic
-    const shuffled = [...ALL_DYNAMIC_KEYS].sort((a, b) => {
-      const cmp = a.localeCompare(b);
-      const val = rand() - 0.5;
-      return val === 0 ? cmp : val;
-    });
-    dynamicTemplates = shuffled.slice(0, 4).map(key => DYNAMIC_NODES[key]);
-  }
+  const dynamicKeys = resolveDynamicRootKeys(tag);
+  const dynamicTemplates = dynamicKeys.map(key => DYNAMIC_NODES[key]);
 
   const template = [...FIXED_ROOTS_TEMPLATE, ...dynamicTemplates];
 
@@ -686,6 +601,75 @@ export function getPlanetRootsForCompany(
     role,
     roleLabel: ROLE_LABELS[role],
     roots,
+  };
+}
+
+export function getPlanetPathLabels(
+  ctx: CompanyPlanetContext,
+  rootId: string | null,
+  internalPath: string[],
+): { rootLabel?: string; internalPathLabels: string[] } {
+  if (!rootId) return { internalPathLabels: [] };
+  const root = ctx.roots.find(r => r.id === rootId);
+  if (!root) return { internalPathLabels: [] };
+
+  const internalPathLabels: string[] = [];
+  if (internalPath.length >= 1) {
+    const branch = root.branches.find(b => b.id === internalPath[0]);
+    if (branch) {
+      internalPathLabels.push(branch.label);
+      if (internalPath.length >= 2) {
+        const action = branch.actions.find(a => a.id === internalPath[1]);
+        if (action) internalPathLabels.push(action.label);
+      }
+    }
+  }
+
+  return { rootLabel: root.label, internalPathLabels };
+}
+
+export function resolvePlanetRestoreTarget(
+  ctx: CompanyPlanetContext,
+  saved: Pick<
+    PersistedPlanetState,
+    'rootPolytopeDeptId' | 'rootPolytopeInternalPath' | 'rootLabel' | 'internalPathLabels'
+  >,
+): { rootId: string | null; internalPath: string[] } {
+  let root =
+    (saved.rootPolytopeDeptId
+      ? ctx.roots.find(r => r.id === saved.rootPolytopeDeptId)
+      : undefined)
+    ?? (saved.rootLabel ? ctx.roots.find(r => r.label === saved.rootLabel) : undefined);
+
+  if (!root) {
+    return { rootId: null, internalPath: [] };
+  }
+
+  const savedPath = saved.rootPolytopeInternalPath ?? [];
+  if (savedPath.length === 0) {
+    return { rootId: root.id, internalPath: [] };
+  }
+
+  let branch = root.branches.find(b => b.id === savedPath[0]);
+  if (!branch && saved.internalPathLabels?.[0]) {
+    branch = root.branches.find(b => b.label === saved.internalPathLabels[0]);
+  }
+  if (!branch) {
+    return { rootId: root.id, internalPath: [] };
+  }
+
+  if (savedPath.length < 2) {
+    return { rootId: root.id, internalPath: [branch.id] };
+  }
+
+  let action = branch.actions.find(a => a.id === savedPath[1]);
+  if (!action && saved.internalPathLabels?.[1]) {
+    action = branch.actions.find(a => a.label === saved.internalPathLabels[1]);
+  }
+
+  return {
+    rootId: root.id,
+    internalPath: action ? [branch.id, action.id] : [branch.id],
   };
 }
 

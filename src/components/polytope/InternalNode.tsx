@@ -99,6 +99,8 @@ interface InternalNodeProps {
   onNodeFocus?: (pos: THREE.Vector3, node: UInternalNode) => void;
   rootPos?: THREE.Vector3;
   revealDelayMs?: number;
+  entryDuration?: number;
+  entryEase?: string;
 }
 
 
@@ -122,6 +124,8 @@ export function InternalNode({
   onNodeFocus,
   rootPos,
   revealDelayMs = 320,
+  entryDuration = 1.1,
+  entryEase = 'power3.out',
 }: InternalNodeProps) {
   const groupRef = useRef<THREE.Group>(null);
   const currentPos = useRef(startPos.clone());
@@ -246,9 +250,9 @@ export function InternalNode({
       x: targetPos.x,
       y: targetPos.y,
       z: targetPos.z,
-      duration: 1.1,
+      duration: entryDuration,
       delay: revealDelay,
-      ease: 'power3.out',
+      ease: entryEase,
       onUpdate: () => {
         if (groupRef.current) {
           currentPos.current.copy(groupRef.current.position);
@@ -260,9 +264,9 @@ export function InternalNode({
       x: targetScale,
       y: targetScale,
       z: targetScale,
-      duration: 1.1,
+      duration: entryDuration,
       delay: revealDelay,
-      ease: 'back.out(1.5)',
+      ease: entryEase,
       onComplete: () => {
         setEntryAnimDone(true);
       },
@@ -272,7 +276,7 @@ export function InternalNode({
       posTween.kill();
       scaleTween.kill();
     };
-  }, [startPos.x, startPos.y, startPos.z, targetPos.x, targetPos.y, targetPos.z, isDraft]);
+  }, [startPos.x, startPos.y, startPos.z, targetPos.x, targetPos.y, targetPos.z, isDraft, entryDuration, entryEase, revealDelayMs]);
 
   useEffect(() => {
     if (isMeActiveCenter) {
@@ -296,7 +300,7 @@ export function InternalNode({
     if (groupRef.current) {
       if (entryAnimDone) {
         if (!isDraft) {
-          currentPos.current.lerp(targetPos, 0.06);
+          currentPos.current.lerp(targetPos, 0.045);
           groupRef.current.position.copy(currentPos.current);
         }
 
@@ -306,7 +310,7 @@ export function InternalNode({
         } else if (isVisible) {
           targetScale = isMeActiveCenter ? 1.5 : 1.0;
         }
-        const lerpSpeed = isHiddenParent || isMeActiveCenter ? 0.14 : 0.08;
+        const lerpSpeed = isHiddenParent || isMeActiveCenter ? 0.1 : 0.06;
         groupRef.current.scale.lerp(
           new THREE.Vector3(targetScale, targetScale, targetScale),
           lerpSpeed,
@@ -373,6 +377,7 @@ export function InternalNode({
         }}
         onPointerOver={() => { if (!isDraft) document.body.style.cursor = 'pointer'; }}
       >
+
         <PlasmaSphere
           color={color}
           radius={radius}
@@ -531,6 +536,8 @@ export function InternalNode({
             onNodeFocus={onNodeFocus}
             rootPos={rootPos}
             revealDelayMs={revealDelayMs}
+            entryDuration={entryDuration}
+            entryEase={entryEase}
           />
         );
       })}
