@@ -108,6 +108,37 @@ function flattenNodes(nodes: UInternalNode[]): UInternalNode[] {
   return nodes.flatMap(node => [node, ...flattenNodes(node.children ?? [])]);
 }
 
+/** Fill missing internal trees from seed when API/cache returns department shells only. */
+function findSeedDepartment(dept: UExternalNode, seedActive: UExternalNode[]): UExternalNode | undefined {
+  const norm = dept.label.toLowerCase().trim();
+  return (
+    seedActive.find(s => s.id === dept.id) ??
+    seedActive.find(s => s.label.toLowerCase().trim() === norm) ??
+    seedActive.find(s => {
+      const seedNorm = s.label.toLowerCase().trim();
+      return norm.includes(seedNorm) || seedNorm.includes(norm);
+    })
+  );
+}
+
+function enrichDepartmentsFromSeed(
+  departments: UExternalNode[],
+  seed: UExternalNode[],
+): UExternalNode[] {
+  const seedActive = seed.filter(d => d.domain !== 'inactive');
+
+  return departments.map(dept => {
+    const match = findSeedDepartment(dept, seedActive);
+    if (!match?.internalNodes?.length) return dept;
+    const apiCount = dept.internalNodes?.length ?? 0;
+    const seedCount = match.internalNodes.length;
+    if (apiCount === 0 || seedCount > apiCount) {
+      return { ...dept, internalNodes: match.internalNodes };
+    }
+    return dept;
+  });
+}
+
 export interface PolytopeStoreState {
   departments: UExternalNode[];
   loading: boolean;
@@ -131,7 +162,10 @@ interface StoreConfig {
 
 function createLocalPolytopeStore({ storageKey, defaultDepartments, onboardingFallback }: StoreConfig) {
   return create<PolytopeStoreState>((set, get) => ({
-    departments: loadCachedDepartments(storageKey, defaultDepartments, { onboardingFallback }) ?? defaultDepartments,
+    departments: enrichDepartmentsFromSeed(
+      loadCachedDepartments(storageKey, defaultDepartments, { onboardingFallback }) ?? defaultDepartments,
+      defaultDepartments,
+    ),
     loading: false,
     loaded: false,
     error: null,
@@ -140,7 +174,8 @@ function createLocalPolytopeStore({ storageKey, defaultDepartments, onboardingFa
       if (get().loading) return;
       set({ loading: true, error: null });
       const cached = loadCachedDepartments(storageKey, defaultDepartments, { onboardingFallback });
-      const departments = cached ?? (get().departments.length ? get().departments : defaultDepartments);
+      const cachedOrLocal = cached ?? (get().departments.length ? get().departments : defaultDepartments);
+      const departments = enrichDepartmentsFromSeed(cachedOrLocal, defaultDepartments);
       persistCache(storageKey, departments);
       set({ departments, loading: false, loaded: true, error: null });
     },
@@ -216,7 +251,10 @@ function createLocalPolytopeStore({ storageKey, defaultDepartments, onboardingFa
 
 function createApiPolytopeStore({ storageKey, defaultDepartments }: StoreConfig) {
   return create<PolytopeStoreState>((set, get) => ({
-    departments: loadCachedDepartments(storageKey, defaultDepartments) ?? defaultDepartments,
+    departments: enrichDepartmentsFromSeed(
+      loadCachedDepartments(storageKey, defaultDepartments) ?? defaultDepartments,
+      defaultDepartments,
+    ),
     loading: false,
     loaded: false,
     error: null,
@@ -226,13 +264,17 @@ function createApiPolytopeStore({ storageKey, defaultDepartments }: StoreConfig)
       set({ loading: true, error: null });
       try {
         const response = await api.get<{ departments: UExternalNode[] }>('/api/departments');
-        const departments = response.departments ?? [];
+        const raw = response.departments ?? [];
+        const departments = enrichDepartmentsFromSeed(raw, defaultDepartments);
         persistCache(storageKey, departments);
         set({ departments, loading: false, loaded: true, error: null });
       } catch (err) {
         console.error('[departments] load failed', err);
         const cached = loadCachedDepartments(storageKey, defaultDepartments);
-        const fallback = cached ?? (get().departments.length ? get().departments : defaultDepartments);
+        const fallback = enrichDepartmentsFromSeed(
+          cached ?? (get().departments.length ? get().departments : defaultDepartments),
+          defaultDepartments,
+        );
         set({
           departments: fallback,
           loading: false,

@@ -174,7 +174,12 @@ export function ExternalNode({
       )}
 
       {isSelected && node.internalNodes.map((intNode, i) => {
+        const pathRootId = selectedInternalPath[0];
+        const pathMatchesDept =
+          selectedInternalPath.length === 0 ||
+          node.internalNodes.some(n => n.id === pathRootId);
         const isChildVisible =
+          !pathMatchesDept ||
           selectedInternalPath.length === 0 ||
           selectedInternalPath[selectedInternalPath.length - 1] === intNode.id;
         return (

@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useEffect, type MutableRefObject } from 'react';
+import { useRef, useState, useMemo, useEffect, useCallback, type MutableRefObject } from 'react';
 import { useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, Stars, Sparkles, Billboard, Text } from '@react-three/drei';
 import * as THREE from 'three';
@@ -17,6 +17,8 @@ import {
   findNodeAtPath,
   computeDraftChildNodePosition,
   computeCameraFraming,
+  isValidInternalPath,
+  deptZoomDistance,
 } from './internalNodeLayout';
 import type { CoreWorkspacePhase } from '../../lib/coreWorkspaceTransition';
 import { CORE_DIVE_DURATION_S, CORE_SURFACE_DURATION_S } from '../../lib/coreWorkspaceTransition';
@@ -40,6 +42,8 @@ export interface SceneProps {
   onExitIntent?: () => void;
   cameraResetTrigger?: number;
   requestSelectDeptId?: string | null;
+  /** Bumped on sidebar dept selection to force camera fly-in */
+  selectDeptNonce?: number;
   requestBackStep?: number;
   /** Draft external node — rendered as a pulsing preview vertex; not in store */
   draftDept?: UExternalNode | null;
@@ -138,6 +142,7 @@ export function Scene({
   onExitIntent,
   cameraResetTrigger,
   requestSelectDeptId,
+  selectDeptNonce = 0,
   requestBackStep,
   draftDept,
   draftNodeScreenPosRef,
@@ -425,47 +430,57 @@ export function Scene({
     }
     prevPathPropsRef.current = nextPath;
 
-    if (nextPath.length === selectedInternalPath.length &&
-      nextPath.every((id, idx) => id === selectedInternalPath[idx])) {
+    const deptIdx = selectedId !== null ? ACTIVE_NODES.findIndex(n => n.id === selectedId) : -1;
+    const deptNodes = deptIdx >= 0 ? ACTIVE_NODES[deptIdx].internalNodes : [];
+    const validatedPath =
+      deptIdx >= 0 && isValidInternalPath(deptNodes, nextPath) ? nextPath : [];
+
+    if (validatedPath.length !== nextPath.length) {
+      onPathChange(validatedPath);
+    }
+
+    if (validatedPath.length === selectedInternalPath.length &&
+      validatedPath.every((id, idx) => id === selectedInternalPath[idx])) {
       return;
     }
 
     // If drilling deeper from sidebar selection, save current camera to history
-    if (nextPath.length > selectedInternalPath.length && orbitRef.current) {
+    if (validatedPath.length > selectedInternalPath.length && orbitRef.current) {
       cameraHistoryRef.current.push({
         path: [...selectedInternalPath],
         orbitTarget: orbitRef.current.target.clone(),
         camPos: camera.position.clone(),
       });
-    } else if (nextPath.length < selectedInternalPath.length) {
+    } else if (validatedPath.length < selectedInternalPath.length) {
       // If we are jumping to a shallower path direct from sidebar (not back button),
       // we can truncate history to match the new path length to keep history in sync.
-      cameraHistoryRef.current = cameraHistoryRef.current.filter(h => h.path.length < nextPath.length);
+      cameraHistoryRef.current = cameraHistoryRef.current.filter(h => h.path.length < validatedPath.length);
     }
 
-    setSelectedInternalPath(nextPath);
+    setSelectedInternalPath(validatedPath);
 
     if (selectedId === null) return;
-    const deptIdx = ACTIVE_NODES.findIndex(n => n.id === selectedId);
     if (deptIdx === -1) return;
     const deptPos = ACTIVE_NODE_POSITIONS[deptIdx];
+    const internalCount = ACTIVE_NODES[deptIdx].internalNodes.length;
+    const zoom = deptZoomDistance(internalCount, DEPT_ZOOM_DISTANCE);
 
-    if (nextPath.length === 0) {
+    if (validatedPath.length === 0) {
       if (orbitRef.current && deptPos) {
         const dir = deptPos.clone().normalize();
-        const { camPos, orbitTarget } = computeCameraFraming(deptPos, dir, ACTIVE_NODES[deptIdx].internalNodes.length, DEPT_ZOOM_DISTANCE);
+        const { camPos, orbitTarget } = computeCameraFraming(deptPos, dir, internalCount, zoom);
         gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.2, ease: 'power2.inOut' });
         gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.2, ease: 'power2.inOut' });
       }
     } else {
-      const targetPos = findNodePosition(deptPos, ACTIVE_NODES[deptIdx].internalNodes, nextPath);
-      const parentNode = findNodeAtPath(ACTIVE_NODES[deptIdx].internalNodes, nextPath);
+      const targetPos = findNodePosition(deptPos, ACTIVE_NODES[deptIdx].internalNodes, validatedPath);
+      const parentNode = findNodeAtPath(ACTIVE_NODES[deptIdx].internalNodes, validatedPath);
       if (targetPos && orbitRef.current) {
         const dir = targetPos.clone().normalize();
         const isLeaf = isLeafInternalNode(parentNode);
         const shift = isLeaf ? 2.5 : 0.0;
-        const zoom = isLeaf ? 4.0 : 10;
-        const { camPos, orbitTarget } = computeCameraFraming(targetPos, dir, parentNode?.children?.length ?? 0, zoom, shift);
+        const leafZoom = isLeaf ? 4.0 : zoom;
+        const { camPos, orbitTarget } = computeCameraFraming(targetPos, dir, parentNode?.children?.length ?? 0, leafZoom, shift);
         gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.0, ease: 'power2.inOut' });
         gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.0, ease: 'power2.inOut' });
       }
@@ -473,10 +488,13 @@ export function Scene({
   }, [selectedInternalPathProps, selectedId, ACTIVE_NODES, ACTIVE_NODE_POSITIONS, camera, selectedInternalPath]);
 
   useEffect(() => {
-    setSelectedInternalPath([]);
     setBackInfo(null);
     cameraHistoryRef.current = [];
-  }, [selectedId, setBackInfo]);
+    if (selectedId === null) {
+      setSelectedInternalPath([]);
+      onPathChange([]);
+    }
+  }, [selectedId, setBackInfo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (selectedId === null && orbitRef.current) {
@@ -500,7 +518,9 @@ export function Scene({
       const extPos = EXTERNAL_NODE_POSITIONS[extNodeIdx];
       if (orbitRef.current && extPos) {
         const dir = extPos.clone().normalize();
-        const { camPos, orbitTarget } = computeCameraFraming(extPos, dir, ACTIVE_NODES[extNodeIdx].internalNodes.length, DEPT_ZOOM_DISTANCE);
+        const internalCount = ACTIVE_NODES[extNodeIdx].internalNodes.length;
+        const zoom = deptZoomDistance(internalCount, DEPT_ZOOM_DISTANCE);
+        const { camPos, orbitTarget } = computeCameraFraming(extPos, dir, internalCount, zoom);
         gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.2, ease: 'power2.inOut' });
         gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.2, ease: 'power2.inOut' });
       }
@@ -557,7 +577,9 @@ export function Scene({
         const extPos = ACTIVE_NODE_POSITIONS[extIdx];
         if (extPos) {
           const dir = extPos.clone().normalize();
-          const { camPos, orbitTarget } = computeCameraFraming(extPos, dir, ACTIVE_NODES[extIdx].internalNodes.length, DEPT_ZOOM_DISTANCE);
+          const internalCount = ACTIVE_NODES[extIdx].internalNodes.length;
+          const zoom = deptZoomDistance(internalCount, DEPT_ZOOM_DISTANCE);
+          const { camPos, orbitTarget } = computeCameraFraming(extPos, dir, internalCount, zoom);
           gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.2, ease: 'power2.inOut' });
           gsap.to(camera.position, {
             x: camPos.x, y: camPos.y, z: camPos.z,
@@ -702,6 +724,50 @@ export function Scene({
   }, [ACTIVE_NODE_POSITIONS, NODE_COLORS]);
 
   // ── Interaction handlers ──────────────────────────────────────────────────
+  const flyToDepartment = useCallback((
+    deptId: string,
+    internalPath: string[] = [],
+  ) => {
+    const idx = ACTIVE_NODES.findIndex(n => n.id === deptId);
+    if (idx === -1) return;
+    const pos = ACTIVE_NODE_POSITIONS[idx];
+    const dept = ACTIVE_NODES[idx];
+    const validatedPath = isValidInternalPath(dept.internalNodes, internalPath) ? internalPath : [];
+
+    setSelectedId(deptId);
+    setSelectedInternalPath(validatedPath);
+    onPathChange(validatedPath);
+
+    if (!orbitRef.current) return;
+
+    if (validatedPath.length === 0) {
+      const internalCount = dept.internalNodes.length;
+      const zoom = deptZoomDistance(internalCount, DEPT_ZOOM_DISTANCE);
+      const dir = pos.clone().normalize();
+      const { camPos, orbitTarget } = computeCameraFraming(pos, dir, internalCount, zoom);
+      gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.5, ease: 'power3.inOut' });
+      gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.5, ease: 'power3.inOut' });
+      return;
+    }
+
+    const targetPos = findNodePosition(pos, dept.internalNodes, validatedPath);
+    const parentNode = findNodeAtPath(dept.internalNodes, validatedPath);
+    if (!targetPos) return;
+    const dir = targetPos.clone().normalize();
+    const isLeaf = parentNode && ['metric', 'signal', 'decision', 'action'].includes(parentNode.type);
+    const shift = isLeaf ? 2.5 : 0.0;
+    const zoom = isLeaf ? 4.0 : deptZoomDistance(dept.internalNodes.length, DEPT_ZOOM_DISTANCE);
+    const { camPos, orbitTarget } = computeCameraFraming(
+      targetPos,
+      dir,
+      parentNode?.children?.length ?? 0,
+      zoom,
+      shift,
+    );
+    gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.0, ease: 'power2.inOut' });
+    gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.0, ease: 'power2.inOut' });
+  }, [ACTIVE_NODES, ACTIVE_NODE_POSITIONS, camera, onPathChange, setSelectedId]);
+
   const handleNodeClick = (id: string, pos: THREE.Vector3) => {
     if (selectedId === id) {
       setSelectedId(null);
@@ -711,36 +777,42 @@ export function Scene({
       onPathChange([]);
       if (orbitRef.current) {
         const nodeObj = ACTIVE_NODES.find(n => n.id === id);
+        const internalCount = nodeObj?.internalNodes.length ?? 0;
+        const zoom = deptZoomDistance(internalCount, DEPT_ZOOM_DISTANCE);
         const dir = pos.clone().normalize();
-        const { camPos, orbitTarget } = computeCameraFraming(pos, dir, nodeObj?.internalNodes.length ?? 0, DEPT_ZOOM_DISTANCE);
+        const { camPos, orbitTarget } = computeCameraFraming(pos, dir, internalCount, zoom);
         gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.5, ease: 'power3.inOut' });
         gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.5, ease: 'power3.inOut' });
       }
     }
   };
 
-  const prevRequestRef = useRef<string | null | undefined>(undefined);
+  const prevSelectRequestRef = useRef<{ id: string | null | undefined; nonce: number }>({
+    id: undefined,
+    nonce: -1,
+  });
   useEffect(() => {
-    if (requestSelectDeptId === prevRequestRef.current) return;
-    prevRequestRef.current = requestSelectDeptId;
-    if (requestSelectDeptId === null) { setSelectedId(null); return; }
     if (requestSelectDeptId === undefined) return;
-    if (selectedId === requestSelectDeptId) return;
-    const idx = ACTIVE_NODES.findIndex(n => n.id === requestSelectDeptId);
-    if (idx === -1) return;
-    const pos = ACTIVE_NODE_POSITIONS[idx];
-    setSelectedId(requestSelectDeptId);
-    setSelectedInternalPath([]);
-    onPathChange([]);
-    if (orbitRef.current) {
-      const nodeObj = ACTIVE_NODES[idx];
-      const dir = pos.clone().normalize();
-      const { camPos, orbitTarget } = computeCameraFraming(pos, dir, nodeObj?.internalNodes.length ?? 0, DEPT_ZOOM_DISTANCE);
-      gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.5, ease: 'power3.inOut' });
-      gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.5, ease: 'power3.inOut' });
+    const nonce = selectDeptNonce ?? 0;
+    if (
+      prevSelectRequestRef.current.id === requestSelectDeptId &&
+      prevSelectRequestRef.current.nonce === nonce
+    ) {
+      return;
     }
+    prevSelectRequestRef.current = { id: requestSelectDeptId, nonce };
+
+    if (requestSelectDeptId === null) {
+      setSelectedId(null);
+      setSelectedInternalPath([]);
+      onPathChange([]);
+      return;
+    }
+
+    const pathFromProps = selectedInternalPathProps ?? [];
+    flyToDepartment(requestSelectDeptId, pathFromProps);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requestSelectDeptId]);
+  }, [requestSelectDeptId, selectDeptNonce]);
 
   const handlePointerMissed = () => {
     // Intentionally left blank: clicking the background should not reset the view

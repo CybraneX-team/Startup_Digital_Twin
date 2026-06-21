@@ -39,6 +39,8 @@ export default function UniversalPage() {
   // (user clicks a node), we just update selectedDeptId directly without
   // re-triggering the camera fly (the 3D scene already handles it).
   const [requestSelectDeptId, setRequestSelectDeptId] = useState<string | null | undefined>(undefined);
+  /** Bumped on every sidebar dept pick so Scene re-flies even to the same dept. */
+  const [selectDeptNonce, setSelectDeptNonce] = useState(0);
 
   // Track whether the last selection came from the 3D scene (to avoid loop)
   const selectionFromScene = useRef(false);
@@ -299,24 +301,38 @@ export default function UniversalPage() {
   // When dept is selected in 3D scene → update sidebar highlight
   const handleDepartmentChange = (id: string | null) => {
     selectionFromScene.current = true;
+    if (id !== selectedDeptId) {
+      setInternalPath([]);
+      setInternalBackStep(0);
+    }
     setSelectedDeptId(id);
-    setRequestSelectDeptId(id);
     if (id === null) {
       setInternalPath([]);
       setInternalBackStep(0);
+      setRequestSelectDeptId(null);
     }
     setTimeout(() => { selectionFromScene.current = false; }, 0);
   };
 
   // When sidebar selects a dept → update selectedDeptId AND trigger camera fly in 3D
-  const handleSidebarDeptSelect = (id: string | null) => {
+  const handleSidebarDeptSelect = (id: string | null, internalPathOverride?: string[]) => {
+    if (id !== selectedDeptId) {
+      setInternalPath([]);
+      setInternalBackStep(0);
+    }
     setSelectedDeptId(id);
     if (id === null) {
       setInternalPath([]);
       setRequestSelectDeptId(null);
       setInternalBackStep(0);
     } else {
+      if (internalPathOverride) {
+        setInternalPath(internalPathOverride);
+      } else {
+        setInternalPath([]);
+      }
       setRequestSelectDeptId(id);
+      setSelectDeptNonce(n => n + 1);
     }
   };
 
@@ -358,6 +374,7 @@ export default function UniversalPage() {
             onDepartmentChange={handleDepartmentChange}
             onInternalPathChange={setInternalPath}
             requestSelectDeptId={requestSelectDeptId}
+            selectDeptNonce={selectDeptNonce}
             requestBackStep={internalBackStep}
             draftDept={draftDept}
             draftNodeScreenPosRef={draftDeptScreenPosRef}
@@ -399,7 +416,7 @@ export default function UniversalPage() {
           <PolytopeSidePanel
             departments={store.departments}
             selectedDeptId={selectedDeptId}
-            onDeptSelect={handleSidebarDeptSelect}
+            onDeptSelect={(id) => handleSidebarDeptSelect(id)}
             selectedInternalPath={internalPath}
             onAddDepartment={handleAddDepartment}
             onAddNode={handleAddNode}
@@ -409,7 +426,10 @@ export default function UniversalPage() {
             onDeleteDepartment={store.deleteDepartment}
             onUpdateNode={store.updateNode}
             onDeleteNode={store.deleteNode}
-            onNodeSelect={setInternalPath}
+            onNodeSelect={(path) => {
+              setInternalPath(path);
+              if (selectedDeptId) setSelectDeptNonce(n => n + 1);
+            }}
             onEditDepartment={handleEditDepartment}
             onEditNode={handleEditNode}
             onDeleteDepartmentClick={handleDeleteDepartmentClick}

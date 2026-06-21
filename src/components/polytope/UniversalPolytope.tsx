@@ -23,6 +23,8 @@ export interface UniversalPolytopeProps {
   onInternalPathChange?: (path: string[]) => void;
   /** When set, auto-flies camera to this department and selects it */
   requestSelectDeptId?: string | null;
+  /** Increment on sidebar dept picks to re-fly camera even to the same dept */
+  selectDeptNonce?: number;
   /** Increment to trigger going back exactly one internal node level with camera animation */
   requestBackStep?: number;
   /** Transient draft dept rendered as a pulsing preview node (not persisted) */
@@ -65,6 +67,7 @@ export default function UniversalPolytope({
   onDepartmentChange,
   onInternalPathChange,
   requestSelectDeptId,
+  selectDeptNonce = 0,
   requestBackStep,
   draftDept,
   draftNodeScreenPosRef,
@@ -121,6 +124,7 @@ export default function UniversalPolytope({
           onExitIntent={onExitIntent}
           cameraResetTrigger={cameraResetTrigger}
           requestSelectDeptId={requestSelectDeptId}
+          selectDeptNonce={selectDeptNonce}
           requestBackStep={requestBackStep}
           draftDept={draftDept}
           draftNodeScreenPosRef={draftNodeScreenPosRef}

@@ -28,7 +28,8 @@ export function computeInternalNodePosition(
   }
 
   const depthStep = isFlat ? 0.5 : 3.0;
-  const radius = isFlat ? 4.0 : 1.8;
+  // Widen ring as more siblings share the orbit (e.g. 6 BDT branch nodes).
+  const radius = isFlat ? 4.0 : 1.8 * Math.max(1, Math.sqrt(totalNodeCount / 4));
   const childCenter = deptPos.clone().add(dir.clone().multiplyScalar(depthStep));
 
   return childCenter
@@ -52,6 +53,17 @@ export function findNodeAtPath(nodes: UInternalNode[], path: string[]): UInterna
   if (!node) return null;
   if (path.length === 1) return node;
   return findNodeAtPath(node.children ?? [], path.slice(1));
+}
+
+/** True when every id in path exists under the department's internal tree. */
+export function isValidInternalPath(nodes: UInternalNode[], path: string[]): boolean {
+  let current = nodes;
+  for (const id of path) {
+    const node = current.find(n => n.id === id);
+    if (!node) return false;
+    current = node.children ?? [];
+  }
+  return true;
 }
 
 export function computeDraftChildNodePosition(
@@ -122,4 +134,9 @@ export function computeCameraFraming(
   }
 
   return { camPos, orbitTarget };
+}
+
+/** Pull camera back when a department has many first-level internal nodes. */
+export function deptZoomDistance(internalCount: number, base = 10): number {
+  return base + Math.max(0, internalCount - 4) * 1.4;
 }
