@@ -504,8 +504,13 @@
           <div class="inote">Implemented — needs end-to-end testing (see verification guide).</div>
         </div>
       </div>
+      <div class="item"><span class="pill p-done">Done</span>
+        <div><span class="itxt"><b>Suggested actions surface (Canvas Overview)</b></span>
+          <div class="inote">Rule-based suggestions from goal gaps, blockers, overdue tasks, at-risk projects and pending decisions — shown in the Canvas Overview with Create/Dismiss/Navigate actions.</div>
+        </div>
+      </div>
       <div class="item"><span class="pill p-pending">Pending</span>
-        <div><span class="itxt"><b>Variance · blockers · suggested actions</b></span></div>
+        <div><span class="itxt"><b>Variance analysis · alignment score</b></span></div>
       </div>
       <div class="item"><span class="pill p-backend">Backend/AI</span>
         <div><span class="itxt"><b>Alignment score</b></span>
@@ -547,22 +552,25 @@
     <section>
       <div class="shead">
         <div class="snum">08</div>
-        <h2>Suggestive Task Engine</h2><span class="score">~40% — rule layer done, AI scoring pending</span>
+        <h2>Suggestive Task Engine</h2><span class="score">~75% — both rule layers + UI done, AI scoring pending</span>
       </div>
       <div class="item"><span class="pill p-done">Done</span>
-        <div><span class="itxt"><b>Rule-based alert engine</b> (frontend)</span>
-          <div class="inote">generateAlerts() in useProjectsStore. Rules: overdue tasks, at-risk project health, open
-            decisions, over-allocated members. Wired into Superspace.</div>
+        <div><span class="itxt"><b>Rule-based alert engine</b> (Superspace)</span>
+          <div class="inote">generateAlerts() — overdue tasks, at-risk health, open decisions, over-allocated members. Wired into Superspace and Left Panel AI Suggestions.</div>
         </div>
       </div>
-      <div class="item"><span class="pill p-pending">Pending</span>
-        <div><span class="itxt"><b>Global suggestive panel</b> in workspace sidebar/dock</span>
-          <div class="inote">Currently shown only in Superspace. A persistent widget across all workspace views still
-            pending.</div>
+      <div class="item"><span class="pill p-done">Done</span>
+        <div><span class="itxt"><b>Suggestive Task Engine surface (Canvas Overview)</b></span>
+          <div class="inote">generateTaskSuggestions() — 5 rule types: goal_gap, blocker, overdue, at_risk, decision. Priority-ranked. Each suggestion has Create / Navigate / Dismiss. "Create" adds directly to the linked project's task board. "Go" navigates to Goals & Metrics for goal_gap type.</div>
+        </div>
+      </div>
+      <div class="item"><span class="pill p-done">Done</span>
+        <div><span class="itxt"><b>Metric impact snapshot in Canvas Overview</b></span>
+          <div class="inote">4 live metric tiles (MRR, Runway, Activation, Churn) with progress bars and trend arrows, shown above suggestions.</div>
         </div>
       </div>
       <div class="item"><span class="pill p-backend">Backend/AI</span>
-        <div><span class="itxt"><b>Priority scoring &amp; smart ranking</b></span></div>
+        <div><span class="itxt"><b>AI priority scoring &amp; smart ranking</b></span></div>
       </div>
     </section>
 

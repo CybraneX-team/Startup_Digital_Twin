@@ -3,6 +3,61 @@ import { useAuth } from '../lib/auth';
 import { usePolytopeStore } from '../lib/usePolytopeStore';
 import { useTeamMembers } from '../lib/db/team';
 
+export type WorkspaceMode = 'explore' | 'decision' | 'execution' | 'review' | 'agent';
+export type WorkspaceRole = 'founder' | 'manager' | 'member';
+
+// ── Entry context: describes where the workspace was opened from ──────────────
+export type WorkspaceEntryLevel = 'universe' | 'industry' | 'subdomain' | 'company' | 'node';
+export interface WorkspaceEntryContext {
+  level: WorkspaceEntryLevel;
+  // Full hierarchy preserved at every level so in-workspace drill-down always has data
+  allIndustries?: Array<{
+    id: string; name: string; color: string; description?: string;
+    subdomains: Array<{
+      id: string; name: string; description?: string;
+      companies: Array<{ id: string; name: string; description?: string; stage?: string; employees?: number; isLive?: boolean }>;
+    }>;
+  }>;
+  // Industry level
+  industryId?: string;
+  industryName?: string;
+  industryColor?: string;
+  industryDescription?: string;
+  subdomains?: Array<{ id: string; name: string; description?: string; companyCount: number; color?: string }>;
+  totalCompanyCount?: number;
+  // Subdomain level
+  subdomainId?: string;
+  subdomainName?: string;
+  subdomainDescription?: string;
+  companies?: Array<{ id: string; name: string; description?: string; stage?: string; employees?: number; isLive?: boolean }>;
+  // Company level
+  companyId?: string;
+  companyName?: string;
+  companyDescription?: string;
+  companyStage?: string;
+  companyEmployees?: number;
+  companyIsLive?: boolean;
+  companyRelationship?: 'own' | 'opportunity' | 'competitor' | 'investor' | 'partner';
+  companyRole?: string;
+  // Node level
+  rootId?: string;
+  rootLabel?: string;
+  rootDescription?: string;
+  branchId?: string;
+  branchLabel?: string;
+  actionId?: string;
+  actionLabel?: string;
+  nodeHint?: string;
+  breadcrumbs?: string[];
+}
+
+export interface AuditEntry {
+  id: string;
+  action: string;
+  detail?: string;
+  at: string; // ISO timestamp
+}
+
 export interface OKRGoal {
   id: string;
   label: string;
@@ -90,6 +145,7 @@ export interface WorkspaceState {
   selectedDeptId: string;
   notes: Note[];
   uploadedFiles?: WorkspaceFile[];
+  auditLog?: AuditEntry[];
 }
 
 interface FounderWorkspaceContextType {
@@ -164,6 +220,12 @@ interface FounderWorkspaceContextType {
   activeSidebarTab: string;
   setActiveSidebarTab: (tab: string) => void;
 
+  // Workspace mode + role lens
+  workspaceMode: WorkspaceMode;
+  setWorkspaceMode: (mode: WorkspaceMode) => void;
+  activeRole: WorkspaceRole;
+  setActiveRole: (role: WorkspaceRole) => void;
+
   // Workspace expansion states
   scrollExpansion: number;
   setScrollExpansion: (val: number | ((prev: number) => number)) => void;
@@ -174,6 +236,13 @@ interface FounderWorkspaceContextType {
   uploadedFiles: WorkspaceFile[];
   addUploadedFile: (file: Omit<WorkspaceFile, 'id' | 'uploadedAt'>) => void;
   deleteUploadedFile: (id: string) => void;
+
+  // Audit trail
+  auditLog: AuditEntry[];
+
+  // Entry context — describes where workspace was opened from
+  entryContext: WorkspaceEntryContext | null;
+  setEntryContext: (ctx: WorkspaceEntryContext | null) => void;
 }
 
 const FounderWorkspaceContext = createContext<FounderWorkspaceContextType | undefined>(undefined);
@@ -353,7 +422,7 @@ Happy coding!
   }
 ];
 
-export function FounderWorkspaceProvider({ children }: { children: ReactNode }) {
+export function FounderWorkspaceProvider({ children, initialEntryContext }: { children: ReactNode; initialEntryContext?: WorkspaceEntryContext | null }) {
   const { profile } = useAuth();
   const polytopeStore = usePolytopeStore('bdt');
   const { members } = useTeamMembers(profile?.company_id);
@@ -391,9 +460,18 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
 
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string>('default');
   const [activeSidebarTab, setActiveSidebarTab] = useState<string>('canvas');
+  const [workspaceMode, setWorkspaceMode] = useState<WorkspaceMode>('explore');
+  const [activeRole, setActiveRole] = useState<WorkspaceRole>('founder');
   const [scrollExpansion, setScrollExpansionState] = useState(0);
   const [isFullscreen, setIsFullscreenState] = useState(false);
   const [activeNoteId, setActiveNoteId] = useState<string | null>(null);
+  const [auditLog, setAuditLog] = useState<AuditEntry[]>([]);
+  const [entryContext, setEntryContext] = useState<WorkspaceEntryContext | null>(initialEntryContext ?? null);
+
+  const logAudit = (action: string, detail?: string) => {
+    const entry: AuditEntry = { id: `a_${Date.now()}`, action, detail, at: new Date().toISOString() };
+    setAuditLog(prev => [entry, ...prev].slice(0, 200));
+  };
 
   const setScrollExpansion = (val: number | ((prev: number) => number)) => {
     setScrollExpansionState(prev => {
@@ -474,6 +552,7 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
 
   // Switch active mrr growth rate
   const setMrrGrowthRate = (rate: number) => {
+    logAudit('MRR growth rate updated', `${rate}%/mo`);
     updateActiveWorkspace(() => ({ mrrGrowthRate: rate }));
   };
 
@@ -518,6 +597,7 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
         return t;
       });
 
+      if (targetGoal) logAudit(nextDone ? 'Goal completed' : 'Goal re-opened', targetGoal.label);
       return { goals: updatedGoals, tasks: updatedTasks };
     });
   };
@@ -528,6 +608,7 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
     timeline?: string,
     owner?: string
   ) => {
+    logAudit('Goal added', label);
     updateActiveWorkspace(w => ({
       goals: [
         ...w.goals,
@@ -553,9 +634,11 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
   };
 
   const deleteGoal = (id: string) => {
-    updateActiveWorkspace(w => ({
-      goals: w.goals.filter(g => g.id !== id),
-    }));
+    updateActiveWorkspace(w => {
+      const g = w.goals.find(x => x.id === id);
+      if (g) logAudit('Goal deleted', g.label);
+      return { goals: w.goals.filter(x => x.id !== id) };
+    });
   };
 
   const hireHeadcount = (deptId: string, role: string) => {
@@ -575,6 +658,7 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
       if (!targetRisk) return {};
 
       const nextMitigated: 'Active' | 'Mitigated' = targetRisk.status === 'Mitigated' ? 'Active' : 'Mitigated';
+      logAudit(nextMitigated === 'Mitigated' ? 'Risk mitigated' : 'Risk re-opened', targetRisk.label);
       const updatedRisks = w.risks.map(r => r.id === id ? { ...r, status: nextMitigated } : r);
 
 
@@ -592,6 +676,7 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
   };
 
   const addRisk = (label: string, impact: 'High' | 'Medium' | 'Low') => {
+    logAudit('Risk added', `${label} (${impact})`);
     updateActiveWorkspace(w => ({
       risks: [...w.risks, { id: `r_${Date.now()}`, label, status: 'Active', impact }],
       tasks: [...w.tasks, { id: `t_${Date.now()}`, label: `Mitigate risk: ${label}`, done: false }],
@@ -637,6 +722,8 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
 
   const toggleTask = (id: string) => {
     updateActiveWorkspace(w => {
+      const targetTask = w.tasks.find(t => t.id === id);
+      if (targetTask) logAudit(targetTask.done ? 'Task re-opened' : 'Task completed', targetTask.label);
       const updatedTasks = w.tasks.map(t => {
         if (t.id === id) {
           const nextDone = !t.done;
@@ -647,7 +734,6 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
       });
 
       // Synchronize back to goals and risks
-      const targetTask = w.tasks.find(t => t.id === id);
       const nextDone = targetTask ? !targetTask.done : false;
 
       let nextRisks = w.risks;
@@ -667,6 +753,7 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
   };
 
   const addTask = (label: string, status: 'in_progress' | 'done' | 'highlighted' = 'in_progress') => {
+    logAudit('Task added', label);
     updateActiveWorkspace(w => ({
       tasks: [...w.tasks, { id: `t_${Date.now()}`, label, done: status === 'done', status }],
     }));
@@ -674,6 +761,8 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
 
   const updateTaskStatus = (id: string, status: 'in_progress' | 'done' | 'highlighted') => {
     updateActiveWorkspace(w => {
+      const t = w.tasks.find(x => x.id === id);
+      if (t) logAudit(`Task ${status === 'done' ? 'completed' : `moved to ${status}`}`, t.label);
       const updatedTasks = w.tasks.map(t => {
         if (t.id === id) {
           return { ...t, status, done: status === 'done' };
@@ -699,12 +788,15 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
   };
 
   const dismissTask = (id: string) => {
-    updateActiveWorkspace(w => ({
-      tasks: w.tasks.filter(t => t.id !== id),
-    }));
+    updateActiveWorkspace(w => {
+      const t = w.tasks.find(x => x.id === id);
+      if (t) logAudit('Task dismissed', t.label);
+      return { tasks: w.tasks.filter(t => t.id !== id) };
+    });
   };
 
   const resetWorkspace = () => {
+    logAudit('Workspace reset to defaults');
     updateActiveWorkspace(() => ({
       goals: DEFAULT_GOALS,
       departments: DEFAULT_DEPARTMENTS,
@@ -779,10 +871,12 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
   };
 
   const renameWorkspace = (id: string, name: string) => {
+    logAudit('Workspace renamed', name);
     setWorkspaces(prev => prev.map(w => w.id === id ? { ...w, name } : w));
   };
 
   const addNote = (title: string, blocks?: NoteBlock[]) => {
+    logAudit('Note created', title || 'Untitled Note');
     const newNote: Note = {
       id: `note_${Date.now()}`,
       title: title || 'Untitled Note',
@@ -806,15 +900,18 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
   };
 
   const deleteNote = (id: string) => {
-    updateActiveWorkspace(w => ({
-      notes: (w.notes || []).filter(n => n.id !== id)
-    }));
+    updateActiveWorkspace(w => {
+      const n = (w.notes || []).find(x => x.id === id);
+      if (n) logAudit('Note deleted', n.title);
+      return { notes: (w.notes || []).filter(n => n.id !== id) };
+    });
     if (activeNoteId === id) {
       setActiveNoteId(null);
     }
   };
 
   const addUploadedFile = (file: Omit<WorkspaceFile, 'id' | 'uploadedAt'>) => {
+    logAudit('File uploaded', file.name);
     updateActiveWorkspace(w => ({
       uploadedFiles: [
         ...(w.uploadedFiles || []),
@@ -828,9 +925,11 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
   };
 
   const deleteUploadedFile = (id: string) => {
-    updateActiveWorkspace(w => ({
-      uploadedFiles: (w.uploadedFiles || []).filter(f => f.id !== id)
-    }));
+    updateActiveWorkspace(w => {
+      const f = (w.uploadedFiles || []).find(x => x.id === id);
+      if (f) logAudit('File deleted', f.name);
+      return { uploadedFiles: (w.uploadedFiles || []).filter(f => f.id !== id) };
+    });
   };
 
   return (
@@ -892,6 +991,12 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
         activeSidebarTab,
         setActiveSidebarTab,
 
+        // Mode + role
+        workspaceMode,
+        setWorkspaceMode,
+        activeRole,
+        setActiveRole,
+
         scrollExpansion,
         setScrollExpansion,
         isFullscreen,
@@ -901,6 +1006,13 @@ export function FounderWorkspaceProvider({ children }: { children: ReactNode }) 
         uploadedFiles,
         addUploadedFile,
         deleteUploadedFile,
+
+        // Audit trail
+        auditLog,
+
+        // Entry context
+        entryContext,
+        setEntryContext,
       }}
     >
 

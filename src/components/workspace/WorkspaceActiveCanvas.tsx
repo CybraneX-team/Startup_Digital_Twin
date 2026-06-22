@@ -24,16 +24,17 @@ import {
   Database,
   Mic,
   Volume2,
-  CircleDollarSign,
   Layers,
-  Users,
-  ShieldCheck,
   Trash2,
-  Sparkles,
   ThumbsUp,
   ThumbsDown,
   Copy,
   RefreshCw,
+  Compass,
+  Scale,
+  Zap,
+  CheckCircle,
+  Bot,
 } from 'lucide-react';
 import {
   WORKSPACE_CANVAS_CARDS,
@@ -41,12 +42,21 @@ import {
   type WorkspaceCanvasCard,
 } from '../../lib/workspaceLayoutData';
 import { WorkspaceCanvasFrame } from './WorkspaceCanvasFrame';
-import { useFounderWorkspace, type NoteBlock, type Note } from '../../context/FounderWorkspaceContext';
+import { useFounderWorkspace, type NoteBlock, type Note, type WorkspaceMode, type AuditEntry } from '../../context/FounderWorkspaceContext';
 import { BrainIcon } from './BrainIcon';
 import Orb from '../Orb';
 import { WorkspaceFilesDashboard } from './WorkspaceFilesDashboard';
 import { WorkspaceSavedNodesCanvas } from './WorkspaceSavedNodesCanvas';
 import { WorkspaceProjectsSpace } from './WorkspaceProjectsSpace';
+import { WorkspaceCanvasOverview } from './WorkspaceCanvasOverview';
+import { WorkspaceAgentSurface } from './WorkspaceAgentSurface';
+import { WorkspaceShortcutPanel } from './WorkspaceShortcutPanel';
+import { WorkspaceSpherePanel } from './WorkspaceSpherePanel';
+import { WorkspaceModeBar } from './WorkspaceModeBar';
+import { WorkspaceUniverseCanvas } from './WorkspaceUniverseCanvas';
+import { WorkspaceIndustryCanvas } from './WorkspaceIndustryCanvas';
+import { WorkspaceSubdomainCanvas } from './WorkspaceSubdomainCanvas';
+import { WorkspaceCompanyCanvas } from './WorkspaceCompanyCanvas';
 
 /* ── tiny chart primitives ─────────────────────────────────────── */
 
@@ -477,822 +487,206 @@ function CompactCardBody({ card }: { card: WorkspaceCanvasCard }) {
   );
 }
 
-function WorkspaceTasksKanban() {
-  const { tasks, addTask, updateTaskStatus, dismissTask } = useFounderWorkspace();
-  const [taskLabel, setTaskLabel] = useState('');
-  const [taskStatus, setTaskStatus] = useState<'in_progress' | 'done' | 'highlighted'>('in_progress');
+/* ── Activity Feed ────────────────────────────────────────────────────────── */
 
-  // Drag and drop states
-  const [draggedTaskId, setDraggedTaskId] = useState<string | null>(null);
-  const [dragOverCol, setDragOverCol] = useState<'highlighted' | 'in_progress' | 'done' | null>(null);
-  const dragCounter = useRef<{ [key: string]: number }>({ highlighted: 0, in_progress: 0, done: 0 });
-  const [isStatusDropdownOpen, setIsStatusDropdownOpen] = useState(false);
+function timeAgoShort(iso: string): string {
+  const diff = Date.now() - new Date(iso).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return 'just now';
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
+}
 
-  const resolveStatus = (t: any) => {
-    if (t.status) return t.status;
-    return t.done ? 'done' : 'in_progress';
-  };
+function ProjectsRedirect({ view }: { view: 'member' | 'goals' }) {
+  const { setActiveSidebarTab } = useFounderWorkspace();
+  useEffect(() => {
+    setActiveSidebarTab('projects');
+    window.dispatchEvent(new CustomEvent(view === 'member' ? 'open-my-work' : 'open-goals-metrics'));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <div className="flex items-center justify-center h-full">
+      <div className="text-sm text-white/30">Opening Projects…</div>
+    </div>
+  );
+}
 
-  const handleDragStart = (e: React.DragEvent, id: string) => {
-    e.dataTransfer.setData('text/plain', id);
-    e.dataTransfer.effectAllowed = 'move';
-    // Use setTimeout so the browser captures the original fully styled card as the drag image
-    setTimeout(() => {
-      setDraggedTaskId(id);
-    }, 0);
-  };
+function WorkspaceActivityFeed() {
+  const { auditLog } = useFounderWorkspace();
 
-  const handleDragEnd = () => {
-    setDraggedTaskId(null);
-    setDragOverCol(null);
-    dragCounter.current = { highlighted: 0, in_progress: 0, done: 0 };
-  };
-
-  const handleDragEnterCol = (e: React.DragEvent, status: 'highlighted' | 'in_progress' | 'done') => {
-    e.preventDefault();
-    dragCounter.current[status]++;
-    setDragOverCol(status);
-  };
-
-  const handleDragLeaveCol = (e: React.DragEvent, status: 'highlighted' | 'in_progress' | 'done') => {
-    e.preventDefault();
-    dragCounter.current[status]--;
-    if (dragCounter.current[status] <= 0) {
-      dragCounter.current[status] = 0;
-      setDragOverCol(prev => prev === status ? null : prev);
-    }
-  };
-
-  const handleDropCol = (e: React.DragEvent, status: 'highlighted' | 'in_progress' | 'done') => {
-    e.preventDefault();
-    const id = e.dataTransfer.getData('text/plain');
-    if (id) {
-      updateTaskStatus(id, status);
-    }
-    dragCounter.current = { highlighted: 0, in_progress: 0, done: 0 };
-    setDragOverCol(null);
-    setDraggedTaskId(null);
-  };
-
-  const handleAddTaskSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!taskLabel.trim()) return;
-    addTask(taskLabel.trim(), taskStatus);
-    setTaskLabel('');
-  };
-
-  const highlighted = tasks.filter(t => resolveStatus(t) === 'highlighted');
-  const inProgress = tasks.filter(t => resolveStatus(t) === 'in_progress');
-  const doneTasks = tasks.filter(t => resolveStatus(t) === 'done');
+  if (auditLog.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full py-16 text-center">
+        <div className="text-2xl mb-3">📋</div>
+        <div className="text-sm font-semibold text-white/50">No activity yet</div>
+        <div className="text-xs text-white/25 mt-1">Actions in this workspace appear here in real time.</div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex flex-col h-full max-w-full min-h-0 w-full">
-      {/* Sleek inline task creator */}
-      <form onSubmit={handleAddTaskSubmit} className="max-w-7xl mx-auto w-full mb-5 bg-white/[0.02] border border-white/10 rounded-2xl p-3 flex gap-3 items-center backdrop-blur-md shrink-0">
-        <input
-          type="text"
-          value={taskLabel}
-          onChange={e => setTaskLabel(e.target.value)}
-          placeholder="Deploy a new objective..."
-          className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-indigo-500/50 transition-colors"
-          required
-        />
-        <div className="relative flex items-center gap-1.5 shrink-0">
-          <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Column:</span>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setIsStatusDropdownOpen(!isStatusDropdownOpen)}
-              className="bg-[#121215]/95 border border-white/10 text-white/80 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-500 flex items-center gap-2 cursor-pointer min-w-[120px] justify-between transition-colors hover:bg-[#1a1a1f]"
-            >
-              <span>
-                {taskStatus === 'in_progress' ? 'In Progress' :
-                  taskStatus === 'highlighted' ? 'Highlighted' : 'Done'}
-              </span>
-              <ChevronDown
-                className="w-3 h-3 text-white/40 transition-transform duration-200"
-                style={{ transform: isStatusDropdownOpen ? 'rotate(180deg)' : 'none' }}
-              />
-            </button>
-
-            {isStatusDropdownOpen && (
-              <>
-                <div
-                  className="fixed inset-0 z-40"
-                  onClick={() => setIsStatusDropdownOpen(false)}
-                />
-                <div className="absolute right-0 mt-1.5 w-36 bg-[#121215]/95 border border-white/10 rounded-xl py-1 shadow-2xl z-50 backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150">
-                  {[
-                    { val: 'in_progress', label: 'In Progress', color: 'bg-blue-500 shadow-[0_0_8px_#3b82f6]' },
-                    { val: 'highlighted', label: 'Highlighted', color: 'bg-amber-500 shadow-[0_0_8px_#f59e0b]' },
-                    { val: 'done', label: 'Done', color: 'bg-emerald-500 shadow-[0_0_8px_#10b981]' }
-                  ].map(opt => (
-                    <button
-                      key={opt.val}
-                      type="button"
-                      onClick={() => {
-                        setTaskStatus(opt.val as any);
-                        setIsStatusDropdownOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/5 transition-colors flex items-center gap-2 cursor-pointer"
-                    >
-                      <span className={`w-1.5 h-1.5 rounded-full ${opt.color}`} />
-                      <span className="flex-1 font-medium">{opt.label}</span>
-                      {taskStatus === opt.val && <Check className="w-3.5 h-3.5 text-white/60" />}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-        <button
-          type="submit"
-          className="px-4 py-2 bg-indigo-600/35 hover:bg-indigo-600/50 border border-indigo-500/30 rounded-xl text-xs font-bold text-indigo-200 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 shrink-0"
-        >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Deploy</span>
-        </button>
-      </form>
-
-      {/* 3-column Kanban Board */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-5 min-h-0 px-2 pb-2">
-
-        {/* COLUMN 1: HIGHLIGHTED */}
-        <div
-          onDragOver={e => e.preventDefault()}
-          onDragEnter={e => handleDragEnterCol(e, 'highlighted')}
-          onDragLeave={e => handleDragLeaveCol(e, 'highlighted')}
-          onDrop={e => handleDropCol(e, 'highlighted')}
-          className={`transition-all duration-200 rounded-2xl flex flex-col h-full min-h-0 overflow-hidden  ${dragOverCol === 'highlighted'
-            ? 'bg-amber-500/[0.04] border border-dashed border-amber-500/40 shadow-[0_0_15px_rgba(245,158,11,0.15)] scale-[1.01]'
-            : 'bg-white/[0.01] border border-white/5'
-            }`}
-        >
-          <div className="px-4 py-3 bg-white/[0.02] border-b border-white/5 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
-              <h3 className="text-xs font-bold text-amber-200 uppercase tracking-wider">Needs Highlight</h3>
-            </div>
-            <span className="text-[10px] font-bold text-white/30 px-2 py-0.5 rounded-full bg-white/5">{highlighted.length}</span>
-          </div>
-          <div className="flex-1 overflow-y-auto p-3.5 space-y-3">
-            {highlighted.length === 0 ? (
-              <div className="h-28 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-xl text-[10px] text-white/20 uppercase tracking-wider font-semibold">
-                No Highlights
+    <div className="w-full h-full overflow-y-auto scrollbar-hide pb-6">
+      <div className="text-[10px] font-bold tracking-[0.15em] uppercase text-white/40 mb-3 flex items-center gap-1.5 px-0.5">
+        <CheckCircle className="w-3.5 h-3.5 text-emerald-400" />
+        Audit Trail · {auditLog.length} events
+      </div>
+      <div className="relative pl-4">
+        <div className="absolute left-[5px] top-0 bottom-0 w-px bg-white/8" />
+        {(auditLog as AuditEntry[]).map((entry, i) => (
+          <div key={entry.id} className="relative mb-4 last:mb-0">
+            <div
+              className="absolute -left-[11px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-[#0f0f17]"
+              style={{ background: i === 0 ? '#c1aeff' : '#334155' }}
+            />
+            <div className="rounded-xl p-3 bg-white/[0.03] border border-white/8">
+              <div className="flex items-center justify-between gap-2 mb-0.5">
+                <span className="text-[12px] font-semibold text-white">{entry.action}</span>
+                <span className="text-[10px] text-white/30 shrink-0">{timeAgoShort(entry.at)}</span>
               </div>
-            ) : (
-              highlighted.map(t => (
-                <div
-                  key={t.id}
-                  draggable
-                  onDragStart={e => handleDragStart(e, t.id)}
-                  onDragEnd={handleDragEnd}
-                  className={`group relative bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-white/20 rounded-xl p-3 transition-all duration-200 flex flex-col justify-between gap-3 shadow-lg select-none ${draggedTaskId === t.id ? 'opacity-30 scale-95 border-dashed border-white/20' : 'cursor-grab active:cursor-grabbing'
-                    }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-xs font-semibold text-white/80 leading-relaxed">{t.label}</span>
-                    <button
-                      type="button"
-                      onClick={() => dismissTask(t.id)}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-white/10 text-white/30 hover:text-rose-400 rounded transition-all shrink-0 cursor-pointer"
-                      title="Dismiss Task"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-white/5 pt-2.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto">
-                    <button
-                      type="button"
-                      onClick={() => updateTaskStatus(t.id, 'in_progress')}
-                      className="px-2 py-1 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/20 text-[9px] text-white/60 hover:text-white rounded-md transition-all flex items-center gap-1 cursor-pointer"
-                    >
-                      <svg className="w-2.5 h-2.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M5 12h14M12 5l7 7-7 7" /></svg>
-                      <span>Move to Progress</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateTaskStatus(t.id, 'done')}
-                      className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40 text-[9px] text-emerald-400 hover:text-emerald-300 rounded-md transition-all flex items-center gap-1 cursor-pointer"
-                    >
-                      <Check className="w-2.5 h-2.5" />
-                      <span>Complete</span>
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* COLUMN 2: IN PROGRESS */}
-        <div
-          onDragOver={e => e.preventDefault()}
-          onDragEnter={e => handleDragEnterCol(e, 'in_progress')}
-          onDragLeave={e => handleDragLeaveCol(e, 'in_progress')}
-          onDrop={e => handleDropCol(e, 'in_progress')}
-          className={`transition-all duration-200 rounded-2xl flex flex-col h-full min-h-0 overflow-hidden ${dragOverCol === 'in_progress'
-            ? 'bg-indigo-500/[0.04] border border-dashed border-indigo-500/40 shadow-[0_0_15px_rgba(99,102,241,0.15)] scale-[1.01]'
-            : 'bg-white/[0.01] border border-white/5'
-            }`}
-        >
-          <div className="px-4 py-3 bg-white/[0.02] border-b border-white/5 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1]" />
-              <h3 className="text-xs font-bold text-indigo-200 uppercase tracking-wider">In Progress</h3>
+              {entry.detail && (
+                <p className="text-[11px] text-white/45 leading-snug truncate" title={entry.detail}>{entry.detail}</p>
+              )}
             </div>
-            <span className="text-[10px] font-bold text-white/30 px-2 py-0.5 rounded-full bg-white/5">{inProgress.length}</span>
           </div>
-          <div className="flex-1 overflow-y-auto p-3.5 space-y-3">
-            {inProgress.length === 0 ? (
-              <div className="h-28 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-xl text-[10px] text-white/20 uppercase tracking-wider font-semibold">
-                No Tasks in Progress
-              </div>
-            ) : (
-              inProgress.map(t => (
-                <div
-                  key={t.id}
-                  draggable
-                  onDragStart={e => handleDragStart(e, t.id)}
-                  onDragEnd={handleDragEnd}
-                  className={`group relative bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-white/20 rounded-xl p-3 transition-all duration-200 flex flex-col justify-between gap-3 shadow-lg select-none ${draggedTaskId === t.id ? 'opacity-30 scale-95 border-dashed border-white/20' : 'cursor-grab active:cursor-grabbing'
-                    }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-xs font-semibold text-white/80 leading-relaxed">{t.label}</span>
-                    <button
-                      type="button"
-                      onClick={() => dismissTask(t.id)}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-white/10 text-white/30 hover:text-rose-400 rounded transition-all shrink-0 cursor-pointer"
-                      title="Dismiss Task"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-between border-t border-white/5 pt-2.5 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto">
-                    <button
-                      type="button"
-                      onClick={() => updateTaskStatus(t.id, 'highlighted')}
-                      className="px-2 py-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 hover:border-amber-500/40 text-[9px] text-amber-400 hover:text-amber-300 rounded-md transition-all flex items-center gap-1 cursor-pointer"
-                    >
-                      <svg className="w-2.5 h-2.5 text-amber-400" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" /></svg>
-                      <span>Highlight</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => updateTaskStatus(t.id, 'done')}
-                      className="px-2 py-1 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40 text-[9px] text-emerald-400 hover:text-emerald-300 rounded-md transition-all flex items-center gap-1 cursor-pointer"
-                    >
-                      <Check className="w-2.5 h-2.5" />
-                      <span>Complete</span>
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* COLUMN 3: DONE */}
-        <div
-          onDragOver={e => e.preventDefault()}
-          onDragEnter={e => handleDragEnterCol(e, 'done')}
-          onDragLeave={e => handleDragLeaveCol(e, 'done')}
-          onDrop={e => handleDropCol(e, 'done')}
-          className={`transition-all duration-200 rounded-2xl flex flex-col h-full min-h-0 overflow-hidden ${dragOverCol === 'done'
-            ? 'bg-emerald-500/[0.04] border border-dashed border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)] scale-[1.01]'
-            : 'bg-white/[0.01] border border-white/5'
-            }`}
-        >
-          <div className="px-4 py-3 bg-white/[0.02] border-b border-white/5 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
-              <h3 className="text-xs font-bold text-emerald-200 uppercase tracking-wider">Done</h3>
-            </div>
-            <span className="text-[10px] font-bold text-white/30 px-2 py-0.5 rounded-full bg-white/5">{doneTasks.length}</span>
-          </div>
-          <div className="flex-1 overflow-y-auto p-3.5 space-y-3">
-            {doneTasks.length === 0 ? (
-              <div className="h-28 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-xl text-[10px] text-white/20 uppercase tracking-wider font-semibold">
-                No Tasks Completed
-              </div>
-            ) : (
-              doneTasks.map(t => (
-                <div
-                  key={t.id}
-                  draggable
-                  onDragStart={e => handleDragStart(e, t.id)}
-                  onDragEnd={handleDragEnd}
-                  className={`group relative bg-white/[0.01] border border-white/5 hover:border-white/10 rounded-xl p-3 transition-all duration-200 flex flex-col justify-between gap-3 shadow select-none ${draggedTaskId === t.id ? 'opacity-30 scale-95 border-dashed border-white/20' : 'cursor-grab active:cursor-grabbing'
-                    }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-xs font-semibold text-white/40 line-through leading-relaxed truncate-2-lines">{t.label}</span>
-                    <button
-                      type="button"
-                      onClick={() => dismissTask(t.id)}
-                      className="opacity-0 group-hover:opacity-100 p-0.5 hover:bg-white/10 text-white/30 hover:text-rose-400 rounded transition-all shrink-0 cursor-pointer"
-                      title="Dismiss Task"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <div className="flex items-center justify-start border-t border-white/[0.02] pt-2 mt-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none group-hover:pointer-events-auto">
-                    <button
-                      type="button"
-                      onClick={() => updateTaskStatus(t.id, 'in_progress')}
-                      className="px-2 py-1 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/20 text-[9px] text-white/50 hover:text-white rounded-md transition-all flex items-center gap-1 cursor-pointer"
-                    >
-                      <svg className="w-2.5 h-2.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M19 12H5M12 19l-7-7 7-7" /></svg>
-                      <span>Reopen Task</span>
-                    </button>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </div>
-
+        ))}
       </div>
     </div>
   );
 }
 
-function WorkspaceGoalsDashboard() {
+/* ── Mode Lens Banner ─────────────────────────────────────────────────────── */
+const DASHBOARD_TABS_SET = new Set(['notes','files','projects','sphere','roadmap','fundraising','interviews','competitors','activity']);
+
+type ModeLensConfig = {
+  color: string;
+  label: string;
+  description: string;
+  stats: { label: string; value: string | number }[];
+};
+
+function WorkspaceModeLensBanner() {
   const {
-    goals,
-    toggleGoal,
-    addGoal,
-    deleteGoal,
-    goalProgress,
-    projectedRunway,
-    confidenceScore,
-    tasks,
+    workspaceMode, activeSidebarTab, activeRole,
+    tasks, goals, goalProgress,
+    risks, confidenceScore, projectedRunway,
   } = useFounderWorkspace();
 
-  const [goalLabel, setGoalLabel] = useState('');
-  const [goalCategory, setGoalCategory] = useState<'growth' | 'product' | 'finance' | 'talent' | 'compliance'>('product');
-  const [goalTimeline, setGoalTimeline] = useState('Q3 2026');
-  const [goalOwner, setGoalOwner] = useState('Product & Eng');
+  const isDashboard = DASHBOARD_TABS_SET.has(activeSidebarTab);
 
-  // Custom Dropdown Open States
-  const [isOwnerDropdownOpen, setIsOwnerDropdownOpen] = useState(false);
-  const [isTimelineDropdownOpen, setIsTimelineDropdownOpen] = useState(false);
+  const visible = (
+    (workspaceMode === 'execution' && activeSidebarTab === 'projects') ||
+    (workspaceMode === 'decision'  && activeSidebarTab === 'projects') ||
+    (workspaceMode === 'review'    && activeSidebarTab === 'projects') ||
+    (workspaceMode === 'explore'   && !isDashboard) ||
+    (workspaceMode === 'agent'     && !isDashboard)
+  );
 
-  const handleAddGoalSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!goalLabel.trim()) return;
-    addGoal(goalLabel.trim(), goalCategory, goalTimeline, goalOwner);
-    setGoalLabel('');
-  };
+  if (!visible) return null;
 
-  const getCategoryIcon = (category?: string) => {
-    switch (category) {
-      case 'growth': return <TrendingUp className="w-3.5 h-3.5 text-blue-400" />;
-      case 'finance': return <CircleDollarSign className="w-3.5 h-3.5 text-emerald-400" />;
-      case 'talent': return <Users className="w-3.5 h-3.5 text-purple-400" />;
-      case 'compliance': return <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />;
-      case 'product':
-      default:
-        return <Layers className="w-3.5 h-3.5 text-indigo-400" />;
+  const resolveStatus = (t: { status?: string; done?: boolean }) =>
+    t.status ?? (t.done ? 'done' : 'in_progress');
+
+  const priorityTasks = tasks.filter(t => resolveStatus(t) === 'highlighted').length;
+  const activeTasks   = tasks.filter(t => resolveStatus(t) === 'in_progress').length;
+  const doneTasks     = tasks.filter(t => resolveStatus(t) === 'done').length;
+  const openRisks     = risks.filter(r => r.status !== 'Mitigated').length;
+  const doneGoals     = goals.filter(g => g.done).length;
+
+  const cfg: ModeLensConfig = (() => {
+    switch (workspaceMode) {
+      case 'execution': return {
+        color: '#c1aeff',
+        label: 'Execution Lens',
+        description: 'Focus on what ships — priority tasks and active work items.',
+        stats: [
+          { label: 'Priority', value: priorityTasks },
+          { label: 'Active',   value: activeTasks },
+          { label: 'Done',     value: doneTasks },
+        ],
+      };
+      case 'decision': return {
+        color: '#fbbf24',
+        label: 'Decision Lens',
+        description: 'Surface what needs a call — open risks, stalled goals, low confidence.',
+        stats: [
+          { label: 'Open Risks',  value: openRisks },
+          { label: 'Confidence', value: `${confidenceScore}%` },
+          ...(activeRole === 'founder' ? [{ label: 'Runway', value: `${projectedRunway}mo` }] : []),
+        ],
+      };
+      case 'review': return {
+        color: '#34d399',
+        label: 'Review Lens',
+        description: 'Measure what matters — OKR health, milestone completion, momentum.',
+        stats: [
+          { label: 'OKR Progress', value: `${goalProgress}%` },
+          { label: 'Milestones',  value: `${doneGoals}/${goals.length}` },
+          ...(activeRole !== 'member' ? [{ label: 'Active Risks', value: openRisks }] : []),
+        ],
+      };
+      case 'explore': return {
+        color: '#60a5fa',
+        label: 'Explore',
+        description: 'Full picture — browse all nodes, cards, and connections in your universe.',
+        stats: [],
+      };
+      case 'agent': return {
+        color: '#f472b6',
+        label: 'Agent Lens',
+        description: 'AI twin engaged — monitoring signals, running simulations, ready to act.',
+        stats: [],
+      };
     }
+  })();
+
+  const ModeIcon: Record<WorkspaceMode, React.ComponentType<{ className?: string; style?: React.CSSProperties }>> = {
+    explore: Compass, decision: Scale, execution: Zap, review: CheckCircle, agent: Bot,
   };
-
-  const getCategoryColor = (category?: string) => {
-    switch (category) {
-      case 'growth': return 'bg-blue-500/10 border-blue-500/20 text-blue-400';
-      case 'finance': return 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400';
-      case 'talent': return 'bg-purple-500/10 border-purple-500/20 text-purple-400';
-      case 'compliance': return 'bg-amber-500/10 border-amber-500/20 text-amber-400';
-      case 'product':
-      default:
-        return 'bg-indigo-500/10 border-indigo-500/20 text-indigo-400';
-    }
-  };
-
-  const getLinkedTasks = (goalLabel: string) => {
-    const keywords = goalLabel
-      .toLowerCase()
-      .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "")
-      .split(" ")
-      .filter(w => w.length >= 3);
-
-    if (keywords.length === 0) return [];
-
-    return tasks.filter(t => {
-      const taskLabel = t.label.toLowerCase();
-      return keywords.some(keyword => taskLabel.includes(keyword));
-    });
-  };
-
-  const getAIAssessment = () => {
-    let title = "Stable Operational Horizon";
-    let message = `AI Status: Runway is highly secure (${projectedRunway} months). Cash resources are healthy. You are in a strong position to scale product development and GTM channels aggressively.`;
-    let status: 'perfect' | 'warning' | 'danger' = 'perfect';
-
-    if (projectedRunway < 6) {
-      status = 'danger';
-      title = "Critical Runway Warning";
-      message = `AI Warning: Projected runway is critically low (${projectedRunway} months). Cash burn must be mitigated immediately. Recommend deferring non-essential headcount expansion and accelerating Seed / Series A fundraising closure.`;
-    } else if (projectedRunway < 12) {
-      status = 'warning';
-      title = "Moderate Runway Watch";
-      message = `AI Advisory: Runway stands at ${projectedRunway} months. Operating burn should be monitored closely as team headcount grows. Focus on driving MRR growth rate above 10% to secure cash extensions.`;
-    }
-
-    if (confidenceScore < 60) {
-      title = status === 'perfect' ? "Operational Risk Advisory" : title + " & Risk Advisory";
-      message += ` Additionally, confidence health is low (${confidenceScore}%) due to active risk blockers (e.g. SOC2 compliance, key hires). Prioritize completing linked risk mitigation tasks.`;
-      if (status === 'perfect') status = 'warning';
-    }
-
-    return { title, message, status };
-  };
-
-  const aiAssessment = getAIAssessment();
-
-  const activeGoals = goals.filter(g => !g.done);
-  const completedGoals = goals.filter(g => g.done);
-
-  // Compute overall execution momentum
-  const totalLinkedTasks = goals.reduce((acc, g) => acc + getLinkedTasks(g.label).length, 0);
-  const completedLinkedTasks = goals.reduce((acc, g) => acc + getLinkedTasks(g.label).filter(t => t.done).length, 0);
-  const executionMomentum = totalLinkedTasks > 0 ? Math.round((completedLinkedTasks / totalLinkedTasks) * 100) : 0;
+  const Icon = ModeIcon[workspaceMode];
 
   return (
-    <div className="flex flex-col h-full min-h-0 w-full overflow-hidden">
-
-      {/* Overview Header Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6 shrink-0">
-
-        {/* Card 1: Goal Progress */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 flex items-center justify-between gap-4 backdrop-blur-md">
-          <div className="space-y-1">
-            <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider">Overall Progress</span>
-            <div className="text-2xl font-black text-white">{goalProgress}%</div>
-            <span className="text-[9px] text-rose-400 font-semibold block">OKR Milestones</span>
-          </div>
-          <div className="w-14 h-14 relative shrink-0">
-            <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
-              <circle cx="50" cy="50" r="40" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={10} />
-              <circle
-                cx="50"
-                cy="50"
-                r="40"
-                fill="none"
-                stroke="#ef4444"
-                strokeWidth={10}
-                strokeLinecap="round"
-                strokeDasharray={2 * Math.PI * 40}
-                strokeDashoffset={2 * Math.PI * 40 * (1 - goalProgress / 100)}
-                style={{ filter: 'drop-shadow(0 0 4px rgba(239,68,68,0.3))' }}
-              />
-            </svg>
-          </div>
-        </div>
-
-        {/* Card 2: Goal Health */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 flex flex-col justify-between backdrop-blur-md">
-          <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider">Objective Health</span>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-black text-white">{activeGoals.length} Active</span>
-            <span className="text-xs text-white/40">/ {completedGoals.length} Done</span>
-          </div>
-          <span className="text-[9px] text-white/30 font-medium block mt-1">Current Quarter Focus</span>
-        </div>
-
-        {/* Card 3: Confidence Score */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 flex flex-col justify-between backdrop-blur-md">
-          <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider">Risk Confidence</span>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className={`text-2xl font-black ${confidenceScore >= 75 ? 'text-emerald-400' : confidenceScore >= 50 ? 'text-amber-400' : 'text-rose-400'}`}>{confidenceScore}%</span>
-          </div>
-          <span className="text-[9px] text-white/30 font-medium block mt-1">Based on Blocker Mitigations</span>
-        </div>
-
-        {/* Card 4: Execution Momentum */}
-        <div className="bg-white/[0.02] border border-white/10 rounded-2xl p-4 flex flex-col justify-between backdrop-blur-md">
-          <span className="text-[10px] text-white/40 font-bold uppercase tracking-wider">Execution Momentum</span>
-          <div className="flex items-baseline gap-2 mt-2">
-            <span className="text-2xl font-black text-indigo-400">{executionMomentum}%</span>
-          </div>
-          <span className="text-[9px] text-indigo-300/60 font-medium block mt-1">Linked Tasks Completion</span>
-        </div>
-
-      </div>
-
-      {/* AI status briefing */}
-      <div className={`p-4 rounded-2xl border backdrop-blur-md mb-6 shrink-0 transition-all flex items-start gap-3.5 shadow-lg ${aiAssessment.status === 'perfect'
-        ? 'bg-emerald-500/[0.03] border-emerald-500/20 shadow-emerald-950/10'
-        : aiAssessment.status === 'warning'
-          ? 'bg-amber-500/[0.03] border-amber-500/20 shadow-amber-950/10'
-          : 'bg-rose-500/[0.03] border-rose-500/20 shadow-rose-950/10'
-        }`}>
-        <div className="p-2 rounded-xl bg-white/5 border border-white/10 shrink-0">
-          {aiAssessment.status === 'perfect' ? (
-            <Sparkles className="w-5 h-5 text-emerald-400" />
-          ) : (
-            <ShieldAlert className={`w-5 h-5 ${aiAssessment.status === 'warning' ? 'text-amber-400' : 'text-rose-400'}`} />
-          )}
-        </div>
-        <div className="space-y-1">
-          <h4 className="text-xs font-bold text-white tracking-wide">{aiAssessment.title}</h4>
-          <p className="text-xs text-white/60 leading-relaxed">{aiAssessment.message}</p>
-        </div>
-      </div>
-
-      {/* Goals form creator */}
-      <form onSubmit={handleAddGoalSubmit} className="max-w-7xl mx-auto w-full mb-6 bg-white/[0.02] border border-white/10 rounded-2xl p-3 flex flex-wrap gap-4 items-center backdrop-blur-md shrink-0">
-        <div className="flex-1 min-w-[240px]">
-          <input
-            type="text"
-            value={goalLabel}
-            onChange={e => setGoalLabel(e.target.value)}
-            placeholder="Key Objective (e.g. Scale API response times by 30%)..."
-            className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-xs text-white placeholder-white/30 focus:outline-none focus:border-indigo-500/50 transition-colors"
-            required
-          />
-        </div>
-
-        {/* Category buttons */}
-        <div className="flex items-center gap-1 shrink-0">
-          <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider mr-1.5">Category:</span>
-          <div className="flex items-center bg-black/25 p-1 rounded-xl border border-white/5 gap-1">
-            {[
-              { val: 'product', label: 'Product', icon: <Layers className="w-3 h-3" /> },
-              { val: 'growth', label: 'Growth', icon: <TrendingUp className="w-3 h-3" /> },
-              { val: 'finance', label: 'Finance', icon: <CircleDollarSign className="w-3 h-3" /> },
-              { val: 'talent', label: 'Talent', icon: <Users className="w-3 h-3" /> },
-              { val: 'compliance', label: 'Compliance', icon: <ShieldCheck className="w-3 h-3" /> }
-            ].map(cat => {
-              const isActive = goalCategory === cat.val;
-              return (
-                <button
-                  key={cat.val}
-                  type="button"
-                  onClick={() => setGoalCategory(cat.val as any)}
-                  className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all cursor-pointer border border-transparent select-none ${isActive
-                    ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-200'
-                    : 'bg-transparent border-transparent text-white/40 hover:text-white/70'
-                    }`}
-                >
-                  {cat.icon}
-                  <span>{cat.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Custom Owner Dropdown */}
-        <div className="relative flex items-center gap-1.5 shrink-0">
-          <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Owner:</span>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setIsOwnerDropdownOpen(!isOwnerDropdownOpen);
-                setIsTimelineDropdownOpen(false);
-              }}
-              className="bg-[#121215]/95 border border-white/10 text-white/80 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-500 flex items-center gap-2 cursor-pointer min-w-[130px] justify-between transition-colors hover:bg-[#1a1a1f] select-none"
-            >
-              <span className="truncate">{goalOwner}</span>
-              <ChevronDown
-                className="w-3 h-3 text-white/40 transition-transform duration-200 shrink-0"
-                style={{ transform: isOwnerDropdownOpen ? 'rotate(180deg)' : 'none' }}
-              />
-            </button>
-            {isOwnerDropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setIsOwnerDropdownOpen(false)} />
-                <div className="absolute right-0 mt-1.5 w-44 bg-[#121215]/95 border border-white/10 rounded-xl py-1 shadow-2xl z-50 backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150">
-                  {['Product & Eng', 'Sales & GTM', 'Ops & Finance', 'HR & Recruiting', 'CEO'].map(opt => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => {
-                        setGoalOwner(opt);
-                        setIsOwnerDropdownOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between cursor-pointer"
-                    >
-                      <span>{opt}</span>
-                      {goalOwner === opt && <Check className="w-3.5 h-3.5 text-white/60" />}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Custom Timeline Dropdown */}
-        <div className="relative flex items-center gap-1.5 shrink-0">
-          <span className="text-[10px] font-bold text-white/40 uppercase tracking-wider">Timeline:</span>
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setIsTimelineDropdownOpen(!isTimelineDropdownOpen);
-                setIsOwnerDropdownOpen(false);
-              }}
-              className="bg-[#121215]/95 border border-white/10 text-white/80 rounded-xl px-3 py-1.5 text-xs focus:outline-none focus:border-indigo-500 flex items-center gap-2 cursor-pointer min-w-[100px] justify-between transition-colors hover:bg-[#1a1a1f] select-none"
-            >
-              <span>{goalTimeline}</span>
-              <ChevronDown
-                className="w-3 h-3 text-white/40 transition-transform duration-200 shrink-0"
-                style={{ transform: isTimelineDropdownOpen ? 'rotate(180deg)' : 'none' }}
-              />
-            </button>
-            {isTimelineDropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setIsTimelineDropdownOpen(false)} />
-                <div className="absolute right-0 mt-1.5 w-32 bg-[#121215]/95 border border-white/10 rounded-xl py-1 shadow-2xl z-50 backdrop-blur-md animate-in fade-in slide-in-from-top-2 duration-150">
-                  {['Q3 2026', 'Q4 2026', 'Q1 2027', 'Series A'].map(opt => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => {
-                        setGoalTimeline(opt);
-                        setIsTimelineDropdownOpen(false);
-                      }}
-                      className="w-full text-left px-3 py-2 text-xs text-white/80 hover:text-white hover:bg-white/5 transition-colors flex items-center justify-between cursor-pointer"
-                    >
-                      <span>{opt}</span>
-                      {goalTimeline === opt && <Check className="w-3.5 h-3.5 text-white/60" />}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        <button
-          type="submit"
-          className="px-4 py-2 bg-[#6366f1]/35 hover:bg-[#6366f1]/50 border border-indigo-500/30 rounded-xl text-xs font-bold text-indigo-200 hover:text-white transition-colors cursor-pointer flex items-center gap-1.5 shrink-0 ml-auto"
+    <div
+      className="shrink-0 ws-canvas-inset mb-3 flex items-center gap-3"
+      style={{
+        padding: '10px 16px 10px 14px',
+        borderRadius: 12,
+        background: `${cfg.color}18`,
+        border: `1px solid ${cfg.color}40`,
+        borderLeft: `3px solid ${cfg.color}`,
+      }}
+    >
+      <Icon className="w-4 h-4 shrink-0" style={{ color: cfg.color }} />
+      <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
+        <span className="text-[11px] font-black uppercase tracking-widest" style={{ color: cfg.color }}>
+          {cfg.label}
+        </span>
+        <span
+          className="text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 rounded-md shrink-0"
+          style={{ background: `${cfg.color}25`, color: cfg.color, border: `1px solid ${cfg.color}45` }}
         >
-          <Plus className="w-3.5 h-3.5" />
-          <span>Add OKR</span>
-        </button>
-      </form>
-
-      {/* Columns Board */}
-      <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-6 min-h-0 px-2 pb-2">
-
-        {/* Column 1: Active Objectives */}
-        <div className="bg-white/[0.01] border border-white/5 rounded-2xl flex flex-col h-full min-h-0 overflow-hidden shadow-[0_4px_30px_rgba(0,0,0,0.2)]">
-          <div className="px-4 py-3 bg-white/[0.02] border-b border-white/5 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />
-              <h3 className="text-xs font-bold text-amber-200 uppercase tracking-wider">Active Objectives</h3>
-            </div>
-            <span className="text-[10px] font-bold text-white/30 px-2 py-0.5 rounded-full bg-white/5">{activeGoals.length}</span>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {activeGoals.length === 0 ? (
-              <div className="h-32 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-2xl text-[10px] text-white/20 uppercase tracking-wider font-semibold">
-                No Active Objectives
-              </div>
-            ) : (
-              activeGoals.map(g => {
-                const linkedTasks = getLinkedTasks(g.label);
-                const completedTasks = linkedTasks.filter(t => t.done).length;
-                const progressPct = linkedTasks.length > 0 ? Math.round((completedTasks / linkedTasks.length) * 100) : 0;
-                const catColor = getCategoryColor(g.category);
-
-                return (
-                  <div key={g.id} className="group relative bg-white/[0.03] hover:bg-white/[0.06] border border-white/10 hover:border-white/20 rounded-2xl p-4 transition-all duration-200 flex flex-col gap-3 shadow-lg">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md border text-[9px] font-bold uppercase tracking-wider ${catColor}`}>
-                            {getCategoryIcon(g.category)}
-                            <span className="ml-1">{g.category || 'product'}</span>
-                          </span>
-                          <span className="bg-white/5 border border-white/5 text-white/40 text-[9px] font-semibold px-1.5 py-0.5 rounded-md">
-                            {g.owner || 'CEO'}
-                          </span>
-                          <span className="bg-white/5 border border-white/5 text-white/40 text-[9px] font-semibold px-1.5 py-0.5 rounded-md">
-                            {g.timeline || 'Q3 2026'}
-                          </span>
-                        </div>
-                        <h4 className="text-xs font-bold text-white/95 pt-1 leading-relaxed">{g.label}</h4>
-                      </div>
-                      <div className="flex items-center gap-1 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          type="button"
-                          onClick={() => deleteGoal(g.id)}
-                          className="p-1 hover:bg-white/10 text-white/30 hover:text-rose-400 rounded-md transition-colors cursor-pointer"
-                          title="Delete Objective"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Progress details */}
-                    {linkedTasks.length > 0 && (
-                      <div className="space-y-1.5 pt-1.5 border-t border-white/5">
-                        <div className="flex justify-between items-baseline text-[9px]">
-                          <span className="text-white/40 font-bold uppercase tracking-wide">Tasks Linked</span>
-                          <span className="text-indigo-400 font-bold">{completedTasks} / {linkedTasks.length} Done ({progressPct}%)</span>
-                        </div>
-                        <div className="w-full h-1 bg-white/5 rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-indigo-500 rounded-full transition-all duration-300"
-                            style={{
-                              width: `${progressPct}%`,
-                              boxShadow: '0 0 8px rgba(99,102,241,0.5)'
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex justify-end mt-1">
-                      <button
-                        type="button"
-                        onClick={() => toggleGoal(g.id)}
-                        className="px-2.5 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 hover:border-emerald-500/40 text-[10px] text-emerald-400 hover:text-emerald-300 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer opacity-0 group-hover:opacity-100"
-                      >
-                        <Check className="w-3 h-3" />
-                        <span>Accomplish OKR</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
-        {/* Column 2: Accomplished Key Results */}
-        <div className="bg-white/[0.01] border border-white/5 rounded-2xl flex flex-col h-full min-h-0 overflow-hidden shadow-[0_4px_30px_rgba(0,0,0,0.2)]">
-          <div className="px-4 py-3 bg-white/[0.02] border-b border-white/5 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_#10b981]" />
-              <h3 className="text-xs font-bold text-emerald-200 uppercase tracking-wider">Accomplished Key Results</h3>
-            </div>
-            <span className="text-[10px] font-bold text-white/30 px-2 py-0.5 rounded-full bg-white/5">{completedGoals.length}</span>
-          </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {completedGoals.length === 0 ? (
-              <div className="h-32 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-2xl text-[10px] text-white/20 uppercase tracking-wider font-semibold">
-                No Accomplished Objectives
-              </div>
-            ) : (
-              completedGoals.map(g => {
-                const catColor = getCategoryColor(g.category);
-                return (
-                  <div key={g.id} className="group relative bg-white/[0.01] border border-white/5 hover:border-white/10 rounded-2xl p-4 transition-all duration-200 flex flex-col gap-2 shadow select-none">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="space-y-1">
-                        <div className="flex flex-wrap items-center gap-1.5">
-                          <span className={`flex items-center gap-1 px-2 py-0.5 rounded-md border text-[9px] font-bold uppercase tracking-wider ${catColor} opacity-50`}>
-                            {getCategoryIcon(g.category)}
-                            <span className="ml-1">{g.category || 'product'}</span>
-                          </span>
-                          <span className="bg-white/5 border border-white/5 text-white/20 text-[9px] font-semibold px-1.5 py-0.5 rounded-md">
-                            {g.owner || 'CEO'}
-                          </span>
-                        </div>
-                        <h4 className="text-xs font-semibold text-white/40 line-through leading-relaxed pt-0.5">{g.label}</h4>
-                      </div>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                          type="button"
-                          onClick={() => deleteGoal(g.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 text-white/30 hover:text-rose-400 rounded-md transition-all cursor-pointer"
-                          title="Delete Objective"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between border-t border-white/[0.02] pt-2 mt-1">
-                      <span className="text-[10px] text-emerald-400/60 font-semibold flex items-center gap-1">
-                        <Check className="w-3.5 h-3.5 text-emerald-400" />
-                        Accomplished
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => toggleGoal(g.id)}
-                        className="px-2 py-1 bg-white/5 hover:bg-white/15 border border-white/10 hover:border-white/20 text-[9px] text-white/50 hover:text-white rounded-md transition-all flex items-center gap-1 cursor-pointer opacity-0 group-hover:opacity-100"
-                      >
-                        <span>Reopen Goal</span>
-                      </button>
-                    </div>
-                  </div>
-                );
-              })
-            )}
-          </div>
-        </div>
-
+          {activeRole === 'founder' ? 'Founder' : activeRole === 'manager' ? 'Manager' : 'Member'}
+        </span>
+        <span className="text-[11px] text-white/55 min-w-0 truncate">{cfg.description}</span>
       </div>
+      {cfg.stats.length > 0 && (
+        <div className="flex items-center gap-2 shrink-0">
+          {cfg.stats.map(s => (
+            <div
+              key={s.label}
+              className="text-center px-3 py-2 rounded-lg"
+              style={{ background: `${cfg.color}20`, border: `1px solid ${cfg.color}40` }}
+            >
+              <div className="text-[14px] font-black leading-none mb-1" style={{ color: cfg.color }}>
+                {s.value}
+              </div>
+              <div className="text-[9px] uppercase tracking-wider leading-none" style={{ color: `${cfg.color}cc` }}>
+                {s.label}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -1313,6 +707,13 @@ function WorkspaceNotesDashboard() {
   const [focusedBlockId, setFocusedBlockId] = useState<string | null>(null);
   const [activeBlockIdForFormat, setActiveBlockIdForFormat] = useState<string | null>(null);
 
+  // Create and open a new note when the dock "Note" (or Link / Code) button is clicked
+  useEffect(() => {
+    const handler = () => addNote('Untitled Note');
+    window.addEventListener('workspace-dock-note', handler);
+    return () => window.removeEventListener('workspace-dock-note', handler);
+  }, [addNote]);
+
   const activeNote = notes.find(n => n.id === activeNoteId);
 
   // Markdown parsing utility
@@ -1322,7 +723,7 @@ function WorkspaceNotesDashboard() {
       .replace(/&/g, "&amp;")
       .replace(/</g, "&lt;")
       .replace(/>/g, "&gt;");
-    
+
     // Bold: **text**
     html = html.replace(/\*\*([\s\S]*?)\*\*/g, '<strong>$1</strong>');
     // Italic: *text* or _text_
@@ -1332,21 +733,21 @@ function WorkspaceNotesDashboard() {
     html = html.replace(/&lt;u&gt;([\s\S]*?)&lt;\/u&gt;/gi, '<span class="underline">$1</span>');
     // Links: [text](url)
     html = html.replace(/\[([\s\S]*?)\]\(([\s\S]*?)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer" class="text-indigo-400 underline hover:text-indigo-300">$1</a>');
-    
+
     return html;
   };
 
   const handleBlockContentChange = (blockId: string, newContent: string) => {
     if (!activeNote) return;
-    const updatedBlocks = activeNote.blocks.map(b => 
+    const updatedBlocks = activeNote.blocks.map(b =>
       b.id === blockId ? { ...b, content: newContent } : b
     );
     updateNote(activeNote.id, { blocks: updatedBlocks });
   };
-  
+
   const handleBlockCheckedChange = (blockId: string, checked: boolean) => {
     if (!activeNote) return;
-    const updatedBlocks = activeNote.blocks.map(b => 
+    const updatedBlocks = activeNote.blocks.map(b =>
       b.id === blockId ? { ...b, checked } : b
     );
     updateNote(activeNote.id, { blocks: updatedBlocks });
@@ -1356,8 +757,8 @@ function WorkspaceNotesDashboard() {
     if (!activeNote) return;
     const updatedBlocks = activeNote.blocks.map(b => {
       if (b.id === blockId && b.tableData) {
-        const newData = b.tableData.map((row, rIdx) => 
-          rIdx === rowIndex 
+        const newData = b.tableData.map((row, rIdx) =>
+          rIdx === rowIndex
             ? row.map((col, cIdx) => cIdx === colIndex ? val : col)
             : row
         );
@@ -1405,7 +806,7 @@ function WorkspaceNotesDashboard() {
     if (idx === -1) return;
     if (direction === 'up' && idx === 0) return;
     if (direction === 'down' && idx === activeNote.blocks.length - 1) return;
-    
+
     const newBlocks = [...activeNote.blocks];
     const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
     const temp = newBlocks[idx];
@@ -1418,7 +819,7 @@ function WorkspaceNotesDashboard() {
     if (!activeNote) return;
     const idx = activeNote.blocks.findIndex(b => b.id === blockId);
     if (idx === -1) return;
-    
+
     const newBlock: NoteBlock = {
       id: `b_${Date.now()}`,
       type,
@@ -1426,7 +827,7 @@ function WorkspaceNotesDashboard() {
       checked: type === 'todo' ? false : undefined,
       tableData: type === 'table' ? [['Column 1', 'Column 2'], ['', '']] : undefined
     };
-    
+
     const newBlocks = [...activeNote.blocks];
     newBlocks.splice(idx + 1, 0, newBlock);
     updateNote(activeNote.id, { blocks: newBlocks });
@@ -1454,9 +855,9 @@ function WorkspaceNotesDashboard() {
         const selected = text.substring(start, end);
         const replacement = prefix + selected + suffix;
         const newValue = text.substring(0, start) + replacement + text.substring(end);
-        
+
         handleBlockContentChange(activeBlockIdForFormat, newValue);
-        
+
         setTimeout(() => {
           el.focus();
           el.setSelectionRange(start + prefix.length, start + prefix.length + selected.length);
@@ -1465,7 +866,7 @@ function WorkspaceNotesDashboard() {
     }
   };
 
-  const filteredNotes = notes.filter(note => 
+  const filteredNotes = notes.filter(note =>
     note.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
     note.blocks.some(block => block.content.toLowerCase().includes(searchQuery.toLowerCase()))
   );
@@ -1607,7 +1008,7 @@ function WorkspaceNotesDashboard() {
               const isFocused = focusedBlockId === block.id;
               return (
                 <div key={block.id} className="group relative flex items-start gap-3 w-full pr-10">
-                  
+
                   {/* Left Block handle (Notion style) */}
                   <div className="flex items-center h-full min-h-[20px] pt-1 opacity-0 group-hover:opacity-100 transition-opacity gap-0.5">
                     <button
@@ -1810,7 +1211,7 @@ function WorkspaceNotesDashboard() {
 
   return (
     <div className="flex flex-col h-full min-h-0 w-full overflow-hidden">
-      
+
       {/* Landing page header controls */}
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6 shrink-0">
         <div className="flex items-center gap-3">
@@ -1864,14 +1265,14 @@ function WorkspaceNotesDashboard() {
                 onClick={() => setActiveNoteId(note.id)}
                 className="group relative bg-white/[0.02] hover:bg-white/[0.05] border border-white/10 hover:border-indigo-500/30 rounded-2xl p-4 aspect-square flex flex-col justify-between transition-all duration-200 cursor-pointer shadow-lg hover:shadow-[0_8px_30px_rgb(0,0,0,0.15)] hover:scale-[1.01]"
               >
-                
+
                 {/* Note title and date */}
                 <div className="space-y-1.5 min-w-0">
                   <div className="flex items-start justify-between gap-2">
                     <h4 className="text-xs font-bold text-white group-hover:text-indigo-300 transition-colors truncate leading-snug">
                       {note.title || 'Untitled Note'}
                     </h4>
-                    
+
                     {/* Delete Icon on Hover */}
                     <button
                       type="button"
@@ -1885,7 +1286,7 @@ function WorkspaceNotesDashboard() {
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                  
+
                   {/* Apple Notes style content preview snippet */}
                   <p className="text-[10px] text-white/45 font-medium line-clamp-3 leading-relaxed whitespace-pre-wrap">
                     {getNotePreview(note)}
@@ -2051,7 +1452,7 @@ function WorkspaceChatCopilot() {
   const handleSaveMessageToNotes = (msgId: string) => {
     const assistantMsgIndex = messages.findIndex(m => m.id === msgId);
     if (assistantMsgIndex === -1) return;
-    
+
     const assistantMsg = messages[assistantMsgIndex];
     let userPrompt = "";
     for (let i = assistantMsgIndex - 1; i >= 0; i--) {
@@ -2060,16 +1461,16 @@ function WorkspaceChatCopilot() {
         break;
       }
     }
-    
+
     const cleanText = assistantMsg.text.replace(/^:::thinking\n[\s\S]*?\n:::\n\n?/, '');
     const title = cleanText.substring(0, 30).replace(/[#*`]/g, '').trim() || "AI Copilot Response";
-    
+
     const blocks: NoteBlock[] = [
       { id: `b_h1_${Date.now()}`, type: 'h1', content: title },
       { id: `b_h3_${Date.now()}`, type: 'h3', content: `Prompt: ${userPrompt || "Direct Simulation"}` },
       { id: `b_text_${Date.now()}`, type: 'text', content: cleanText }
     ];
-    
+
     addNote(title, blocks);
     showToastMessage("Saved to Notes!");
   };
@@ -2091,7 +1492,7 @@ function WorkspaceChatCopilot() {
     if (selectedText.length > 0) {
       const range = selection.getRangeAt(0);
       const rect = range.getBoundingClientRect();
-      
+
       const container = document.querySelector('.ws-chat-messages-container');
       if (container && container.contains(range.commonAncestorContainer)) {
         setTooltipPos({
@@ -2363,7 +1764,7 @@ function WorkspaceChatCopilot() {
     const rawFolderTitle = firstUserMsg
       ? firstUserMsg.text
       : (text.trim() || `Uploads: ${fileToUpload?.name || 'Session'}`);
-    
+
     // Clean and truncate folder name to look premium
     const folderName = rawFolderTitle.length > 40
       ? rawFolderTitle.slice(0, 37) + '...'
@@ -3109,7 +2510,7 @@ function curvePath(s: Pt, e: Pt): string {
 
 export function WorkspaceActiveCanvas() {
   const [renderedCard, setRenderedCard] = useState<string | null>(null);
-  const [canvasView, setCanvasView] = useState<'nodes' | 'overview'>('nodes');
+  const [canvasView, setCanvasView] = useState<'nodes' | 'overview'>('overview');
 
   const {
     goals,
@@ -3146,6 +2547,9 @@ export function WorkspaceActiveCanvas() {
     setScrollExpansion,
     isFullscreen,
     setIsFullscreen,
+    activeRole,
+    workspaceMode,
+    entryContext,
   } = useFounderWorkspace();
 
   const canvasWrapRef = useRef<HTMLDivElement>(null);
@@ -3155,12 +2559,6 @@ export function WorkspaceActiveCanvas() {
     if (!container) return;
 
     const handleWheel = (e: WheelEvent) => {
-      // Scroll-to-expand applies to the scrollable dashboards AND the saved-nodes view.
-      const isDashboardTab = ['tasks', 'goals', 'notes', 'files', 'projects'].includes(activeSidebarTab);
-      if (!isDashboardTab && canvasView !== 'nodes') {
-        return;
-      }
-
       const isScrollingDown = e.deltaY > 0;
 
       if (isScrollingDown) {
@@ -3176,7 +2574,17 @@ export function WorkspaceActiveCanvas() {
     return () => {
       container.removeEventListener('wheel', handleWheel);
     };
-  }, [activeSidebarTab, canvasView, scrollExpansion, setScrollExpansion]);
+  }, [scrollExpansion, setScrollExpansion]);
+
+  // Listen for mode-bar canvas view switch events
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const view = (e as CustomEvent<{ view: 'nodes' | 'overview' }>).detail?.view;
+      if (view === 'nodes' || view === 'overview') setCanvasView(view);
+    };
+    window.addEventListener('workspace-set-canvas-view', handler);
+    return () => window.removeEventListener('workspace-set-canvas-view', handler);
+  }, []);
 
   const visibleWorkspaces = useMemo(() => {
     if (workspaces.length <= 2) return workspaces;
@@ -3273,9 +2681,29 @@ export function WorkspaceActiveCanvas() {
   return (
     <div
       ref={canvasWrapRef}
-      className={`ws-canvas-wrap flex-1 min-h-0 flex flex-col justify-end px-1 pb-2 ${isFullscreen ? 'ws-canvas-wrap--fullscreen' : ''
+      className={`ws-canvas-wrap flex-1 min-h-0 flex flex-col justify-end px-1 pb-0 ${isFullscreen ? 'ws-canvas-wrap--fullscreen' : ''
         } ${scrollExpansion > 0 && scrollExpansion < 100 ? 'ws-canvas-wrap--scrolling' : ''}`}
     >
+      {/* ── Floating pill — only visible when workspace is fully collapsed ── */}
+      <div
+        className="shrink-0"
+        style={{
+          position: 'relative',
+          zIndex: 10,
+          overflow: 'hidden',
+          opacity: (scrollExpansion === 0 && !isFullscreen) ? 1 : 0,
+          maxHeight: (scrollExpansion === 0 && !isFullscreen) ? '46px' : '0px',
+          transform: (scrollExpansion === 0 && !isFullscreen) ? 'translateY(0)' : 'translateY(6px)',
+          pointerEvents: (scrollExpansion === 0 && !isFullscreen) ? 'auto' : 'none',
+          transition: (scrollExpansion === 0 && !isFullscreen)
+            ? 'opacity 0.38s ease 0.1s, max-height 0.38s ease 0.1s, transform 0.38s cubic-bezier(0.16,1,0.3,1) 0.1s'
+            : 'opacity 0.22s ease, max-height 0.22s ease, transform 0.18s ease',
+          marginBottom: -30,
+        }}
+      >
+        <WorkspaceModeBar placement="external" />
+      </div>
+
       <div className="ws-canvas-trapezium flex-1 min-h-0 min-w-0">
         <WorkspaceCanvasFrame
           isFullscreen={isFullscreen}
@@ -3350,21 +2778,20 @@ export function WorkspaceActiveCanvas() {
 
 
             <div className="flex items-center gap-2 shrink-0">
-              {!['tasks', 'goals', 'notes', 'files', 'projects'].includes(activeSidebarTab) && !activeDetailCard && (
+              {!['tasks', 'goals', 'notes', 'files', 'projects', 'sphere', 'roadmap', 'fundraising', 'interviews', 'competitors'].includes(activeSidebarTab) && !activeDetailCard && (
                 <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5 border border-white/10 mr-1">
                   {([
-                    { id: 'nodes', label: 'Nodes', Icon: Layers },
                     { id: 'overview', label: 'Overview', Icon: Building2 },
+                    { id: 'nodes', label: 'Saved', Icon: Layers },
                   ] as const).map(({ id, label, Icon }) => (
                     <button
                       key={id}
                       type="button"
                       onClick={() => setCanvasView(id)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${
-                        canvasView === id
-                          ? 'bg-white/10 text-white shadow-[0_1px_4px_rgba(0,0,0,0.3)]'
-                          : 'text-white/45 hover:text-white/80'
-                      }`}
+                      className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[11px] font-semibold transition-all ${canvasView === id
+                        ? 'bg-white/10 text-white shadow-[0_1px_4px_rgba(0,0,0,0.3)]'
+                        : 'text-white/45 hover:text-white/80'
+                        }`}
                     >
                       <Icon className="w-3.5 h-3.5" />
                       {label}
@@ -3396,17 +2823,37 @@ export function WorkspaceActiveCanvas() {
 
           <div className="ws-canvas-toolbar-divider ws-canvas-inset" />
 
-          <div className="relative flex-1 min-h-0 overflow-hidden ws-canvas-stage-pad pb-3 pt-1">
+          <div className="flex-1 min-h-0 overflow-hidden ws-canvas-stage-pad pb-3 pt-0 flex flex-col gap-0">
+            <WorkspaceModeLensBanner />
+            <div className="relative flex-1 min-h-0 overflow-hidden">
             {activeSidebarTab === 'tasks' ? (
-              <WorkspaceTasksKanban />
+              <ProjectsRedirect view="member" />
             ) : activeSidebarTab === 'goals' ? (
-              <WorkspaceGoalsDashboard />
+              <ProjectsRedirect view="goals" />
             ) : activeSidebarTab === 'notes' ? (
               <WorkspaceNotesDashboard />
             ) : activeSidebarTab === 'files' ? (
               <WorkspaceFilesDashboard />
             ) : activeSidebarTab === 'projects' ? (
               <WorkspaceProjectsSpace />
+            ) : activeSidebarTab === 'sphere' ? (
+              <WorkspaceSpherePanel />
+            ) : activeSidebarTab === 'activity' ? (
+              <WorkspaceActivityFeed />
+            ) : activeSidebarTab === 'roadmap' || activeSidebarTab === 'fundraising' || activeSidebarTab === 'interviews' || activeSidebarTab === 'competitors' ? (
+              <WorkspaceShortcutPanel tabId={activeSidebarTab} />
+            ) : canvasView === 'overview' ? (
+              activeRole !== 'member' && workspaceMode === 'agent'
+                ? <WorkspaceAgentSurface />
+                : entryContext?.level === 'universe'
+                  ? <WorkspaceUniverseCanvas />
+                  : entryContext?.level === 'industry'
+                    ? <WorkspaceIndustryCanvas />
+                    : entryContext?.level === 'subdomain'
+                      ? <WorkspaceSubdomainCanvas />
+                      : entryContext?.level === 'company'
+                        ? <WorkspaceCompanyCanvas />
+                        : <WorkspaceCanvasOverview />
             ) : canvasView === 'nodes' && !activeDetailCard ? (
               <WorkspaceSavedNodesCanvas isFullscreen={isFullscreen} />
             ) : (
@@ -3486,8 +2933,13 @@ export function WorkspaceActiveCanvas() {
                   ))}
                 </div>
 
-                {/* cards — 3D glass slab */}
-                {WORKSPACE_CANVAS_CARDS.map((card, index) => {
+                {/* cards — 3D glass slab — filtered by role */}
+                {WORKSPACE_CANVAS_CARDS.filter(c => {
+                  if (activeRole === 'founder') return true;
+                  if (activeRole === 'manager') return c.id !== 'metrics';
+                  // member: only overview + goals
+                  return c.id === 'company_hub' || c.id === 'goals';
+                }).map((card, index) => {
                   const isActive = activeDetailCard === card.id;
                   const isAnyActive = activeDetailCard !== null;
                   const isHidden = isAnyActive && !isActive;
@@ -3936,6 +3388,7 @@ export function WorkspaceActiveCanvas() {
                 )}
               </div>
             )}
+            </div>{/* end relative inner */}
           </div>
         </WorkspaceCanvasFrame>
       </div>

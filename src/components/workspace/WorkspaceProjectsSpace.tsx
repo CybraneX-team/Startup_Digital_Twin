@@ -34,6 +34,7 @@ import {
   metricTargetDisplay,
   type Horizon,
 } from '../../lib/useGoalsStore';
+import { useFounderWorkspace } from '../../context/FounderWorkspaceContext';
 
 const ACCENT = '#C1AEFF';
 const MEMBER_COLORS = ['#60a5fa', '#a78bfa', '#34d399', '#fbbf24', '#fb7185', '#22d3ee'];
@@ -1065,7 +1066,10 @@ function MemberSpace({ onSelectTask }: { onSelectTask?: (id: string) => void }) 
 
   // Personal metrics
   const oneWeekAgo = new Date(Date.now() - 7 * 86400000).toISOString();
+  const twoWeeksAgo = new Date(Date.now() - 14 * 86400000).toISOString();
   const completedThisWeek = myTasks.filter(t => t.status === 'done' && t.createdAt >= oneWeekAgo).length;
+  const completedPrevWeek = myTasks.filter(t => t.status === 'done' && t.createdAt >= twoWeeksAgo && t.createdAt < oneWeekAgo).length;
+  const velocityTrend = completedThisWeek > completedPrevWeek ? '↑' : completedThisWeek < completedPrevWeek ? '↓' : '→';
   const weekEnd = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10);
   const dueThisWeek = myTasks.filter(t => t.dueDate && t.dueDate >= today && t.dueDate <= weekEnd).length;
   const doneTasks = myTasks.filter(t => t.status === 'done');
@@ -1073,6 +1077,10 @@ function MemberSpace({ onSelectTask }: { onSelectTask?: (id: string) => void }) 
     ? Math.round(doneTasks.filter(t => !t.dueDate || t.dueDate >= t.createdAt.slice(0, 10)).length / doneTasks.length * 100)
     : 100;
   const overdue = openTasks.filter(t => t.dueDate && t.dueDate < today).length;
+  // Quality: tasks completed without being sent back from done (approximated as done tasks / total assigned)
+  const qualityPct = myTasks.length ? Math.round((doneTasks.length / myTasks.length) * 100) : 0;
+  // Active projects count
+  const activeProjectCount = new Set(openTasks.map(t => t.projectId)).size;
 
   const [activeTab, setActiveTab] = useState<'today' | 'all'>('today');
 
@@ -1088,14 +1096,16 @@ function MemberSpace({ onSelectTask }: { onSelectTask?: (id: string) => void }) 
       </div>
 
       {/* personal metrics */}
-      <div className="shrink-0 grid grid-cols-4 gap-2 mb-3">
+      <div className="shrink-0 grid grid-cols-3 sm:grid-cols-6 gap-2 mb-3">
         {[
-          { label: 'Done this week', value: completedThisWeek, color: '#34d399' },
-          { label: 'Due this week', value: dueThisWeek, color: ACCENT },
-          { label: 'Overdue', value: overdue, color: overdue > 0 ? '#fb7185' : '#34d399' },
-          { label: 'On-time', value: `${onTimePct}%`, color: onTimePct >= 80 ? '#34d399' : '#fbbf24' },
+          { label: 'Velocity', value: `${completedThisWeek}${velocityTrend}`, color: '#34d399', title: 'Tasks done this week vs last' },
+          { label: 'Due soon', value: dueThisWeek, color: ACCENT, title: 'Tasks due within 7 days' },
+          { label: 'Overdue', value: overdue, color: overdue > 0 ? '#fb7185' : '#34d399', title: 'Overdue open tasks' },
+          { label: 'On-time', value: `${onTimePct}%`, color: onTimePct >= 80 ? '#34d399' : '#fbbf24', title: 'Tasks completed on or before due date' },
+          { label: 'Quality', value: `${qualityPct}%`, color: qualityPct >= 70 ? '#34d399' : '#fbbf24', title: 'Completion rate across all assigned tasks' },
+          { label: 'Projects', value: activeProjectCount, color: '#a78bfa', title: 'Active projects with open tasks' },
         ].map(s => (
-          <div key={s.label} className="rounded-xl p-3 bg-white/[0.03] border border-white/8">
+          <div key={s.label} className="rounded-xl p-3 bg-white/[0.03] border border-white/8" title={s.title}>
             <div className="text-[9px] uppercase tracking-wider text-white/35 mb-1">{s.label}</div>
             <div className="text-lg font-bold tabular-nums" style={{ color: s.color }}>{s.value}</div>
           </div>
@@ -1356,6 +1366,16 @@ export function WorkspaceProjectsSpace() {
   const [projectId, setProjectId] = useState<string | null>(null);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
 
+  const { workspaceMode } = useFounderWorkspace();
+
+  // Auto-switch sub-view when workspace mode changes
+  useEffect(() => {
+    setProjectId(null);
+    if (workspaceMode === 'execution') setView('member');
+    else if (workspaceMode === 'review') setView('goals');
+    else setView('super');
+  }, [workspaceMode]);
+
   useEffect(() => {
     const handleOpenProject = (e: Event & { detail?: { projectId: string } }) => {
       if (e.detail?.projectId) {
@@ -1371,14 +1391,20 @@ export function WorkspaceProjectsSpace() {
         setSelectedTaskId(e.detail.taskId);
       }
     };
+    const handleOpenGoalsMetrics = () => {
+      setProjectId(null);
+      setView('goals');
+    };
 
     window.addEventListener('open-project' as any, handleOpenProject);
     window.addEventListener('open-my-work' as any, handleOpenMyWork);
     window.addEventListener('open-task' as any, handleOpenTask);
+    window.addEventListener('open-goals-metrics' as any, handleOpenGoalsMetrics);
     return () => {
       window.removeEventListener('open-project' as any, handleOpenProject);
       window.removeEventListener('open-my-work' as any, handleOpenMyWork);
       window.removeEventListener('open-task' as any, handleOpenTask);
+      window.removeEventListener('open-goals-metrics' as any, handleOpenGoalsMetrics);
     };
   }, []);
 

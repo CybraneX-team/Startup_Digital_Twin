@@ -317,6 +317,20 @@
   animation-delay: 0.08s;
 }
 
+/* Container for the fullscreen mode pill — sits in the TopBar zone, transparent */
+.twin-workspace-topbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3.5rem;
+  z-index: 10;
+  pointer-events: none; /* individual pill buttons override with pointer-events: auto */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .twin-workspace-close {
   grid-column: 2;
   grid-row: 1;
@@ -718,7 +732,9 @@
   height: 100%;
   min-height: 0;
   overflow: visible;
-  filter: drop-shadow(0 4px 16px rgba(0, 0, 0, 0.2));
+  filter:
+    drop-shadow(0 8px 32px rgba(0, 0, 0, 0.45))
+    drop-shadow(0 2px 8px rgba(0, 0, 0, 0.25));
 }
 
 .ws-canvas-frame-svg {
@@ -731,12 +747,12 @@
 }
 
 .ws-canvas-frame-fill {
-  /* fill: #000000; */
+  fill: none;
 }
 
 .ws-canvas-frame-stroke {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.2);
+  stroke: rgba(255, 255, 255, 0.08);
   stroke-width: 1px;
   stroke-linejoin: round;
   stroke-linecap: round;
@@ -750,7 +766,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: transparent;
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
   backdrop-filter: blur(24px) saturate(1.4);
   -webkit-backdrop-filter: blur(24px) saturate(1.4);
   box-shadow:
@@ -1531,6 +1547,22 @@
 
 /* When active canvas is fullscreen, disable pointer events on the 3D viewport */
 div:has(.ws-canvas-wrap--fullscreen) .twin-universe-viewport {
+  pointer-events: none;
+}
+
+/* Root-nodes 3D canvas (CompanyPlanet3DView): shift up + fade when workspace goes fullscreen,
+   matching the ws-planet-zone behaviour on industry/subdomain pages. */
+.universe-planet-root-zone {
+  position: absolute;
+  inset: 0;
+  transition:
+    transform 2.2s cubic-bezier(0.645, 0.045, 0.355, 1),
+    opacity 2.2s ease;
+}
+
+div:has(.ws-canvas-wrap--fullscreen) .universe-planet-root-zone {
+  transform: translateY(-100%) scale(0.9);
+  opacity: 0;
   pointer-events: none;
 }
 

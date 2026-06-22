@@ -55,6 +55,8 @@ export interface CompanyPlanet3DViewProps {
   onRestoreDrillPath?: (path: string[]) => void;
   onRestoreComplete?: () => void;
   onRestoreFocusMiss?: () => void;
+  /** When the workspace panel is open: hide orbit nodes, keep only the core orb */
+  isWorkspaceOpen?: boolean;
 }
 
 const RING_RADIUS = 7.5;
@@ -87,6 +89,7 @@ function SceneContent({
   onRestoreDrillPath,
   onRestoreComplete,
   onRestoreFocusMiss,
+  isWorkspaceOpen = false,
 }: CompanyPlanet3DViewProps) {
   const { camera } = useThree();
   const orbitRef = useRef<any>(null);
@@ -203,6 +206,77 @@ function SceneContent({
       });
     }
   }, [camera, computeFramingForPath]);
+
+  const savedCameraRef = useRef<{ px: number; py: number; pz: number; tx: number; ty: number; tz: number } | null>(null);
+  // Pauses the per-frame OrbitControls.update() so GSAP can animate camera.position directly.
+  const skipOrbitUpdateRef = useRef(false);
+  // Mirrors insideRootPolytope as a ref so the workspace effect can read it without re-registering deps.
+  const insideRootPolytopeRef = useRef(insideRootPolytope);
+  useEffect(() => { insideRootPolytopeRef.current = insideRootPolytope; }, [insideRootPolytope]);
+
+  useEffect(() => {
+    if (!orbitRef.current) return;
+
+    if (isWorkspaceOpen) {
+      savedCameraRef.current = {
+        px: camera.position.x, py: camera.position.y, pz: camera.position.z,
+        tx: orbitRef.current.target.x, ty: orbitRef.current.target.y, tz: orbitRef.current.target.z,
+      };
+
+      gsap.killTweensOf(camera.position);
+      gsap.killTweensOf(orbitRef.current.target);
+
+      // Stop OrbitControls from overriding GSAP each frame, and lift the distance cap.
+      skipOrbitUpdateRef.current = true;
+      orbitRef.current.maxDistance = 80;
+
+      let camX: number, camY: number, camZ: number;
+      let tgtX: number, tgtY: number, tgtZ: number;
+
+      if (insideRootPolytopeRef.current) {
+        // Dept node sits at the current orbit target (deptX, deptY, 0).
+        // Pull camera far back along Z, keep XY near the cluster, shift target down.
+        const dx = orbitRef.current.target.x;
+        const dy = orbitRef.current.target.y;
+        camX = dx * 0.25; camY = dy * 0.25 + 3; camZ = 50;
+        tgtX = dx * 0.25; tgtY = dy * 0.25 - 10; tgtZ = 0;
+      } else {
+        camX = 0; camY = 2; camZ = 54;
+        tgtX = 0.5; tgtY = -11; tgtZ = 0;
+      }
+
+      gsap.to(orbitRef.current.target, { x: tgtX, y: tgtY, z: tgtZ, duration: 0.75, ease: 'power3.out' });
+      gsap.to(camera.position, {
+        x: camX, y: camY, z: camZ, duration: 0.75, ease: 'power3.out',
+        onUpdate: () => { if (orbitRef.current) camera.lookAt(orbitRef.current.target); },
+        onComplete: () => {
+          skipOrbitUpdateRef.current = false;
+          orbitRef.current?.update();
+        },
+      });
+    } else {
+      if (!savedCameraRef.current) return;
+      const s = savedCameraRef.current;
+
+      gsap.killTweensOf(camera.position);
+      gsap.killTweensOf(orbitRef.current.target);
+
+      skipOrbitUpdateRef.current = true;
+
+      gsap.to(orbitRef.current.target, { x: s.tx, y: s.ty, z: s.tz, duration: 0.65, ease: 'power3.out' });
+      gsap.to(camera.position, {
+        x: s.px, y: s.py, z: s.pz, duration: 0.65, ease: 'power3.out',
+        onUpdate: () => { if (orbitRef.current) camera.lookAt(orbitRef.current.target); },
+        onComplete: () => {
+          if (orbitRef.current) orbitRef.current.maxDistance = 45;
+          skipOrbitUpdateRef.current = false;
+          orbitRef.current?.update();
+          savedCameraRef.current = null;
+        },
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isWorkspaceOpen]);
 
   const nodes = useMemo(() => getPlanetNodesAtPath(context, path), [context, path]);
 
@@ -589,12 +663,12 @@ function SceneContent({
   const coreRef = useRef<THREE.Group>(null);
 
   useFrame(() => {
-    if (orbitRef.current) {
+    if (orbitRef.current && !skipOrbitUpdateRef.current) {
       orbitRef.current.update();
     }
 
     const fp = fadeProgress.current;
-    
+
     // Fade core orb
     if (coreRef.current) {
       const coreOpacity = 1 - fp;
@@ -609,9 +683,9 @@ function SceneContent({
     layout.forEach(node => {
       const group = groupRefs.current.get(node.id);
       if (!group) return;
-      
+
       const isFocused = node.id === focusRootId || node.id === zoomOutFromRootId;
-      
+
       if (isFocused) {
         const targetScale = isDeepDrillDown ? 0.0 : (focusRootId ? scaleProgress.current : (1 + (1 - fp) * 0));
         const current = group.scale.x;
@@ -656,7 +730,7 @@ function SceneContent({
         {/* Center Orb */}
         <group ref={coreRef}>
           <PlasmaSphere color={coreColor} radius={CORE_RADIUS} opacity={0.65} glowIntensity={0.7} />
-          
+
           <Html position={[0, -CORE_RADIUS - 0.5, 0]} center zIndexRange={[100, 0]}>
             <div
               className="px-3 py-1 rounded-full text-white font-bold text-sm text-center"
@@ -675,80 +749,85 @@ function SceneContent({
           </Html>
         </group>
 
-        {/* Orbit Nodes */}
-        {layout.map((node) => {
-          const isFocus = node.id === focusRootId;
-          const isOther = focusRootId != null && !isFocus;
-          const isHovered = hoveredId === node.id;
-          const baseScale = isHovered && !isTransitioning ? 1.15 : 1;
+        {/* Orbit Nodes — hidden when workspace opens at root ring level.
+            In internal-node mode the focused dept sphere IS a ring node, so keep
+            the group visible and let useFrame control per-node scale/visibility. */}
+        {/* @ts-ignore – R3F 'visible' prop is valid on group */}
+        <group visible={!isWorkspaceOpen || insideRootPolytope}>
+          {layout.map((node) => {
+            const isFocus = node.id === focusRootId;
+            const isOther = focusRootId != null && !isFocus;
+            const isHovered = hoveredId === node.id;
+            const baseScale = isHovered && !isTransitioning ? 1.15 : 1;
 
 
 
-          return (
-            <group
-              key={node.id}
-              position={node.pos}
-              ref={(ref) => {
-                if (ref) groupRefs.current.set(node.id, ref);
-              }}
-            >
-              <group scale={baseScale}>
-                <mesh
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (!isZoomingOut) handleNodeClick(node.id, node.pos);
-                  }}
-                  onPointerOver={(e) => {
-                    e.stopPropagation();
-                    if (!isTransitioning && !isZoomingOut) {
-                      setHoveredId(node.id);
-                      document.body.style.cursor = 'pointer';
-                    }
-                  }}
-                  onPointerOut={() => {
-                    setHoveredId(null);
-                    document.body.style.cursor = 'auto';
-                  }}
-                >
-                  <sphereGeometry args={[NODE_RADIUS * 1.5, 16, 16]} />
-                  <meshBasicMaterial transparent opacity={0} depthWrite={false} />
-                </mesh>
-
-                <PlasmaSphere
-                  color={node.color || industryColor}
-                  radius={NODE_RADIUS}
-                  opacity={0.7}
-                  glowIntensity={0.7}
-                  halo={true}
-                />
-
-                {/* HTML Label */}
-                <Html position={[0, -NODE_RADIUS - 0.7, 0]} center zIndexRange={[100, 0]}>
-                  <div
-                    className="flex flex-col items-center pointer-events-none"
-                    style={{
-                      opacity: (isOther || (isFocus && isDeepDrillDown)) ? 0 : 1,
-                      transition: 'opacity 0.15s',
+            return (
+              <group
+                key={node.id}
+                position={node.pos}
+                ref={(ref) => {
+                  if (ref) groupRefs.current.set(node.id, ref);
+                }}
+              >
+                <group scale={baseScale}>
+                  <mesh
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!isZoomingOut) handleNodeClick(node.id, node.pos);
+                    }}
+                    onPointerOver={(e) => {
+                      e.stopPropagation();
+                      if (!isTransitioning && !isZoomingOut) {
+                        setHoveredId(node.id);
+                        document.body.style.cursor = 'pointer';
+                      }
+                    }}
+                    onPointerOut={() => {
+                      setHoveredId(null);
+                      document.body.style.cursor = 'auto';
                     }}
                   >
+                    <sphereGeometry args={[NODE_RADIUS * 1.5, 16, 16]} />
+                    <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+                  </mesh>
+
+                  <PlasmaSphere
+                    color={node.color || industryColor}
+                    radius={NODE_RADIUS}
+                    opacity={0.7}
+                    glowIntensity={0.7}
+                    halo={true}
+                  />
+
+                  {/* HTML Label */}
+                  <Html position={[0, -NODE_RADIUS - 0.7, 0]} center zIndexRange={[100, 0]}>
                     <div
-                      className="px-3 py-1 rounded-full text-white font-bold text-[11px]"
+                      className="flex flex-col items-center pointer-events-none"
                       style={{
-                        background: 'rgba(4,4,12,0.9)',
-                        border: `1px solid ${node.color}66`,
-                        backdropFilter: 'blur(4px)',
-                        whiteSpace: 'nowrap',
+                        opacity: (isOther || (isFocus && isDeepDrillDown) || isWorkspaceOpen) ? 0 : 1,
+                        transition: 'opacity 0.35s ease',
                       }}
                     >
-                      {node.label}
+                      <div
+                        className="px-3 py-1 rounded-full text-white font-bold text-[11px]"
+                        style={{
+                          background: 'rgba(4,4,12,0.9)',
+                          border: `1px solid ${node.color}66`,
+                          backdropFilter: 'blur(4px)',
+                          whiteSpace: 'nowrap',
+                        }}
+                      >
+                        {node.label}
+                      </div>
                     </div>
-                  </div>
-                </Html>
+                  </Html>
 
+                </group>
               </group>
-            </group>
-          );
-        })}
+            );
+          })}
+        </group>
 
         {/* Unified BDT internal nodes */}
         {insideRootPolytope && activeRootDept && internalNodesVisible && (() => {
@@ -756,7 +835,8 @@ function SceneContent({
           if (!deptNode) return null;
           const ROOT_POS = deptNode.pos;
           const color = getExternalNodeColor(activeRootDept);
-          
+
+
           // Calculate positions for the active root's internal nodes
           const n = activeRootDept.internalNodes.length;
           const internalPositions = activeRootDept.internalNodes.map((_, i) =>
@@ -809,8 +889,8 @@ function SceneContent({
                     parentPos={ROOT_POS}
                     isVisible={isChildVisible}
                     parentLabel={activeRootDept.label}
-                    setBackInfo={() => {}}
-                    onNodeFocus={() => {}}
+                    setBackInfo={() => { }}
+                    onNodeFocus={() => { }}
                     rootPos={ROOT_POS}
                     revealDelayMs={PLANET_ANIM.internalNodeRevealDelayMs + i * 70}
                     entryDuration={polytopeEntryMode === 'snap' ? 0 : PLANET_ANIM.internalNodeDuration}
@@ -836,7 +916,7 @@ export default function CompanyPlanet3DView(props: CompanyPlanet3DViewProps) {
   const coreColor = activeTag ? COMPANY_TAG_COLORS[activeTag] : props.industryColor || '#C1AEFF';
 
   return (
-    <div 
+    <div
       className="absolute inset-0 z-30"
       style={{ background: 'radial-gradient(ellipse at 50% 40%, rgba(18,10,36,1) 0%, rgba(2,2,6,1) 65%)' }}
     >

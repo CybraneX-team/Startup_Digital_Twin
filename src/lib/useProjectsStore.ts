@@ -7,6 +7,8 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
+import type { Goal } from './useGoalsStore';
+import { metricProgress } from './useGoalsStore';
 
 const STORAGE_KEY = 'bdt_projects_v1';
 
@@ -31,6 +33,9 @@ export interface ProjectTask {
   createdAt: string;
   sourceCardId?: string;     // linked SavedWorkflowItem id
   blockedByTaskId?: string;  // task id that blocks this task
+  metricImpactId?: string;   // linked MetricImpact id (Phase 4)
+  agentSuitable?: boolean;   // can an agent auto-implement this? (Phase 5/6)
+  estimatedEffortHours?: number; // effort estimate for priority scoring
 }
 
 export interface Project {
@@ -326,7 +331,16 @@ export function useProjectsStore() {
   }, [update]);
 
   const updateTask = useCallback((id: string, patch: Partial<ProjectTask>) => {
-    update(s => ({ ...s, tasks: s.tasks.map(t => t.id === id ? { ...t, ...patch } : t) }));
+    update(s => {
+      const existing = s.tasks.find(t => t.id === id);
+      // When task is completed and has a metric impact, fire event for useGoalsStore to resolve
+      if (patch.status === 'done' && existing && existing.status !== 'done' && existing.metricImpactId) {
+        window.dispatchEvent(new CustomEvent('task-completed-metric-impact', {
+          detail: { impactId: existing.metricImpactId, taskTitle: existing.title },
+        }));
+      }
+      return { ...s, tasks: s.tasks.map(t => t.id === id ? { ...t, ...patch } : t) };
+    });
   }, [update]);
 
   const deleteTask = useCallback((id: string) => {
@@ -607,4 +621,214 @@ export function generateAlerts(
 
   // Sort: high first
   return alerts.sort((a, b) => (a.severity === 'high' ? -1 : b.severity === 'high' ? 1 : 0));
+}
+
+/* ── Suggestive Task Engine ──────────────────────────────────────────────── */
+
+export type TaskSuggestion = {
+  key: string;
+  type: 'goal_gap' | 'blocker' | 'at_risk' | 'overdue' | 'decision' | 'metric_gap';
+  priority: 'high' | 'medium' | 'low';
+  taskTitle: string;
+  why: string;
+  projectId?: string;
+  projectName?: string;
+  goalTitle?: string;
+  metricId?: string;
+  metricName?: string;
+  estimatedMetricLift?: number;  // absolute value improvement
+  dependencyUnlockCount?: number; // how many tasks unblocked
+  agentSuitable?: boolean;
+};
+
+/**
+ * Pure rule-based suggestion engine. Returns up to 8 actionable next steps
+ * derived from goal gaps, blockers, overdue tasks, at-risk projects, and
+ * pending decisions.
+ */
+export function generateTaskSuggestions(
+  projects: Project[],
+  tasks: ProjectTask[],
+  decisions: Decision[],
+  risks: Risk[],
+  goals: Goal[],
+  metrics?: import('./useGoalsStore').Metric[],
+): TaskSuggestion[] {
+  const suggestions: TaskSuggestion[] = [];
+  const today = new Date().toISOString().slice(0, 10);
+
+  // Rule 1 — goals with no linked project
+  for (const g of goals) {
+    const linked = projects.filter(
+      p => p.goalId === g.id || p.goalLink?.trim().toLowerCase() === g.title.trim().toLowerCase(),
+    );
+    if (linked.length === 0) {
+      suggestions.push({
+        key: `goal_gap_${g.id}`,
+        type: 'goal_gap',
+        priority: g.metricId ? 'high' : 'medium',
+        taskTitle: `Create a project to drive "${g.title}"`,
+        why: `No project is linked to this goal — progress is stuck at 0.`,
+        goalTitle: g.title,
+      });
+    }
+  }
+
+  // Rule 2 — blocked tasks (open task with an active upstream blocker)
+  for (const t of tasks) {
+    if (t.status === 'done' || !t.blockedByTaskId) continue;
+    const blocker = tasks.find(x => x.id === t.blockedByTaskId);
+    if (!blocker || blocker.status === 'done') continue;
+    const proj = projects.find(p => p.id === t.projectId);
+    suggestions.push({
+      key: `blocker_${t.id}`,
+      type: 'blocker',
+      priority: 'high',
+      taskTitle: `Unblock: "${t.title}"`,
+      why: `Waiting on "${blocker.title}". Clearing this unblocks downstream work.`,
+      projectId: t.projectId,
+      projectName: proj?.name,
+    });
+  }
+
+  // Rule 3 — projects with 2+ overdue tasks
+  for (const p of projects) {
+    if (p.status === 'done') continue;
+    const overdue = tasks.filter(t => t.projectId === p.id && t.dueDate && t.dueDate < today && t.status !== 'done');
+    if (overdue.length >= 2) {
+      suggestions.push({
+        key: `overdue_${p.id}`,
+        type: 'overdue',
+        priority: overdue.length >= 3 ? 'high' : 'medium',
+        taskTitle: `Clear ${overdue.length} overdue tasks in "${p.name}"`,
+        why: `Tasks are past due, dragging project health to ${p.health}%.`,
+        projectId: p.id,
+        projectName: p.name,
+      });
+    }
+  }
+
+  // Rule 4 — at-risk / delayed projects with unmitigated high risks
+  for (const p of projects) {
+    if (p.status === 'done') continue;
+    const highRisks = risks.filter(r => r.projectId === p.id && r.severity === 'high' && !r.mitigated);
+    if (highRisks.length > 0 && (p.status === 'at_risk' || p.status === 'delayed')) {
+      suggestions.push({
+        key: `at_risk_${p.id}`,
+        type: 'at_risk',
+        priority: 'high',
+        taskTitle: `Mitigate high risk in "${p.name}"`,
+        why: `${highRisks.length} unmitigated high risk${highRisks.length > 1 ? 's' : ''}: "${highRisks[0].title}".`,
+        projectId: p.id,
+        projectName: p.name,
+      });
+    }
+  }
+
+  // Rule 5 — pending decisions blocking progress
+  const openDecs = decisions.filter(d => d.status === 'open');
+  if (openDecs.length > 0) {
+    const first = openDecs[0];
+    const proj = projects.find(p => p.id === first.projectId);
+    suggestions.push({
+      key: 'decisions_queue',
+      type: 'decision',
+      priority: 'medium',
+      taskTitle: `Resolve ${openDecs.length} pending decision${openDecs.length > 1 ? 's' : ''}`,
+      why: `"${first.title}"${openDecs.length > 1 ? ` +${openDecs.length - 1} more` : ''} — unresolved decisions block teams.`,
+      projectId: first.projectId,
+      projectName: proj?.name,
+    });
+  }
+
+  // Rule 6 — metrics below alert threshold (Phase 4 integration)
+  if (metrics) {
+    for (const m of metrics) {
+      const pct = metricProgress(m);
+      const threshold = m.alertThreshold ?? 50;
+      if (pct < threshold) {
+        const linkedGoal = goals.find(g => g.metricId === m.id);
+        const linkedProject = linkedGoal
+          ? projects.find(p => p.goalId === linkedGoal.id || p.goalLink?.toLowerCase() === linkedGoal.title.toLowerCase())
+          : undefined;
+        const lift = +(m.target * 0.1).toFixed(2); // suggest 10% lift as next step
+        suggestions.push({
+          key: `metric_gap_${m.id}`,
+          type: 'metric_gap',
+          priority: pct < threshold / 2 ? 'high' : 'medium',
+          taskTitle: `Improve ${m.name} — currently ${pct}% to target`,
+          why: `${m.name} is at ${pct}% progress (threshold: ${threshold}%). Trend is ${m.trend}. A focused sprint could lift it by ~10%.`,
+          projectId: linkedProject?.id,
+          projectName: linkedProject?.name,
+          metricId: m.id,
+          metricName: m.name,
+          estimatedMetricLift: lift,
+          agentSuitable: true,
+        });
+      }
+    }
+  }
+
+  // Rule 7 — dependency unlock: blockers with high downstream count
+  const blockerIds = new Set(tasks.filter(t => t.blockedByTaskId).map(t => t.blockedByTaskId!));
+  for (const blockerId of blockerIds) {
+    const blockerTask = tasks.find(t => t.id === blockerId);
+    if (!blockerTask || blockerTask.status === 'done') continue;
+    const downstreamCount = tasks.filter(t => t.blockedByTaskId === blockerId && t.status !== 'done').length;
+    if (downstreamCount >= 2 && !suggestions.some(s => s.key === `blocker_${blockerId}`)) {
+      const proj = projects.find(p => p.id === blockerTask.projectId);
+      suggestions.push({
+        key: `dep_unlock_${blockerId}`,
+        type: 'blocker',
+        priority: 'high',
+        taskTitle: `Complete "${blockerTask.title}" to unblock ${downstreamCount} tasks`,
+        why: `This task is blocking ${downstreamCount} downstream tasks. Completing it unlocks significant execution capacity.`,
+        projectId: blockerTask.projectId,
+        projectName: proj?.name,
+        dependencyUnlockCount: downstreamCount,
+        agentSuitable: false,
+      });
+    }
+  }
+
+  const ORDER: Record<string, number> = { high: 0, medium: 1, low: 2 };
+  return suggestions.sort((a, b) => ORDER[a.priority] - ORDER[b.priority]).slice(0, 10);
+}
+
+/**
+ * Alignment score for a task.
+ * Formula (spec §7): Goal Relevance × Impact × Confidence × Urgency / Effort
+ * Returns 0–100.
+ */
+export function computeAlignmentScore(
+  task: ProjectTask,
+  projects: Project[],
+  risks: Risk[],
+  goals: import('./useGoalsStore').Goal[],
+): number {
+  const project = projects.find(p => p.id === task.projectId);
+
+  // Goal relevance — how tightly connected to a goal
+  const goalLinked = goals.some(g => g.id === project?.goalId);
+  const goalRelevance = goalLinked ? 1.0 : project?.goalLink ? 0.65 : 0.3;
+
+  // Urgency — higher as due date approaches (0–1 over 14-day window)
+  let urgency = 0.5;
+  if (task.dueDate) {
+    const daysLeft = (new Date(task.dueDate).getTime() - Date.now()) / 86400000;
+    if (daysLeft <= 0) urgency = 1.0;
+    else if (daysLeft <= 14) urgency = 1 - daysLeft / 14;
+    else urgency = 0.2;
+  }
+
+  // Confidence — penalise for open high risks in the project
+  const projectRisks = risks.filter(r => r.projectId === task.projectId && !r.mitigated);
+  const highRisks = projectRisks.filter(r => r.severity === 'high').length;
+  const confidence = Math.max(0.2, 1 - highRisks * 0.2);
+
+  // Status multiplier — in_progress tasks get a small boost
+  const statusBoost = task.status === 'in_progress' ? 1.15 : task.status === 'review' ? 1.05 : 1.0;
+
+  const raw = goalRelevance * urgency * confidence * statusBoost;
+  return Math.min(100, Math.round(raw * 100));
 }

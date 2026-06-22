@@ -117,12 +117,12 @@ export const CANVAS_FRAME_PATH_NORMALIZED = serialize(
 
 /** Rectangular shape for fullscreen state (sides straight down, keeping top shoulders) */
 export const CANVAS_FRAME_POINTS_FULL = [
-  { x: 0, y: 30 }, // 0 top-left corner
-  { x: 335, y: 30 }, // 1 left shoulder → ramp start
-  { x: 395, y: 50 }, // 2 valley (left)
-  { x: 605, y: 50 }, // 3 valley (right)
-  { x: 665, y: 30 }, // 4 ramp end → right shoulder
-  { x: 1000, y: 30 }, // 5 top-right corner
+  { x: 0, y: 20 }, // 0 top-left corner
+  { x: 335, y: 20 }, // 1 left shoulder → ramp start
+  { x: 395, y: 40 }, // 2 valley (left)
+  { x: 605, y: 40 }, // 3 valley (right)
+  { x: 665, y: 20 }, // 4 ramp end → right shoulder
+  { x: 1000, y: 20 }, // 5 top-right corner
   { x: 1000, y: 600 }, // 6 bottom-right (straight down)
   { x: 0, y: 600 }, // 7 bottom-left (straight down)
 ] as const;

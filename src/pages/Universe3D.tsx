@@ -25,6 +25,7 @@ import {
   type CompanyPlanetContext,
 } from '../data/companyPlanetRoots';
 import { OpenWorkspaceCue } from '../components/OpenWorkspaceCue';
+import type { WorkspaceEntryContext } from '../context/FounderWorkspaceContext';
 import { UniverseGalaxySidebar } from '../components/universe/UniverseGalaxySidebar';
 import { TwinWorkspaceLayout } from '../components/twin/TwinWorkspaceLayout';
 import {
@@ -151,6 +152,7 @@ export default function Universe3DPage() {
   }, [hoverTarget, voiceState]);
   const openWorkspacePendingRef = useRef(false);
   const twinWorkspaceTimerRef = useRef<number | null>(null);
+  const [workspaceEntryContext, setWorkspaceEntryContext] = useState<WorkspaceEntryContext | null>(null);
 
   const clearTwinWorkspaceTimers = useCallback(() => {
     if (twinWorkspaceTimerRef.current != null) {
@@ -894,7 +896,110 @@ export default function Universe3DPage() {
   const handleOpenWorkspace = useCallback(() => {
     if (twinWorkspacePhase !== 'closed' || insideBH || insideCompanyInterior) return;
 
-    if (currentLevel === ZOOM_LEVELS.GALAXY) {
+    // ── Build entry context from current navigation state ──
+    let ctx: WorkspaceEntryContext;
+
+    if (insidePlanetRoots && planetContext) {
+      // Company level — inside a company planet's root system
+      ctx = {
+        level: 'company',
+        companyId: planetContext.companyId,
+        companyName: planetContext.companyName,
+        companyRole: planetContext.role,
+        industryName: navPath.find(p => p.level === ZOOM_LEVELS.INDUSTRY)?.name,
+        industryColor: (navPath.find(p => p.level === ZOOM_LEVELS.INDUSTRY)?.data as UniverseIndustry | undefined)?.color,
+        subdomainName: navPath.find(p => p.level === ZOOM_LEVELS.SUBDOMAIN)?.name,
+      };
+    } else if (currentLevel === ZOOM_LEVELS.GALAXY) {
+      // Universe level — pass summary of all industries + full hierarchy for in-workspace nav
+      const allIndustries = data?.industries.map(ind => ({
+        id: ind.id, name: ind.name, color: ind.color, description: ind.description,
+        subdomains: ind.subdomains.map(sub => ({
+          id: sub.id, name: sub.name, description: sub.description,
+          companies: sub.companies.map(c => ({ id: c.id, name: c.name, description: c.description, stage: c.stage, employees: c.employees, isLive: c.isLive })),
+        })),
+      })) ?? [];
+      ctx = {
+        level: 'universe',
+        subdomains: data?.industries.map(ind => ({
+          id: ind.id,
+          name: ind.name,
+          description: ind.description,
+          companyCount: ind.subdomains.reduce((sum, s) => sum + s.companies.length, 0),
+          color: ind.color,
+        })),
+        totalCompanyCount: data?.industries.reduce(
+          (sum, ind) => sum + ind.subdomains.reduce((s2, sub) => s2 + sub.companies.length, 0), 0
+        ),
+        allIndustries,
+      };
+    } else if (currentLevel === ZOOM_LEVELS.INDUSTRY) {
+      const industryEntry = navPath[navPath.length - 1];
+      const industry = industryEntry?.data as UniverseIndustry | undefined;
+      const allIndustries = data?.industries.map(ind => ({
+        id: ind.id, name: ind.name, color: ind.color, description: ind.description,
+        subdomains: ind.subdomains.map(sub => ({
+          id: sub.id, name: sub.name, description: sub.description,
+          companies: sub.companies.map(c => ({ id: c.id, name: c.name, description: c.description, stage: c.stage, employees: c.employees, isLive: c.isLive })),
+        })),
+      })) ?? [];
+      ctx = {
+        level: 'industry',
+        industryId: industryEntry?.id,
+        industryName: industryEntry?.name,
+        industryColor: industry?.color,
+        industryDescription: industry?.description,
+        subdomains: industry?.subdomains.map(s => ({
+          id: s.id,
+          name: s.name,
+          description: s.description,
+          companyCount: s.companies.length,
+          color: industry.color,
+        })),
+        totalCompanyCount: industry?.subdomains.reduce((sum, s) => sum + s.companies.length, 0),
+        allIndustries,
+      };
+    } else {
+      // SUBDOMAIN or COMPANY level
+      const lastEntry = navPath[navPath.length - 1];
+      const industryEntry = navPath.find(p => p.level === ZOOM_LEVELS.GALAXY);
+      const subdomain = lastEntry?.data as UniverseSubdomain | undefined;
+      const industry = industryEntry?.data as UniverseIndustry | undefined;
+      const allIndustries = data?.industries.map(ind => ({
+        id: ind.id, name: ind.name, color: ind.color, description: ind.description,
+        subdomains: ind.subdomains.map(sub => ({
+          id: sub.id, name: sub.name, description: sub.description,
+          companies: sub.companies.map(c => ({ id: c.id, name: c.name, description: c.description, stage: c.stage, employees: c.employees, isLive: c.isLive })),
+        })),
+      })) ?? [];
+      ctx = {
+        level: 'subdomain',
+        industryId: industryEntry?.id,
+        industryName: industryEntry?.name,
+        industryColor: industry?.color,
+        subdomainId: lastEntry?.id,
+        subdomainName: lastEntry?.name,
+        subdomainDescription: subdomain?.description,
+        companies: subdomain?.companies.map(c => ({
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          stage: c.stage,
+          employees: c.employees,
+          isLive: c.isLive,
+        })),
+        allIndustries,
+      };
+    }
+
+    setWorkspaceEntryContext(ctx);
+
+    if (insidePlanetRoots) {
+      openWorkspacePendingRef.current = false;
+      controllerRef.current?.openTwinWorkspaceFromSubdomain();
+      setTwinWorkspacePhase('zooming');
+      scheduleTwinWorkspacePanels(TWIN_WORKSPACE_CAMERA_MS);
+    } else if (currentLevel === ZOOM_LEVELS.GALAXY) {
       openWorkspacePendingRef.current = true;
       controllerRef.current?.openTwinWorkspaceFromGalaxy();
       setTwinWorkspacePhase('zooming');
@@ -904,10 +1009,7 @@ export default function Universe3DPage() {
       controllerRef.current?.openTwinWorkspaceFromIndustry();
       setTwinWorkspacePhase('zooming');
       scheduleTwinWorkspacePanels(TWIN_WORKSPACE_CAMERA_MS);
-    } else if (
-      currentLevel === ZOOM_LEVELS.SUBDOMAIN ||
-      currentLevel === ZOOM_LEVELS.COMPANY
-    ) {
+    } else {
       openWorkspacePendingRef.current = false;
       controllerRef.current?.openTwinWorkspaceFromSubdomain();
       setTwinWorkspacePhase('zooming');
@@ -917,7 +1019,11 @@ export default function Universe3DPage() {
     twinWorkspacePhase,
     insideBH,
     insideCompanyInterior,
+    insidePlanetRoots,
+    planetContext,
     currentLevel,
+    navPath,
+    data,
     scheduleTwinWorkspacePanels,
   ]);
 
@@ -956,6 +1062,26 @@ export default function Universe3DPage() {
       if (event.data?.type === 'ACTION_WORKSPACE_CLOSED') {
         setRootPolytopeBackStep(c => c + 1);
       } else if (event.data?.type === 'EXPORT_TO_WORKSPACE') {
+        // If we have action node context, use it as the entry context
+        if (event.data.rootLabel || event.data.actionLabel) {
+          setWorkspaceEntryContext({
+            level: 'node',
+            companyId: planetContext?.companyId,
+            companyName: planetContext?.companyName,
+            companyRole: planetContext?.role,
+            rootId: event.data.rootId,
+            rootLabel: event.data.rootLabel,
+            rootDescription: event.data.rootDescription,
+            branchId: event.data.branchId,
+            branchLabel: event.data.branchLabel,
+            actionId: event.data.actionId,
+            actionLabel: event.data.actionLabel,
+            nodeHint: event.data.nodeHint,
+            breadcrumbs: [planetContext?.companyName, event.data.rootLabel, event.data.branchLabel, event.data.actionLabel].filter(Boolean) as string[],
+            industryName: navPath.find(p => p.level === ZOOM_LEVELS.INDUSTRY)?.name,
+            industryColor: (navPath.find(p => p.level === ZOOM_LEVELS.INDUSTRY)?.data as UniverseIndustry | undefined)?.color,
+          });
+        }
         setActionWorkspace(null);
         handleOpenWorkspace();
       }
@@ -970,7 +1096,7 @@ export default function Universe3DPage() {
       window.removeEventListener('message', onMessage);
       window.removeEventListener('request-open-workspace', onRequestOpen);
     };
-  }, [handleOpenWorkspace]);
+  }, [handleOpenWorkspace, planetContext, navPath]);
 
   const handleNavigate = useCallback((path: NavPathEntry[], level: ZoomLevel) => {
     setNavPath([...path]);
@@ -1146,11 +1272,16 @@ export default function Universe3DPage() {
         </div>
       )}
 
+      {/* Interaction blocker — only covers the workspace panel area so the 3D peek zone stays interactive */}
       {isTwinWorkspaceActive(twinWorkspacePhase) && (
-        <div className="twin-universe-interaction-blocker" aria-hidden />
+        <div
+          className="twin-universe-interaction-blocker"
+          style={{ top: '34vh', height: '66vh' }}
+          aria-hidden
+        />
       )}
 
-      <TwinWorkspaceLayout phase={twinWorkspacePhase} onClose={handleCloseWorkspace} />
+      <TwinWorkspaceLayout phase={twinWorkspacePhase} onClose={handleCloseWorkspace} entryContext={workspaceEntryContext} />
 
       {/* ── Black Hole Interior: UniversalPolytope overlay ──
            visibility:hidden cascades to ALL children (including R3F canvas) so
@@ -1206,11 +1337,14 @@ export default function Universe3DPage() {
 
 
       {/* ── Company Planet 3D root map (after role pick) ── */}
+      {/* Shift-up zone: animates translateY(-100%)+fade when workspace goes fullscreen,
+          matching the ws-planet-zone behaviour on industry/subdomain pages. */}
+      <div className="universe-planet-root-zone" style={{ zIndex: 6 }}>
+      {/* Inner div: owns opacity / visibility / right — transition string changes safely here */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          zIndex: 6,
           // Solid galaxy background on this container so it persists even when
           // CompanyPlanet3DView unmounts, preventing universe planets from bleeding through.
           background: 'radial-gradient(ellipse at 50% 40%, rgba(18,10,36,1) 0%, rgba(2,2,6,1) 65%)',
@@ -1228,6 +1362,7 @@ export default function Universe3DPage() {
             context={planetContext}
             depth={0}
             path={[]}
+            isWorkspaceOpen={isTwinWorkspaceActive(twinWorkspacePhase)}
             requestFocusRootId={requestFocusRootId}
             onFocusTransitionComplete={handleRootFocusTransitionComplete}
             onDrillInto={() => { }}
@@ -1262,6 +1397,7 @@ export default function Universe3DPage() {
           />
         )}
       </div>
+      </div>{/* /universe-planet-root-zone */}
 
       {/* ── Create Company Floating Panel ── */}
       {createModal && (
@@ -1278,11 +1414,19 @@ export default function Universe3DPage() {
         />
       )}
 
-      {/* Bottom-left column: hidden when create modal is active OR drafting dept/node OR action workspace open */}
+      {/* Bottom-left column: hidden when create modal active, drafting, or action workspace open */}
       {!createModal && !polytopeDraftDept && !polytopeDraftInternalNode && !actionWorkspace && (
         <>
           {insideRootPolytope && activeRootDept ? (
-            <div className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3">
+            <div
+              className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3"
+              style={{
+                opacity: isTwinWorkspaceActive(twinWorkspacePhase) ? 0 : 1,
+                pointerEvents: isTwinWorkspaceActive(twinWorkspacePhase) ? 'none' : 'auto',
+                transform: isTwinWorkspaceActive(twinWorkspacePhase) ? 'translateY(8px)' : 'translateY(0)',
+                transition: 'opacity 0.4s ease, transform 0.4s ease',
+              }}
+            >
               <PolytopeSidePanel
                 departments={[activeRootDept]}
                 selectedDeptId={activeRootDept.id}
@@ -1300,7 +1444,15 @@ export default function Universe3DPage() {
               />
             </div>
           ) : insidePlanetRoots && planetContext ? (
-            <div className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3">
+            <div
+              className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3"
+              style={{
+                opacity: isTwinWorkspaceActive(twinWorkspacePhase) ? 0 : 1,
+                pointerEvents: isTwinWorkspaceActive(twinWorkspacePhase) ? 'none' : 'auto',
+                transform: isTwinWorkspaceActive(twinWorkspacePhase) ? 'translateY(8px)' : 'translateY(0)',
+                transition: 'opacity 0.4s ease, transform 0.4s ease',
+              }}
+            >
               <CompanyPlanetSidePanel
                 context={planetContext}
                 depth={0}
@@ -1318,7 +1470,15 @@ export default function Universe3DPage() {
               />
             </div>
           ) : (insideBH || insideCompanyInterior) && voiceState === 'idle' ? (
-            <div className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3">
+            <div
+              className="absolute bottom-6 left-4 z-20 flex flex-col items-start gap-3"
+              style={{
+                opacity: isTwinWorkspaceActive(twinWorkspacePhase) ? 0 : 1,
+                pointerEvents: isTwinWorkspaceActive(twinWorkspacePhase) ? 'none' : 'auto',
+                transform: isTwinWorkspaceActive(twinWorkspacePhase) ? 'translateY(8px)' : 'translateY(0)',
+                transition: 'opacity 0.4s ease, transform 0.4s ease',
+              }}
+            >
               <PolytopeSidePanel
                 departments={polytopeStore.departments}
                 selectedDeptId={insideBH ? polytopeDeptId : (companyInteriorPath[0] ?? null)}
@@ -1580,8 +1740,8 @@ export default function Universe3DPage() {
 
 
 
-      {/* Open workspace — bottom center */}
-      {!loading && data && !createModal && !polytopeDraftDept && !polytopeDraftInternalNode && !insideBH && !insideCompanyInterior && !insidePlanetRoots && !insideRootPolytope && twinWorkspacePhase === 'closed' && (
+      {/* Open workspace — bottom center (visible at all navigation levels except BH/company interior) */}
+      {!loading && data && !createModal && !polytopeDraftDept && !polytopeDraftInternalNode && !insideBH && !insideCompanyInterior && twinWorkspacePhase === 'closed' && (
         <OpenWorkspaceCue onClick={handleOpenWorkspace} />
       )}
 

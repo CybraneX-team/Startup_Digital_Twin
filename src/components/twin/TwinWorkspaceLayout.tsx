@@ -6,19 +6,21 @@ import {
   WorkspaceRightPanel,
 } from '../workspace/panels';
 import type { TwinWorkspacePhase } from '../../lib/twinWorkspaceTransition';
-import { FounderWorkspaceProvider, useFounderWorkspace } from '../../context/FounderWorkspaceContext';
+import { FounderWorkspaceProvider, useFounderWorkspace, type WorkspaceEntryContext } from '../../context/FounderWorkspaceContext';
+import { WorkspaceModeBar } from '../workspace/WorkspaceModeBar';
 
 export interface TwinWorkspaceLayoutProps {
   phase: TwinWorkspacePhase;
   onClose?: () => void;
+  entryContext?: WorkspaceEntryContext | null;
 }
 
 /** Panel chrome only — universe stays visible as the background (no workspace shell). */
-export function TwinWorkspaceLayout({ phase, onClose }: TwinWorkspaceLayoutProps) {
+export function TwinWorkspaceLayout({ phase, onClose, entryContext }: TwinWorkspaceLayoutProps) {
   if (phase !== 'entering' && phase !== 'open' && phase !== 'closing') return null;
 
   return (
-    <FounderWorkspaceProvider>
+    <FounderWorkspaceProvider initialEntryContext={entryContext}>
       <TwinWorkspaceLayoutInner phase={phase} onClose={onClose} />
     </FounderWorkspaceProvider>
   );
@@ -54,6 +56,17 @@ function TwinWorkspaceLayoutInner({ phase, onClose }: TwinWorkspaceLayoutProps) 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isFullscreen, scrollExpansion]);
 
+  // Hide the TopBar once the workspace starts expanding (scrollExpansion > 0 or fullscreen).
+  // In collapsed state (scrollExpansion === 0) the TopBar is visible and the pill floats above canvas.
+  const shouldHideTopBar = scrollExpansion > 0 || isFullscreen;
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent('workspace_toggled', { detail: shouldHideTopBar }));
+  }, [shouldHideTopBar]);
+  // Always restore TopBar when workspace closes
+  useEffect(() => () => {
+    window.dispatchEvent(new CustomEvent('workspace_toggled', { detail: false }));
+  }, []);
+
   const p = scrollExpansion / 100;
 
   // Inline styles for grid morphing when 0 < scrollExpansion < 100
@@ -78,12 +91,35 @@ function TwinWorkspaceLayoutInner({ phase, onClose }: TwinWorkspaceLayoutProps) 
         } ${scrollExpansion > 0 && scrollExpansion < 100 ? 'twin-workspace-shell--scrolling' : ''}`}
       style={shellStyle}
     >
+      {/* ── Fullscreen pill — floats at page top when canvas is fullscreen ── */}
+      <div
+        className="twin-workspace-topbar"
+        style={{
+          opacity: (isFullscreen && !isClosing) ? 1 : 0,
+          transform: (isFullscreen && !isClosing) ? 'translateY(0)' : 'translateY(-14px)',
+          pointerEvents: (isFullscreen && !isClosing) ? 'auto' : 'none',
+          transition: isFullscreen
+            ? 'opacity 0.4s cubic-bezier(0.16,1,0.3,1) 0.6s, transform 0.4s cubic-bezier(0.16,1,0.3,1) 0.6s'
+            : 'opacity 0.18s ease, transform 0.18s ease',
+        }}
+      >
+        <WorkspaceModeBar placement="top" />
+      </div>
+
+      {/* ── Close button — grid row 1 center, hidden in fullscreen ── */}
       <button
         type="button"
         onClick={handleCloseClick}
         disabled={isClosing || isCollapsing}
-        className="twin-workspace-close group -mb-18"
+        className="twin-workspace-close group"
         aria-label="Close workspace"
+        style={{
+          // CSS animation fill-mode:forwards overrides inline opacity; clearing animation removes that lock
+          animation: isFullscreen ? 'none' : undefined,
+          opacity: isFullscreen ? 0 : undefined,
+          pointerEvents: isFullscreen ? 'none' : undefined,
+          transition: 'opacity 0.25s ease',
+        }}
       >
         <span className="twin-workspace-close__chevrons" aria-hidden>
           <ChevronDown

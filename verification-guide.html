@@ -298,11 +298,11 @@
       <h1>Verification Guide</h1>
       <p class="sub">Click each test to check it off as you verify it on the live platform. Only features that are
         actually built (Done / Partial) are listed. Status lives in <b>execution-status.html</b>.</p>
-      <div class="updated">Last updated: June 2026 — reflects all features shipped through this session</div>
+      <div class="updated">Last updated: 19 June 2026 — reflects all features shipped through Session 2</div>
       <div class="path">Get there: <b>3D Twin</b> → click the <b>"Open Workspace"</b> text (bottom-centre) → the
         workspace panels slide in.</div>
       <div class="progress-wrap">
-        <div class="progress-label" id="prog-label">0 / 17 verified</div>
+        <div class="progress-label" id="prog-label">0 / 26 verified</div>
         <div class="progress-track">
           <div class="progress-fill" id="prog-fill" style="width:0%"></div>
         </div>
@@ -758,17 +758,153 @@
       </div>
     </div>
 
+    <!-- ─── GROUP: NEW PANELS SESSION 2 ────────────────────────────────────── -->
+    <div class="group-label">New Intelligence Panels — Session 2 (19 Jun 2026)</div>
+
+    <!-- T21 -->
+    <div class="card new">
+      <div class="ch" onclick="t(this)">
+        <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#0b0b0f" stroke-width="3.5">
+            <path d="M5 13l4 4L19 7" />
+          </svg></span>
+        <span class="ttl">21 · Signals Intelligence Panel <span class="badge b-new">New</span></span>
+        <span class="tag t-done">Done</span>
+      </div>
+      <div class="body">
+        <ol>
+          <li>Left nav → <b>Signals</b> (⚡ lightning bolt icon). Panel loads with 15 seeded signals.</li>
+          <li>Verify the <b>stat chips</b> in the header show "high-relevance" count and "new" count.</li>
+          <li>Click each <b>category filter</b> (Market · Competitor · Technology · Regulatory · Customer) — list narrows to that category.</li>
+          <li>Type a word in the <b>search bar</b> (e.g. "churn") — matching signals remain, others hide.</li>
+          <li>Click a signal row to <b>expand</b> it — body text, tags, and action buttons appear.</li>
+          <li>Click <b>Save to Canvas</b> on an expanded signal.</li>
+          <li>Navigate to <b>Canvas → Nodes</b> view — find the saved signal card.</li>
+        </ol>
+        <div class="exp"><b>Expect:</b> the signal card appears in Saved Nodes with its title as the root label and its category colour. The "Save to Canvas" button on that signal now shows <b>"Saved to Canvas"</b> and stays disabled. The "✓ Node card created" confirm appears inline.</div>
+      </div>
+    </div>
+
+    <!-- T22 -->
+    <div class="card new">
+      <div class="ch" onclick="t(this)">
+        <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#0b0b0f" stroke-width="3.5">
+            <path d="M5 13l4 4L19 7" />
+          </svg></span>
+        <span class="ttl">22 · Universe Pulse — Sphere tab <span class="badge b-new">New</span></span>
+        <span class="tag t-done">Done</span>
+      </div>
+      <div class="body">
+        <ol>
+          <li>Left nav → <b>Sphere</b> (orbit/ring icon). The <b>Universe Pulse</b> panel loads.</li>
+          <li>Verify the <b>8 stat tiles</b> (Open Tasks, Active Projects, Goals, Open Decisions, Tasks Done, Overdue, Notes, Files) show live numbers matching your actual data.</li>
+          <li>Click <b>Open Tasks</b> tile — should navigate to the Tasks tab.</li>
+          <li>Click <b>Active Projects</b> tile — should navigate to Projects tab.</li>
+          <li>Scroll down to <b>Key Metrics</b> — verify metric names + values from Goals &amp; Metrics are mirrored here.</li>
+          <li>Check <b>Active Alerts</b> section — verify at least one alert matches the data (e.g. overdue task in Seed Round Prep).</li>
+          <li>Use <b>Quick Navigate</b> buttons at the bottom to jump to Signals, Roadmap, Competitors.</li>
+        </ol>
+        <div class="exp"><b>Expect:</b> all tile counts are live (derived from the same stores, not hardcoded). Clicking any tile or nav button changes the active left-nav tab. Alerts correctly identify project issues. Metrics progress bars reflect current values.</div>
+      </div>
+    </div>
+
+    <!-- T23 -->
+    <div class="card new">
+      <div class="ch" onclick="t(this)">
+        <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#0b0b0f" stroke-width="3.5">
+            <path d="M5 13l4 4L19 7" />
+          </svg></span>
+        <span class="ttl">23 · AI Roadmap tab <span class="badge b-new">New</span></span>
+        <span class="tag t-done">Done</span>
+      </div>
+      <div class="body">
+        <ol>
+          <li>Left nav → <b>Roadmap</b> (map icon). Panel loads showing a sorted list of goals and projects.</li>
+          <li>Verify that seeded items show (<b>"Canvas v2 Launch"</b> and <b>"Seed Round Prep"</b> projects, plus any goals you created).</li>
+          <li>Check that project rows have <b>progress bars</b> (% of tasks done) on the right.</li>
+          <li>Check that status chips show the correct colour: on-track = purple, at-risk/delayed = red, done = green.</li>
+          <li>Click <b>Manage Goals →</b> button (top-right) — should navigate to the Goals tab.</li>
+          <li>Add a new project or goal in their respective tabs, then return to Roadmap.</li>
+        </ol>
+        <div class="exp"><b>Expect:</b> newly created projects and goals appear immediately in the roadmap list, sorted by due/creation order. Progress bars update live as tasks are completed. The list is empty only if no goals or projects exist.</div>
+      </div>
+    </div>
+
+    <!-- T24 -->
+    <div class="card new">
+      <div class="ch" onclick="t(this)">
+        <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#0b0b0f" stroke-width="3.5">
+            <path d="M5 13l4 4L19 7" />
+          </svg></span>
+        <span class="ttl">24 · Fundraising Tracker tab <span class="badge b-new">New</span></span>
+        <span class="tag t-done">Done</span>
+      </div>
+      <div class="body">
+        <ol>
+          <li>Left nav → <b>Fundraising</b> ($ icon). Panel loads with metric snapshot and checklist.</li>
+          <li>Verify the metric tiles at the top show <b>Runway</b> and/or <b>MRR</b> values pulled live from Goals &amp; Metrics (if those metrics exist).</li>
+          <li>If no runway/MRR metric exists, verify the graceful fallback message: <i>"Add Runway and MRR metrics…"</i></li>
+          <li>Scroll to the <b>Fundraising Checklist</b> — verify all 8 steps are present with step numbers and circular status indicators.</li>
+          <li>Confirm the checklist renders correctly (no layout breakage on narrow screens).</li>
+        </ol>
+        <div class="exp"><b>Expect:</b> metric tiles reflect live store values with trend arrows and progress bars. The checklist renders 8 steps. No console errors. Metric progress bars fill proportionally to target.</div>
+      </div>
+    </div>
+
+    <!-- T25 -->
+    <div class="card new">
+      <div class="ch" onclick="t(this)">
+        <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#0b0b0f" stroke-width="3.5">
+            <path d="M5 13l4 4L19 7" />
+          </svg></span>
+        <span class="ttl">25 · Interview Hub tab <span class="badge b-new">New</span></span>
+        <span class="tag t-done">Done</span>
+      </div>
+      <div class="body">
+        <ol>
+          <li>Left nav → <b>Interviews</b> (mic icon). Panel loads with 6 interview templates.</li>
+          <li>Verify all 6 templates appear: <b>Discovery Call · Activation · Churn · Power User · Investor Discovery · Hiring (Engineer)</b>.</li>
+          <li>Each card should show the template title, a description, and a <b>+ Note</b> button.</li>
+          <li>Click <b>Open Notes →</b> (top-right) — should navigate to the Notes tab.</li>
+          <li>Click <b>+ Note</b> on any template — should also navigate to the Notes tab.</li>
+        </ol>
+        <div class="exp"><b>Expect:</b> all 6 template cards render without overlap. Both the header button and the inline <b>+ Note</b> button successfully switch the active tab to Notes. No console errors on load.</div>
+      </div>
+    </div>
+
+    <!-- T26 -->
+    <div class="card new">
+      <div class="ch" onclick="t(this)">
+        <span class="box"><svg viewBox="0 0 24 24" fill="none" stroke="#0b0b0f" stroke-width="3.5">
+            <path d="M5 13l4 4L19 7" />
+          </svg></span>
+        <span class="ttl">26 · Competitor Intelligence tab <span class="badge b-new">New</span></span>
+        <span class="tag t-done">Done</span>
+      </div>
+      <div class="body">
+        <ol>
+          <li>Left nav → <b>Competitors</b> (swords icon). Panel loads with 5 competitor cards.</li>
+          <li>Verify competitors present: <b>Notion · Linear · Monday.com · Craft · Height (shutdown)</b>.</li>
+          <li>Each card should show: name, category, <b>threat level chip</b> (high/medium/low in correct colour), Strengths, and Our Edge columns.</li>
+          <li>Confirm threat colour coding: Notion and Height (opportunity) = red chip; Linear = yellow; Monday, Craft = green.</li>
+          <li>Verify the threat-level legend renders at the top with coloured chips for high / medium / low.</li>
+          <li>Confirm the grid layout renders correctly — two columns (Strengths / Our Edge) inside each card.</li>
+        </ol>
+        <div class="exp"><b>Expect:</b> all 5 cards load with correct threat level colours. Two-column Strengths/Edge layout renders inside each card. Legend chips at the top are visible. No layout overflow or text truncation issues.</div>
+      </div>
+    </div>
+
     <footer>
       Going forward: every new feature ships with its test added here and its status updated in
       <b>execution-status.html</b>.<br>
-      <span style="color:rgba(193,174,255,0.5);font-size:11px">Tests added this session: T5 (Card→PM task), T6
-        (Card→Project), T8 (live health), T9 (alerts), T10 (decision queue), T11 (resource load), T14 (personal
-        metrics), T15 (Today Plan + goal context), T18 (source cards), T19 (blockers), T20 (agent execution drawer).</span>
+      <span style="color:rgba(193,174,255,0.5);font-size:11px">
+        Session 1: T5 (Card→PM task), T6 (Card→Project), T8 (live health), T9 (alerts), T10 (decision queue), T11 (resource load), T14 (personal metrics), T15 (Today Plan + goal context), T18 (source cards), T19 (blockers), T20 (agent execution drawer).<br>
+        Session 2 (19 Jun): T21 (Signals Intelligence), T22 (Universe Pulse/Sphere), T23 (AI Roadmap), T24 (Fundraising Tracker), T25 (Interview Hub), T26 (Competitor Intelligence).
+      </span>
     </footer>
   </div>
 
   <script>
-    const TOTAL = 20;
+    const TOTAL = 26;
 
     function t(el) {
       el.classList.toggle('on');

@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   FolderOpen,
@@ -260,6 +260,13 @@ export function WorkspaceFilesDashboard() {
   const [previewFile, setPreviewFile] = useState<WorkspaceFile | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Trigger file picker when the dock "File" or "Table" button is clicked
+  useEffect(() => {
+    const handler = () => fileInputRef.current?.click();
+    window.addEventListener('workspace-dock-file', handler);
+    return () => window.removeEventListener('workspace-dock-file', handler);
+  }, []);
 
   const folders = useMemo(() => {
     const map = new Map<string, WorkspaceFile[]>();

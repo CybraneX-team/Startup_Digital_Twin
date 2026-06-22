@@ -37,6 +37,35 @@ export const COMPANY_TAG_COLORS: Record<CompanyTag, string> = {
   partner: '#3b82f6',
 };
 
+export type CardSyncStatus = 'draft' | 'proposed' | 'approved' | 'synced';
+
+export const SYNC_STATUS_META: Record<CardSyncStatus, { label: string; color: string }> = {
+  draft:    { label: 'Draft',    color: '#94a3b8' },
+  proposed: { label: 'Proposed', color: '#fbbf24' },
+  approved: { label: 'Approved', color: '#60a5fa' },
+  synced:   { label: 'Synced',   color: '#34d399' },
+};
+
+export const SYNC_STATUS_ORDER: CardSyncStatus[] = ['draft', 'proposed', 'approved', 'synced'];
+
+export type CardConnectionType = 'dependency' | 'evidence' | 'conflict' | 'opportunity' | 'risk' | 'goal_link';
+
+export const CONNECTION_TYPE_META: Record<CardConnectionType, { label: string; color: string }> = {
+  dependency:  { label: 'Depends on',   color: '#a78bfa' },
+  evidence:    { label: 'Supports',     color: '#34d399' },
+  conflict:    { label: 'Conflicts',    color: '#fb7185' },
+  opportunity: { label: 'Opportunity',  color: '#fbbf24' },
+  risk:        { label: 'Risk for',     color: '#f97316' },
+  goal_link:   { label: 'Goal link',    color: '#60a5fa' },
+};
+
+export interface CardConnection {
+  fromId: string;
+  toId: string;
+  type: CardConnectionType;
+  createdAt: string;
+}
+
 export interface SavedWorkflowItem {
   id: string;
   savedAt: string;         // ISO timestamp
@@ -67,6 +96,9 @@ export interface SavedWorkflowItem {
 
   // User note
   note?: string;
+
+  // Sync status — tracks proposal/approval lifecycle back to the twin
+  syncStatus?: CardSyncStatus;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -176,20 +208,34 @@ function roleItems(role: UserPlanetRole, items: SavedWorkflowItem[]): string {
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
+const CONNECTIONS_KEY = 'workspace_card_connections_v1';
+
+function loadConnections(): CardConnection[] {
+  try { return JSON.parse(localStorage.getItem(CONNECTIONS_KEY) ?? '[]'); } catch { return []; }
+}
+function saveConnections(conns: CardConnection[]) {
+  try { localStorage.setItem(CONNECTIONS_KEY, JSON.stringify(conns)); } catch { /* quota */ }
+}
+
 export interface UseSavedWorkflowsReturn {
   items: SavedWorkflowItem[];
   totalCount: number;
   save: (item: Omit<SavedWorkflowItem, 'id' | 'savedAt'>) => SavedWorkflowItem;
   remove: (id: string) => void;
   updateNote: (id: string, note: string) => void;
+  updateItem: (id: string, updates: Partial<Pick<SavedWorkflowItem, 'syncStatus' | 'note'>>) => void;
   has: (lookup: Pick<SavedWorkflowItem, 'companyId' | 'role' | 'rootId'> & { branchId?: string; actionId?: string }) => boolean;
   getId: (lookup: Pick<SavedWorkflowItem, 'companyId' | 'role' | 'rootId'> & { branchId?: string; actionId?: string }) => string | null;
   clear: () => void;
   grouped: SavedWorkflowGroup[];
+  connections: CardConnection[];
+  addConnection: (fromId: string, toId: string, type: CardConnectionType) => void;
+  removeConnection: (fromId: string, toId: string) => void;
 }
 
 export function useSavedWorkflows(): UseSavedWorkflowsReturn {
   const [items, setItems] = useState<SavedWorkflowItem[]>(() => loadFromStorage());
+  const [connections, setConnections] = useState<CardConnection[]>(() => loadConnections());
 
   useEffect(() => {
     const handleUpdate = () => setItems(loadFromStorage());
@@ -237,6 +283,28 @@ export function useSavedWorkflows(): UseSavedWorkflowsReturn {
     const newItems = current.map(p => (p.id === id ? { ...p, note } : p));
     saveToStorage(newItems);
     setItems(newItems);
+  }, []);
+
+  const updateItem = useCallback((id: string, updates: Partial<Pick<SavedWorkflowItem, 'syncStatus' | 'note'>>) => {
+    const current = loadFromStorage();
+    const newItems = current.map(p => (p.id === id ? { ...p, ...updates } : p));
+    saveToStorage(newItems);
+    setItems(newItems);
+  }, []);
+
+  const addConnection = useCallback((fromId: string, toId: string, type: CardConnectionType) => {
+    const current = loadConnections();
+    const exists = current.some(c => c.fromId === fromId && c.toId === toId);
+    if (exists) return;
+    const next = [...current, { fromId, toId, type, createdAt: new Date().toISOString() }];
+    saveConnections(next);
+    setConnections(next);
+  }, []);
+
+  const removeConnection = useCallback((fromId: string, toId: string) => {
+    const next = loadConnections().filter(c => !(c.fromId === fromId && c.toId === toId) && !(c.fromId === toId && c.toId === fromId));
+    saveConnections(next);
+    setConnections(next);
   }, []);
 
   const has = useCallback((
@@ -293,9 +361,13 @@ export function useSavedWorkflows(): UseSavedWorkflowsReturn {
     save,
     remove,
     updateNote,
+    updateItem,
     has,
     getId,
     clear,
     grouped,
+    connections,
+    addConnection,
+    removeConnection,
   };
 }

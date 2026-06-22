@@ -13,7 +13,11 @@ import {
   COMPANY_TAG_ICONS,
   COMPANY_TAG_COLORS,
   COMPANY_TAG_LABELS,
+  SYNC_STATUS_META,
+  SYNC_STATUS_ORDER,
+  CONNECTION_TYPE_META,
   type SavedWorkflowItem,
+  type CardConnectionType,
 } from '../../lib/useSavedWorkflows';
 import { useFounderWorkspace } from '../../context/FounderWorkspaceContext';
 import { useProjectsStore } from '../../lib/useProjectsStore';
@@ -417,10 +421,13 @@ function NodeDetail({ item, onBack, onRemove, onOpenWorkspace }: { item: SavedWo
 
   const { addTask: addFounderTask, addGoal } = useFounderWorkspace();
   const { projects, addTask: addPMTask, createProject } = useProjectsStore();
+  const { items: allItems, updateItem, connections, addConnection, removeConnection } = useSavedWorkflows();
   const [tab, setTab] = useState<DetailTab>('overview');
   const [moreOpen, setMoreOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
   const [pmModal, setPmModal] = useState<'task' | 'project' | null>(null);
+  const [connectType, setConnectType] = useState<CardConnectionType>('dependency');
+  const [connectTargetId, setConnectTargetId] = useState('');
   const toastTimer = useRef<number | undefined>(undefined);
   const showToast = (m: string) => {
     setToast(m);
@@ -487,6 +494,24 @@ function NodeDetail({ item, onBack, onRemove, onOpenWorkspace }: { item: SavedWo
                 <TagIcon className="w-3 h-3" /> {COMPANY_TAG_LABELS[item.planetTag]}
               </span>
             )}
+            {/* Sync status — click to cycle */}
+            {(() => {
+              const s = item.syncStatus ?? 'draft';
+              const m = SYNC_STATUS_META[s];
+              const nextIdx = (SYNC_STATUS_ORDER.indexOf(s) + 1) % SYNC_STATUS_ORDER.length;
+              const next = SYNC_STATUS_ORDER[nextIdx];
+              return (
+                <button
+                  type="button"
+                  onClick={() => { updateItem(item.id, { syncStatus: next }); showToast(`Status → ${SYNC_STATUS_META[next].label}`); }}
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full flex items-center gap-1 transition-all hover:brightness-125 cursor-pointer"
+                  title={`Sync status: ${m.label}. Click to advance.`}
+                  style={{ background: `${m.color}20`, color: m.color, border: `1px solid ${m.color}40` }}
+                >
+                  <Database className="w-3 h-3" /> {m.label}
+                </button>
+              );
+            })()}
             <span className="ml-auto text-[10px] text-white/35 flex items-center gap-1">
               <Clock className="w-3 h-3" /> saved {timeAgo(item.savedAt)}
             </span>
@@ -604,7 +629,7 @@ function NodeDetail({ item, onBack, onRemove, onOpenWorkspace }: { item: SavedWo
               )}
 
               {tab === 'relationships' && (
-                <div>
+                <div className="space-y-4">
                   <div className="flex flex-wrap gap-2">
                     <RelChip icon={Network} label="Company" value={item.companyName} color={accent} />
                     <RelChip icon={Layers} label="Lens" value={item.roleLabel} color={roleColor} />
@@ -612,7 +637,80 @@ function NodeDetail({ item, onBack, onRemove, onOpenWorkspace }: { item: SavedWo
                     {item.rootLabel && <RelChip icon={GitBranch} label="Root" value={item.rootLabel} color={item.rootColor || accent} />}
                     {item.branchLabel && <RelChip icon={GitBranch} label="Branch" value={item.branchLabel} color={accent} />}
                   </div>
-                  <p className="text-[11px] text-white/30 mt-3">Cross-links to other saved nodes appear here as your workspace grows.</p>
+
+                  {/* Card connections */}
+                  {(() => {
+                    const myConns = connections.filter(c => c.fromId === item.id || c.toId === item.id);
+                    const otherIds = myConns.map(c => c.fromId === item.id ? c.toId : c.fromId);
+                    const connItems = otherIds.map(id => allItems.find(x => x.id === id)).filter(Boolean) as SavedWorkflowItem[];
+                    return (
+                      <div>
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-white/30 mb-2">Canvas connections</div>
+                        {connItems.length > 0 ? (
+                          <div className="space-y-1.5 mb-3">
+                            {myConns.map(c => {
+                              const peerId = c.fromId === item.id ? c.toId : c.fromId;
+                              const peer = allItems.find(x => x.id === peerId);
+                              if (!peer) return null;
+                              const cm = CONNECTION_TYPE_META[c.type];
+                              return (
+                                <div key={`${c.fromId}-${c.toId}`} className="flex items-center gap-2 p-2 rounded-lg bg-white/[0.03] border border-white/8">
+                                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0" style={{ background: `${cm.color}20`, color: cm.color, border: `1px solid ${cm.color}35` }}>
+                                    {cm.label}
+                                  </span>
+                                  <span className="text-[12px] text-white/75 truncate flex-1">{nodeTitle(peer)}</span>
+                                  <button type="button" onClick={() => removeConnection(item.id, peerId)} className="p-1 rounded text-white/20 hover:text-rose-300 transition-colors">
+                                    <Plus className="w-3 h-3 rotate-45" />
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-[11px] text-white/30 mb-3">No connections yet. Link this card to others below.</p>
+                        )}
+
+                        {/* Add connection form */}
+                        {allItems.filter(x => x.id !== item.id).length > 0 && (
+                          <div className="flex items-center gap-2 flex-wrap mt-1">
+                            <select
+                              value={connectTargetId}
+                              onChange={e => setConnectTargetId(e.target.value)}
+                              className="text-[11px] px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/70 flex-1 min-w-0"
+                            >
+                              <option value="">Select card…</option>
+                              {allItems.filter(x => x.id !== item.id).map(x => (
+                                <option key={x.id} value={x.id}>{nodeTitle(x)}</option>
+                              ))}
+                            </select>
+                            <select
+                              value={connectType}
+                              onChange={e => setConnectType(e.target.value as CardConnectionType)}
+                              className="text-[11px] px-2 py-1.5 rounded-lg bg-white/5 border border-white/10 text-white/70"
+                            >
+                              {(Object.keys(CONNECTION_TYPE_META) as CardConnectionType[]).map(t => (
+                                <option key={t} value={t}>{CONNECTION_TYPE_META[t].label}</option>
+                              ))}
+                            </select>
+                            <button
+                              type="button"
+                              disabled={!connectTargetId}
+                              onClick={() => {
+                                if (!connectTargetId) return;
+                                addConnection(item.id, connectTargetId, connectType);
+                                setConnectTargetId('');
+                                showToast('Connection added');
+                              }}
+                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-40"
+                              style={{ background: `${accent}1a`, border: `1px solid ${accent}40`, color: accent }}
+                            >
+                              <Plus className="w-3 h-3" /> Connect
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
@@ -635,12 +733,25 @@ function NodeDetail({ item, onBack, onRemove, onOpenWorkspace }: { item: SavedWo
               )}
 
               {tab === 'history' && (
-                <div className="flex items-start gap-2 text-[12px] text-white/55">
-                  <span className="w-1.5 h-1.5 rounded-full mt-1.5 shrink-0" style={{ background: accent }} />
-                  <div>
-                    <span className="text-white/80 font-medium">Saved to workspace</span>
-                    <span className="text-white/35"> · {timeAgo(item.savedAt)}</span>
-                  </div>
+                <div className="relative pl-4">
+                  <div className="absolute left-[5px] top-0 bottom-0 w-px bg-white/8" />
+                  {[
+                    ...(item.syncStatus && item.syncStatus !== 'draft'
+                      ? [{ label: `Status advanced to ${SYNC_STATUS_META[item.syncStatus].label}`, at: item.savedAt, color: SYNC_STATUS_META[item.syncStatus].color }]
+                      : []),
+                    { label: 'Saved to workspace', at: item.savedAt, color: accent },
+                  ].map((e, i) => (
+                    <div key={i} className="relative mb-4 last:mb-0">
+                      <div className="absolute -left-[11px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-[#0f0f17]" style={{ background: i === 0 ? e.color : '#334155' }} />
+                      <div className="rounded-xl p-3 bg-white/[0.03] border border-white/8">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[12px] font-semibold text-white">{e.label}</span>
+                          <span className="text-[10px] text-white/30 shrink-0">{timeAgo(e.at)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <p className="text-[10px] text-white/25 mt-3 px-1">Full sync history available once twin write-back is connected.</p>
                 </div>
               )}
             </div>
@@ -701,6 +812,14 @@ function NodeCard({ item, index, onOpen, onRemove }: { item: SavedWorkflowItem; 
         <span className="ml-auto text-[9px] text-white/30 flex items-center gap-1">
           <Clock className="w-2.5 h-2.5" /> {timeAgo(item.savedAt)}
         </span>
+        {/* sync status dot */}
+        {(() => {
+          const s = item.syncStatus ?? 'draft';
+          const m = SYNC_STATUS_META[s];
+          return (
+            <span className="w-2 h-2 rounded-full shrink-0" title={m.label} style={{ background: m.color }} />
+          );
+        })()}
         <button
           type="button"
           onClick={(e) => { e.stopPropagation(); onRemove(); }}

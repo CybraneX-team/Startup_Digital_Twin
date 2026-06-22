@@ -1,17 +1,15 @@
 import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
+  Activity,
   ChartLine,
   ChevronRight,
   CircleDollarSign,
   Files,
   Folder,
   LayoutGrid,
-  ListTodo,
-  Megaphone,
   Plus,
   Rocket,
-  Target,
   Users,
   FileText,
   Sparkles,
@@ -57,15 +55,13 @@ type NavItem = {
 const NAV_UNIVERSE: NavItem[] = [
   { id: 'sphere', label: 'Sphere', customIcon: 'sphere' },
   { id: 'canvas', label: 'Canvas', icon: LayoutGrid },
-  { id: 'signals', label: 'Signals', icon: Megaphone },
 ];
 
 const NAV_WORK: NavItem[] = [
   { id: 'projects', label: 'Projects', icon: Folder },
-  { id: 'tasks', label: 'Tasks', icon: ListTodo },
-  { id: 'goals', label: 'Goals', icon: Target },
   { id: 'notes', label: 'Notes', icon: FileText },
   { id: 'files', label: 'Files', icon: Files },
+  { id: 'activity', label: 'Activity', icon: Activity },
 ];
 
 const NAV_SHORTCUTS: NavItem[] = [
