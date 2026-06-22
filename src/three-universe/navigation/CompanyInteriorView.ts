@@ -7,6 +7,7 @@
 
 import * as THREE from 'three';
 import gsap from 'gsap';
+import { getExternalNodeColor } from '../../lib/bdtPolytopeData';
 
 const DOMAIN_COLORS: Record<string, number> = {
   direction: 0xfde047,
@@ -123,6 +124,7 @@ export class CompanyInteriorView {
         id: d.id,
         label: d.label,
         domain: d.domain,
+        color: d.color,
         internalNodes: d.internalNodes,
         children: d.internalNodes,
       }));
@@ -152,6 +154,9 @@ export class CompanyInteriorView {
   }
 
   _nodeColor(node) {
+    if (node.color) return new THREE.Color(node.color);
+    const hex = getExternalNodeColor(node);
+    if (hex) return new THREE.Color(hex);
     if (node.domain && DOMAIN_COLORS[node.domain]) {
       return new THREE.Color(DOMAIN_COLORS[node.domain]);
     }

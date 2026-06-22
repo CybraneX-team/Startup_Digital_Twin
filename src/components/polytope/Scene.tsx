@@ -4,7 +4,7 @@ import { OrbitControls, Stars, Sparkles, Billboard, Text } from '@react-three/dr
 import * as THREE from 'three';
 import { ConvexGeometry } from 'three-stdlib';
 import { gsap } from 'gsap';
-import { U_DOMAIN_COLOR, isActionLeafNode } from '../../lib/universalPolytopeData';
+import { getExternalNodeColor, isActionLeafNode, isBdtWorkspaceLeafNode } from '../../lib/universalPolytopeData';
 import type { UExternalNode, UInternalNode } from '../../lib/universalPolytopeData';
 import { OrgCore, PlasmaSphere } from '../PolytopeShared';
 import { symmetricDirs, seededShuffle } from './geometry';
@@ -69,6 +69,12 @@ export interface SceneProps {
   onCoreDiveComplete?: () => void;
   onCoreSurfaceComplete?: () => void;
   voiceIntensityRef?: MutableRefObject<number>;
+  /** When true, project leaves also trigger workspace camera framing (BDT route). */
+  bdtWorkspaceLeaves?: boolean;
+}
+
+function workspaceLeafCheck(node: UInternalNode | null | undefined, bdt: boolean): boolean {
+  return bdt ? isBdtWorkspaceLeafNode(node) : isActionLeafNode(node);
 }
 
 function findNodePosition(
@@ -126,8 +132,8 @@ function findChildNodePosition(
   return findChildNodePosition(node, childPos, path.slice(1), depth + 1);
 }
 
-function isLeafInternalNode(node: UInternalNode | null | undefined): boolean {
-  return isActionLeafNode(node);
+function isLeafInternalNode(node: UInternalNode | null | undefined, bdtWorkspaceLeaves: boolean): boolean {
+  return workspaceLeafCheck(node, bdtWorkspaceLeaves);
 }
 
 // ── Scene ────────────────────────────────────────────────────────────────────
@@ -161,6 +167,7 @@ export function Scene({
   onCoreDiveComplete,
   onCoreSurfaceComplete,
   voiceIntensityRef,
+  bdtWorkspaceLeaves = false,
 }: SceneProps) {
   const isDragging = useDragWorkspaceStore(s => s.isDragging);
   const diveBlendRef = useRef({ value: 0 });
@@ -185,7 +192,7 @@ export function Scene({
     const shuffledDirs = seededShuffle(dirs, 137);
     const positions = nodes.map((_, i) => shuffledDirs[i].clone().multiplyScalar(12));
     const maxR = positions.length > 0 ? Math.max(...positions.map(p => p.length())) : 12;
-    const colors = nodes.map(node => new THREE.Color(U_DOMAIN_COLOR[node.domain] ?? '#8b5cf6'));
+    const colors = nodes.map(node => new THREE.Color(getExternalNodeColor(node)));
     return {
       ACTIVE_NODES: nodes,
       ACTIVE_NODE_POSITIONS: positions,
@@ -487,7 +494,7 @@ export function Scene({
       const parentNode = findNodeAtPath(ACTIVE_NODES[deptIdx].internalNodes, validatedPath);
       if (targetPos && orbitRef.current) {
         const dir = targetPos.clone().normalize();
-        const isLeaf = isLeafInternalNode(parentNode);
+        const isLeaf = isLeafInternalNode(parentNode, bdtWorkspaceLeaves);
         const shift = isLeaf ? 2.5 : 0.0;
         const leafZoom = isLeaf ? 4.0 : zoom;
         const { camPos, orbitTarget } = computeCameraFraming(targetPos, dir, parentNode?.children?.length ?? 0, leafZoom, shift);
@@ -495,7 +502,7 @@ export function Scene({
         gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.0, ease: 'power2.inOut' });
       }
     }
-  }, [selectedInternalPathProps, selectedId, ACTIVE_NODES, ACTIVE_NODE_POSITIONS, camera, selectedInternalPath]);
+  }, [selectedInternalPathProps, selectedId, ACTIVE_NODES, ACTIVE_NODE_POSITIONS, camera, selectedInternalPath, bdtWorkspaceLeaves]);
 
   useEffect(() => {
     setBackInfo(null);
@@ -548,7 +555,7 @@ export function Scene({
         const extNodeIdx = ACTIVE_NODES.findIndex(n => n.id === parentId);
         const parentNode = findNodeAtPath(ACTIVE_NODES[extNodeIdx].internalNodes, path);
         const dir = pos.clone().normalize();
-        const isLeaf = isLeafInternalNode(parentNode);
+        const isLeaf = isLeafInternalNode(parentNode, bdtWorkspaceLeaves);
         const shift = isLeaf ? 2.5 : 0.0;
         const zoom = isLeaf ? 4.0 : 10;
         const { camPos, orbitTarget } = computeCameraFraming(pos, dir, parentNode?.children?.length ?? 0, zoom, shift);
@@ -764,7 +771,7 @@ export function Scene({
     const parentNode = findNodeAtPath(dept.internalNodes, validatedPath);
     if (!targetPos) return;
     const dir = targetPos.clone().normalize();
-        const isLeaf = isActionLeafNode(parentNode);
+        const isLeaf = isLeafInternalNode(parentNode, bdtWorkspaceLeaves);
     const shift = isLeaf ? 2.5 : 0.0;
     const zoom = isLeaf ? 4.0 : deptZoomDistance(dept.internalNodes.length, DEPT_ZOOM_DISTANCE);
     const { camPos, orbitTarget } = computeCameraFraming(
@@ -776,7 +783,7 @@ export function Scene({
     );
     gsap.to(orbitRef.current.target, { x: orbitTarget.x, y: orbitTarget.y, z: orbitTarget.z, duration: 1.0, ease: 'power2.inOut' });
     gsap.to(camera.position, { x: camPos.x, y: camPos.y, z: camPos.z, duration: 1.0, ease: 'power2.inOut' });
-  }, [ACTIVE_NODES, ACTIVE_NODE_POSITIONS, camera, onPathChange, setSelectedId]);
+  }, [ACTIVE_NODES, ACTIVE_NODE_POSITIONS, camera, onPathChange, setSelectedId, bdtWorkspaceLeaves]);
 
   const handleNodeClick = (id: string, pos: THREE.Vector3) => {
     if (selectedId === id) {

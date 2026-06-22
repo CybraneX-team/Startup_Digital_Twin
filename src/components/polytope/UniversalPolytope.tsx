@@ -53,6 +53,8 @@ export interface UniversalPolytopeProps {
   storeScope?: PolytopeStoreScope;
   voiceIntensityRef?: MutableRefObject<number>;
   readOnly?: boolean;
+  /** BDT: project leaves open the action workspace side panel */
+  bdtWorkspaceLeaves?: boolean;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -85,6 +87,7 @@ export default function UniversalPolytope({
   storeScope = 'twin',
   voiceIntensityRef,
   readOnly = false,
+  bdtWorkspaceLeaves = false,
 }: UniversalPolytopeProps) {
   const [selectedId, setSelectedIdRaw] = useState<string | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
@@ -139,6 +142,7 @@ export default function UniversalPolytope({
           onCoreDiveComplete={onCoreDiveComplete}
           onCoreSurfaceComplete={onCoreSurfaceComplete}
           voiceIntensityRef={voiceIntensityRef}
+          bdtWorkspaceLeaves={bdtWorkspaceLeaves}
         />
       </Canvas>
 

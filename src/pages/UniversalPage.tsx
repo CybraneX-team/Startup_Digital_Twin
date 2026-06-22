@@ -14,7 +14,8 @@ import { getAllIndustries } from '../lib/db/industries';
 import { getAllSubdomains } from '../lib/db/subdomains';
 import { useVoice } from '../context/VoiceContext';
 import { BdtActionWorkspace } from '../components/workspace/BdtActionWorkspace';
-import { isActionLeafNode } from '../lib/usePolytopeStore';
+import { isBdtWorkspaceLeafNode } from '../lib/usePolytopeStore';
+import { resolveDepartmentDelete, resolveDepartmentWrite } from '../lib/bdtPolytopeData';
 import type { UserPlanetRole } from '../data/companyPlanetRoots';
 
 export default function UniversalPage() {
@@ -24,9 +25,11 @@ export default function UniversalPage() {
   const { company } = useCompany(profile?.company_id);
   const store = usePolytopeStore('bdt');
   const { sendContextUpdate, voiceState, toggle, intensityRef } = useVoice();
-  const canWriteDept = (dept?: UExternalNode | null) => Boolean(dept?.access?.write);
-  const canDeleteDept = (dept?: UExternalNode | null) => Boolean(dept?.access?.delete);
-  const hasWritableDepartment = store.departments.some(d => canWriteDept(d));
+  const canWriteDept = (dept?: UExternalNode | null) => resolveDepartmentWrite(canCreateDepartments, dept);
+  const canDeleteDept = (dept?: UExternalNode | null) => resolveDepartmentDelete(canCreateDepartments, dept);
+  const hasWritableDepartment = canCreateDepartments && (
+    store.departments.length === 0 || store.departments.some(d => canWriteDept(d))
+  );
 
   /** New session id */
   const [bdtSessionId] = useState(() => Date.now());
@@ -85,7 +88,7 @@ export default function UniversalPage() {
     return targetNode;
   };
   const selectedNode = getSelectedInternalNode();
-  const isLeafNode = !!selectedNode && isActionLeafNode(selectedNode);
+  const isLeafNode = !!selectedNode && isBdtWorkspaceLeafNode(selectedNode);
 
   const handleEditDepartment = (dept: UExternalNode) => {
     if (!canWriteDept(dept)) return;
@@ -421,6 +424,7 @@ export default function UniversalPage() {
             onCoreDiveComplete={handleCoreDiveComplete}
             onCoreSurfaceComplete={handleCoreSurfaceComplete}
             voiceIntensityRef={intensityRef}
+            bdtWorkspaceLeaves
           />
         )}
       </div>
@@ -465,8 +469,9 @@ export default function UniversalPage() {
             onDeleteNodeClick={handleDeleteNodeClick}
             onEditMember={handleEditMember}
             onDeleteMemberClick={handleDeleteMemberClick}
-            canEdit={hasWritableDepartment}
+            canEdit={canCreateDepartments}
             canCreateDepartment={canCreateDepartments}
+            bdtWorkspaceLeaves
           />
         </div>
       )}

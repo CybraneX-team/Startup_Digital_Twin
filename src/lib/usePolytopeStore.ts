@@ -1,22 +1,22 @@
 import { create } from 'zustand';
 import { U_NODES as TWIN_DEFAULT_NODES } from './universalPolytopeData';
+import { U_NODES as BDT_DEFAULT_NODES } from './bdtPolytopeData';
 import type { UExternalNode, UInternalNode, UDomain } from './bdtPolytopeData';
-import { U_DOMAIN_COLOR, isActionLeafNode } from './bdtPolytopeData';
+import { U_DOMAIN_COLOR, isActionLeafNode, isBdtWorkspaceLeafNode } from './bdtPolytopeData';
 import { api } from './api';
 
 /** Twin (/3d company polytope) and BDT (/universal) use separate graphs and caches. */
 export type PolytopeStoreScope = 'twin' | 'bdt';
 
 const TWIN_CACHE_KEY = 'polytope_departments_twin_v2';
-const BDT_CACHE_KEY = 'polytope_departments_bdt_v3';
+const BDT_CACHE_KEY = 'polytope_departments_bdt_v4';
 const LEGACY_STORAGE_KEY = 'polytope_departments_v1';
 
 export type { UExternalNode, UInternalNode, UDomain };
-export { U_DOMAIN_COLOR, isActionLeafNode };
+export { U_DOMAIN_COLOR, isActionLeafNode, isBdtWorkspaceLeafNode };
 
 const TWIN_DEFAULT_DEPARTMENTS = TWIN_DEFAULT_NODES.filter(n => n.domain !== 'inactive');
-/** Rich Teams / Projects / Processes trees (pre–injectLeaves BDT layout). */
-const BDT_DEFAULT_DEPARTMENTS = TWIN_DEFAULT_DEPARTMENTS;
+const BDT_DEFAULT_DEPARTMENTS = BDT_DEFAULT_NODES.filter(n => n.domain !== 'inactive');
 
 function persistCache(storageKey: string, departments: UExternalNode[]) {
   try {
@@ -133,13 +133,26 @@ function enrichDepartmentsFromSeed(
 
   return departments.map(dept => {
     const match = findSeedDepartment(dept, seedActive);
-    if (!match?.internalNodes?.length) return dept;
+    if (!match) return dept;
+
     const apiCount = countInternalTree(dept.internalNodes ?? []);
-    const seedCount = countInternalTree(match.internalNodes);
-    if (apiCount === 0 || seedCount > apiCount) {
-      return { ...dept, internalNodes: match.internalNodes };
+    const seedCount = countInternalTree(match.internalNodes ?? []);
+    const needsInternal = Boolean(match.internalNodes?.length && (apiCount === 0 || seedCount > apiCount));
+    const color = dept.color ?? match.color;
+    const domain = dept.domain ?? match.domain;
+    const cluster = dept.cluster ?? match.cluster;
+
+    if (!needsInternal && color === dept.color && domain === dept.domain && cluster === dept.cluster) {
+      return dept;
     }
-    return dept;
+
+    return {
+      ...dept,
+      ...(color !== dept.color ? { color } : {}),
+      ...(domain !== dept.domain ? { domain } : {}),
+      ...(cluster !== dept.cluster ? { cluster } : {}),
+      ...(needsInternal ? { internalNodes: match.internalNodes } : {}),
+    };
   });
 }
 
@@ -330,8 +343,10 @@ function createApiPolytopeStore({ storageKey, defaultDepartments }: StoreConfig)
       const previous = get().departments;
       set(state => ({ departments: state.departments.filter(d => d.id !== id) }));
       try {
-        await api.delete(`/api/departments/${id}`);
-        persistCache(storageKey, get().departments);
+        const response = await api.delete<{ departments: UExternalNode[] }>(`/api/departments/${id}`);
+        const departments = enrichDepartmentsFromSeed(response.departments ?? [], defaultDepartments);
+        persistCache(storageKey, departments);
+        set({ departments });
       } catch (err) {
         set({ departments: previous });
         throw err;
@@ -393,8 +408,10 @@ function createApiPolytopeStore({ storageKey, defaultDepartments }: StoreConfig)
         ),
       }));
       try {
-        await api.delete(`/api/departments/nodes/${nodeId}`);
-        persistCache(storageKey, get().departments);
+        const response = await api.delete<{ departments: UExternalNode[] }>(`/api/departments/nodes/${nodeId}`);
+        const departments = enrichDepartmentsFromSeed(response.departments ?? [], defaultDepartments);
+        persistCache(storageKey, departments);
+        set({ departments });
       } catch (err) {
         set({ departments: previous });
         throw err;
@@ -423,6 +440,16 @@ const useBdtPolytopeStore = createApiPolytopeStore({
   storageKey: BDT_CACHE_KEY,
   defaultDepartments: BDT_DEFAULT_DEPARTMENTS,
 });
+
+export function primeBdtDepartmentCache(departments: UExternalNode[]) {
+  persistCache(BDT_CACHE_KEY, departments);
+  useBdtPolytopeStore.setState({ departments, loaded: true, loading: false, error: null });
+}
+
+export function primeTwinDepartmentCache(departments: UExternalNode[]) {
+  persistCache(TWIN_CACHE_KEY, departments);
+  useTwinPolytopeStore.setState({ departments, loaded: true, loading: false, error: null });
+}
 
 export function usePolytopeStore(scope: PolytopeStoreScope = 'bdt') {
   return scope === 'twin' ? useTwinPolytopeStore() : useBdtPolytopeStore();

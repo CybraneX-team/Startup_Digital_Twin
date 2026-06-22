@@ -52,6 +52,10 @@ export interface CreateCompanyInput {
   problem_solved?: string;
   usp?: string;
   competitors?: string[];
+  /** Framework department source keys (dept_engineering, etc.) */
+  bdt_department_source_keys?: string[];
+  /** Custom department labels added during onboarding */
+  bdt_custom_departments?: string[];
   departments?: string[];
   profile?: {
     first_name?: string;

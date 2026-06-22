@@ -2,7 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { Search, Command, ArrowLeft, Plus, ChevronRight, Pencil, Trash2, Target, Database, Activity, Users, BarChart2, UserPlus, Plug } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
-import { getExternalNodeColor, isActionLeafNode } from '../lib/universalPolytopeData';
+import { getExternalNodeColor, isActionLeafNode, isBdtWorkspaceLeafNode } from '../lib/universalPolytopeData';
+import { resolveDepartmentDelete, resolveDepartmentWrite } from '../lib/bdtPolytopeData';
 
 export interface PolytopeSidePanelProps {
   departments: UExternalNode[];
@@ -31,6 +32,8 @@ export interface PolytopeSidePanelProps {
   onDeleteMemberClick?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
   canEdit?: boolean;
   canCreateDepartment?: boolean;
+  /** When true, project leaves are treated as workspace leaves (BDT route). */
+  bdtWorkspaceLeaves?: boolean;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -112,6 +115,7 @@ export function PolytopeSidePanel({
   onDeleteMemberClick,
   canEdit = true,
   canCreateDepartment = canEdit,
+  bdtWorkspaceLeaves = false,
 }: PolytopeSidePanelProps) {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'departments' | 'information'>('departments');
@@ -119,8 +123,8 @@ export function PolytopeSidePanel({
   const searchInputRef = useRef<HTMLInputElement>(null);
 
   const activeDepts = departments.filter(d => d.domain !== 'inactive');
-  const canWriteDept = (dept: UExternalNode) => canEdit && dept.access?.write === true;
-  const canDeleteDept = (dept: UExternalNode) => canEdit && dept.access?.delete === true;
+  const canWriteDept = (dept: UExternalNode) => resolveDepartmentWrite(canEdit, dept);
+  const canDeleteDept = (dept: UExternalNode) => resolveDepartmentDelete(canEdit, dept);
   const selectedDept = activeDepts.find(d => d.id === selectedDeptId) ?? null;
   // showingNodes is true when: a dept is explicitly selected OR the user has drilled into sub-nodes
   const showingNodes = (selectedDeptId !== null && selectedDept !== null) || selectedInternalPath.length > 0;
@@ -209,7 +213,8 @@ export function PolytopeSidePanel({
   const deptColor = effectiveDept ? getExternalNodeColor(effectiveDept) : '#C1AEFF';
   const canWriteEffectiveDept = effectiveDept ? canWriteDept(effectiveDept) : false;
   const canDeleteEffectiveDept = effectiveDept ? canDeleteDept(effectiveDept) : false;
-  const isLeafInternalNode = (node: UInternalNode) => isActionLeafNode(node);
+  const isLeafInternalNode = (node: UInternalNode) =>
+    bdtWorkspaceLeaves ? isBdtWorkspaceLeafNode(node) : isActionLeafNode(node);
   const selectInternalNode = (node: UInternalNode) => {
     onNodeSelect?.([...selectedInternalPath, node.id]);
   };
@@ -547,11 +552,12 @@ export function PolytopeSidePanel({
                     </div>
 
                     {/* Action buttons (pencil, trash) on hover / Chevron otherwise */}
-                    <div className="flex items-center gap-0.5 shrink-0">
+                    <div className="relative flex items-center justify-end gap-0.5 shrink-0 min-w-[2.75rem]">
                       {(canWriteDept(dept) || canDeleteDept(dept)) && (
-                      <div className="hidden group-hover/row:flex items-center gap-0.5">
+                      <div className="flex items-center gap-0.5 opacity-0 pointer-events-none group-hover/row:opacity-100 group-hover/row:pointer-events-auto transition-opacity duration-150">
                         {canWriteDept(dept) && (
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               onEditDepartment?.(dept);
@@ -564,6 +570,7 @@ export function PolytopeSidePanel({
                         )}
                         {canDeleteDept(dept) && (
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               if (onDeleteDepartmentClick) {
@@ -584,7 +591,7 @@ export function PolytopeSidePanel({
                       </div>
                       )}
                       <ChevronRight
-                        className="w-3 h-3 shrink-0 transition-all group-hover/row:hidden"
+                        className={`w-3 h-3 shrink-0 transition-opacity duration-150 ${(canWriteDept(dept) || canDeleteDept(dept)) ? 'group-hover/row:opacity-0' : ''}`}
                         style={{ color: isActiveDept ? color : '#6b7280', opacity: isActiveDept ? 0.9 : 0 }}
                       />
                     </div>
@@ -613,7 +620,7 @@ export function PolytopeSidePanel({
                       <p className="text-[9px] text-gray-500 truncate leading-tight mt-0.5">{member.role}</p>
                     </div>
                     {canWriteEffectiveDept && (
-                      <div className="hidden group-hover/member:flex items-center gap-0.5 shrink-0">
+                      <div className="flex items-center gap-0.5 shrink-0 opacity-0 pointer-events-none group-hover/member:opacity-100 group-hover/member:pointer-events-auto transition-opacity duration-150">
                         <button
                           type="button"
                           onClick={() => onEditMember?.(effectiveDept, activeNode, index)}
@@ -723,9 +730,9 @@ export function PolytopeSidePanel({
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-0.5 shrink-0">
+                  <div className="relative flex items-center justify-end gap-0.5 shrink-0 min-w-[2.75rem]">
                     {effectiveDept && (canWriteEffectiveDept || canDeleteEffectiveDept) && (
-                      <div className="hidden group-hover/row:flex items-center gap-0.5">
+                      <div className="flex items-center gap-0.5 opacity-0 pointer-events-none group-hover/row:opacity-100 group-hover/row:pointer-events-auto transition-opacity duration-150">
                         {canWriteEffectiveDept && node.type === 'team' && isLeaf && (
                           <button
                             type="button"
@@ -772,7 +779,7 @@ export function PolytopeSidePanel({
                       </div>
                     )}
                     <ChevronRight
-                      className="w-3 h-3 shrink-0 transition-all group-hover/row:hidden"
+                      className={`w-3 h-3 shrink-0 transition-opacity duration-150 ${effectiveDept && (canWriteEffectiveDept || canDeleteEffectiveDept) ? 'group-hover/row:opacity-0' : ''}`}
                       style={{ color: typeColor, opacity: 0.55 }}
                     />
                   </div>

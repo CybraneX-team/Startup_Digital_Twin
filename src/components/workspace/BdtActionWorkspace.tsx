@@ -2,10 +2,12 @@ import { useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Text, Billboard } from '@react-three/drei';
 import { PlasmaSphere } from '../PolytopeShared';
-import { X, ChevronRight, Zap, Briefcase, Activity, Bookmark, BookmarkCheck, ExternalLink, Users, UserPlus, Pencil, Trash2 } from 'lucide-react';
+import { X, ChevronRight, Zap, Briefcase, Activity, Bookmark, BookmarkCheck, ExternalLink, Users, UserPlus, Pencil, Trash2, Radio, GitBranch, BarChart3, HelpCircle } from 'lucide-react';
 import type { UInternalNode, UExternalNode } from '../../lib/usePolytopeStore';
 import { U_DOMAIN_COLOR } from '../../lib/usePolytopeStore';
 import { useSavedWorkflows } from '../../lib/useSavedWorkflows';
+import { BdtTypePanel } from './bdtWorkspacePanels';
+import { isProjectLeafNode } from '../../lib/bdtPolytopeData';
 
 export interface BdtActionWorkspaceProps {
   node: UInternalNode;
@@ -51,8 +53,28 @@ export function BdtActionWorkspace({
 }: BdtActionWorkspaceProps) {
   const primaryColor = U_DOMAIN_COLOR[department.domain] || '#8b5cf6';
   const isTeamNode = node.type === 'team';
+  const isProjectNode = isProjectLeafNode(node);
   const teamMembers = node.members ?? [];
   const teamMemberCount = node.memberCount ?? teamMembers.length;
+
+  const panelIconByType: Record<string, typeof Activity> = {
+    signal: Radio,
+    decision: HelpCircle,
+    metric: BarChart3,
+    action: Zap,
+    project: GitBranch,
+  };
+  const PanelIcon = panelIconByType[node.type] ?? Activity;
+
+  const sidebarBlurb = isProjectNode
+    ? `Project workspace for ${department.label}.`
+    : node.type === 'signal'
+      ? `Review signal and suggested response for ${department.label}.`
+      : node.type === 'decision'
+        ? `Evaluate options and choose a path for ${department.label}.`
+        : node.type === 'metric'
+          ? `Track metric performance for ${department.label}.`
+          : `Execute ${node.type} tasks for ${department.label}.`;
 
   useEffect(() => {
     window.dispatchEvent(new CustomEvent('workspace_toggled', { detail: isOpen }));
@@ -95,8 +117,6 @@ export function BdtActionWorkspace({
       });
     }
   }, [alreadySaved, save, remove, getId, lookup.companyId, lookup.role, department.id, department.label, primaryColor, node.id, node.label, node.type]);
-  
-  const PanelIcon = Activity;
 
   // Interrelated departments resolution
   const interrelatedDepts = (node.interrelatedDepartments || []).map(id => {
@@ -249,7 +269,7 @@ export function BdtActionWorkspace({
             </h1>
             
             <p className="text-sm leading-relaxed mb-8" style={{ color: primaryColor + 'aa' }}>
-              Execute {node.type} tasks for {department.label}.
+              {sidebarBlurb}
             </p>
 
             <div className="space-y-4">
@@ -350,8 +370,18 @@ export function BdtActionWorkspace({
               </GlassCard>
             )}
 
+            {!isTeamNode && (
+              <GlassCard>
+                <SectionTitle icon={PanelIcon}>
+                  {isProjectNode ? 'PROJECT DETAILS' : `${node.type.toUpperCase()} WORKSPACE`}
+                </SectionTitle>
+                <BdtTypePanel node={node} primaryColor={primaryColor} />
+              </GlassCard>
+            )}
+
+            {!isTeamNode && !isProjectNode && (
             <GlassCard>
-              <SectionTitle icon={Zap}>WORKFLOW & DETAILS</SectionTitle>
+              <SectionTitle icon={Zap}>METADATA</SectionTitle>
               <h3 className="text-lg font-semibold text-white mb-4" style={{ color: primaryColor }}>{department.label}</h3>
               
               <div className="grid grid-cols-2 gap-4 mb-8">
@@ -417,6 +447,7 @@ export function BdtActionWorkspace({
                 </div>
               )}
             </GlassCard>
+            )}
           </div>
         </div>
 

@@ -1,5 +1,5 @@
 import { useRef, useEffect } from 'react';
-import { U_DOMAIN_COLOR } from '../../lib/universalPolytopeData';
+import { getExternalNodeColor } from '../../lib/universalPolytopeData';
 import type { UExternalNode } from '../../lib/universalPolytopeData';
 
 interface AnalyticHoverCardProps {
@@ -30,7 +30,7 @@ export function AnalyticHoverCard({ hoveredId, departments }: AnalyticHoverCardP
   const node = departments.find(n => n.id === hoveredId);
   if (!node) return null;
 
-  const color = U_DOMAIN_COLOR[node.domain] ?? '#6366f1';
+  const color = getExternalNodeColor(node);
 
   return (
     <div
