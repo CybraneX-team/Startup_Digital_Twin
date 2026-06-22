@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { U_NODES as TWIN_DEFAULT_NODES } from './universalPolytopeData';
-import { U_NODES as BDT_DEFAULT_NODES } from './bdtPolytopeData';
 import type { UExternalNode, UInternalNode, UDomain } from './bdtPolytopeData';
 import { U_DOMAIN_COLOR, isActionLeafNode, isBdtWorkspaceLeafNode } from './bdtPolytopeData';
 import { api } from './api';
@@ -9,14 +8,14 @@ import { api } from './api';
 export type PolytopeStoreScope = 'twin' | 'bdt';
 
 const TWIN_CACHE_KEY = 'polytope_departments_twin_v2';
-const BDT_CACHE_KEY = 'polytope_departments_bdt_v4';
+const BDT_CACHE_KEY = 'polytope_departments_bdt_v5';
 const LEGACY_STORAGE_KEY = 'polytope_departments_v1';
 
 export type { UExternalNode, UInternalNode, UDomain };
 export { U_DOMAIN_COLOR, isActionLeafNode, isBdtWorkspaceLeafNode };
 
 const TWIN_DEFAULT_DEPARTMENTS = TWIN_DEFAULT_NODES.filter(n => n.domain !== 'inactive');
-const BDT_DEFAULT_DEPARTMENTS = BDT_DEFAULT_NODES.filter(n => n.domain !== 'inactive');
+const BDT_DEFAULT_DEPARTMENTS: UExternalNode[] = [];
 
 function persistCache(storageKey: string, departments: UExternalNode[]) {
   try {
@@ -168,6 +167,8 @@ export interface PolytopeStoreState {
   addNode: (deptId: string, node: Omit<UInternalNode, 'id' | 'children'>, path?: string[]) => Promise<UInternalNode>;
   updateNode: (deptId: string, nodeId: string, updates: Partial<Omit<UInternalNode, 'id' | 'children'>>) => Promise<void>;
   deleteNode: (deptId: string, nodeId: string) => Promise<void>;
+  addNodeMember: (nodeId: string, memberId: string) => Promise<void>;
+  removeNodeMember: (nodeId: string, memberId: string) => Promise<void>;
   resetToDefaults: () => Promise<void>;
 }
 
@@ -258,6 +259,10 @@ function createLocalPolytopeStore({ storageKey, defaultDepartments, onboardingFa
         return { departments: next };
       });
     },
+
+    addNodeMember: async () => {},
+
+    removeNodeMember: async () => {},
 
     resetToDefaults: async () => {
       persistCache(storageKey, defaultDepartments);
@@ -416,6 +421,20 @@ function createApiPolytopeStore({ storageKey, defaultDepartments }: StoreConfig)
         set({ departments: previous });
         throw err;
       }
+    },
+
+    addNodeMember: async (nodeId, memberId) => {
+      const response = await api.post<{ departments: UExternalNode[] }>(`/api/departments/nodes/${nodeId}/members`, { memberId });
+      const departments = response.departments ?? [];
+      persistCache(storageKey, departments);
+      set({ departments });
+    },
+
+    removeNodeMember: async (nodeId, memberId) => {
+      const response = await api.delete<{ departments: UExternalNode[] }>(`/api/departments/nodes/${nodeId}/members/${memberId}`);
+      const departments = response.departments ?? [];
+      persistCache(storageKey, departments);
+      set({ departments });
     },
 
     resetToDefaults: async () => {

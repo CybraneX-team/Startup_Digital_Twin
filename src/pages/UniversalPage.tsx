@@ -9,6 +9,7 @@ import { usePolytopeStore } from '../lib/usePolytopeStore';
 import type { UExternalNode, UInternalNode } from '../lib/usePolytopeStore';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/db/companies';
+import { useTeamMembers } from '../lib/db/team';
 import type { CoreWorkspacePhase } from '../lib/coreWorkspaceTransition';
 import { getAllIndustries } from '../lib/db/industries';
 import { getAllSubdomains } from '../lib/db/subdomains';
@@ -23,6 +24,7 @@ export default function UniversalPage() {
   const { profile, canWrite, role: authRole } = useAuth();
   const canCreateDepartments = canWrite('twin') && canWrite('team');
   const { company } = useCompany(profile?.company_id);
+  const { members: workspaceMembers } = useTeamMembers(profile?.company_id);
   const store = usePolytopeStore('bdt');
   const { sendContextUpdate, voiceState, toggle, intensityRef } = useVoice();
   const canWriteDept = (dept?: UExternalNode | null) => resolveDepartmentWrite(canCreateDepartments, dept);
@@ -61,7 +63,7 @@ export default function UniversalPage() {
   const draftInternalNodeScreenPosRef = useRef<{ x: number; y: number } | null>(null);
 
   // ── Draft member state (for "Add Member" inline flow) ───────────────
-  const [draftMember, setDraftMember] = useState<{ deptId: string; nodeId: string; member: any } | null>(null);
+  const [draftMember, setDraftMember] = useState<{ deptId: string; nodeId: string } | null>(null);
   const draftMemberScreenPosRef = useRef<{ x: number; y: number } | null>(null);
 
   // Camera reset trigger — increment to fly back to overview
@@ -114,16 +116,18 @@ export default function UniversalPage() {
     setManagerOpen(true);
   };
 
-  const handleEditMember = (dept: UExternalNode, node: UInternalNode, memberIndex: number) => {
+  const handleDeleteMemberClick = async (dept: UExternalNode, node: UInternalNode, memberIndex: number) => {
     if (!canWriteDept(dept)) return;
-    setManagerView({ type: 'editMember', dept, node, memberIndex });
-    setManagerOpen(true);
-  };
+    const member = node.members?.[memberIndex];
+    if (!member) return;
 
-  const handleDeleteMemberClick = (dept: UExternalNode, node: UInternalNode, memberIndex: number) => {
-    if (!canWriteDept(dept)) return;
-    setManagerView({ type: 'deleteMember', dept, node, memberIndex });
-    setManagerOpen(true);
+    if (member.companyMemberId) {
+      await store.removeNodeMember(node.id, member.companyMemberId);
+      return;
+    }
+
+    const newMembers = (node.members || []).filter((_, index) => index !== memberIndex);
+    await store.updateNode(dept.id, node.id, { members: newMembers, memberCount: newMembers.length });
   };
 
   // Core workspace/Voice AI zoom state
@@ -268,21 +272,11 @@ export default function UniversalPage() {
   const handleAddMember = (deptId: string, nodeId: string) => {
     const dept = store.departments.find(d => d.id === deptId);
     if (!canWriteDept(dept)) return;
-    const draftMemberData = {
-      name: 'New Member',
-      role: 'Member',
-      avatarUrl: '',
-      isDraft: true,
-    };
-    setDraftMember({ deptId, nodeId, member: draftMemberData });
+    setDraftMember({ deptId, nodeId });
     if (selectedDeptId !== deptId) {
       setSelectedDeptId(deptId);
       setRequestSelectDeptId(deptId);
     }
-  };
-
-  const handleDraftMemberUpdate = (patch: any) => {
-    setDraftMember(prev => prev ? { ...prev, member: { ...prev.member, ...patch } } : prev);
   };
 
   const handleDraftMemberClose = (isCancel?: boolean) => {
@@ -291,26 +285,10 @@ export default function UniversalPage() {
     }
   };
 
-  const handleDraftMemberCreated = (data: any) => {
+  const handleDraftMemberCreated = async (data: { memberId: string }) => {
     if (!draftMember) return;
     const { deptId, nodeId } = draftMember;
-    const dept = store.departments.find(d => d.id === deptId);
-    if (!dept) return;
-    const findNode = (nodes: UInternalNode[], id: string): UInternalNode | undefined => {
-      for (const n of nodes) {
-        if (n.id === id) return n;
-        if (n.children) {
-          const found = findNode(n.children, id);
-          if (found) return found;
-        }
-      }
-      return undefined;
-    };
-    const targetNode = findNode(dept.internalNodes, nodeId);
-    if (targetNode && targetNode.type === 'team') {
-      const newMembers = [...(targetNode.members || []), data];
-      void store.updateNode(deptId, nodeId, { members: newMembers, memberCount: newMembers.length });
-    }
+    await store.addNodeMember(nodeId, data.memberId);
     setDraftMember(null);
     setSelectedDeptId(deptId);
   };
@@ -467,7 +445,6 @@ export default function UniversalPage() {
             onEditNode={handleEditNode}
             onDeleteDepartmentClick={handleDeleteDepartmentClick}
             onDeleteNodeClick={handleDeleteNodeClick}
-            onEditMember={handleEditMember}
             onDeleteMemberClick={handleDeleteMemberClick}
             canEdit={canCreateDepartments}
             canCreateDepartment={canCreateDepartments}
@@ -512,13 +489,24 @@ export default function UniversalPage() {
       {/* ── Draft Member Creation Panel ── */}
       {draftMember && (() => {
         const dept = store.departments.find(d => d.id === draftMember.deptId);
-        if (!dept || !canWriteDept(dept)) return null;
+        const findNode = (nodes: UInternalNode[], id: string): UInternalNode | null => {
+          for (const entry of nodes) {
+            if (entry.id === id) return entry;
+            const child = findNode(entry.children || [], id);
+            if (child) return child;
+          }
+          return null;
+        };
+        const node = dept ? findNode(dept.internalNodes, draftMember.nodeId) : null;
+        if (!dept || !node || !canWriteDept(dept)) return null;
         return (
           <CreateDepartmentPanel
             mode="member"
             dept={dept}
+            node={node}
+            availableMembers={workspaceMembers}
+            assignedMemberIds={(node.members || []).map(member => member.companyMemberId).filter((id): id is string => Boolean(id))}
             draftNodeScreenPosRef={draftMemberScreenPosRef}
-            onDraftUpdate={handleDraftMemberUpdate}
             onClose={handleDraftMemberClose}
             onCreated={handleDraftMemberCreated}
           />
@@ -534,7 +522,6 @@ export default function UniversalPage() {
           allDepartments={store.departments}
           canEdit={canWriteDept(selectedDept)}
           onAddMember={handleAddMember}
-          onEditMember={handleEditMember}
           onDeleteMember={handleDeleteMemberClick}
           onClose={() => {
             // go up one level

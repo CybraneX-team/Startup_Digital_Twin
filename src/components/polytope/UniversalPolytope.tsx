@@ -36,7 +36,7 @@ export interface UniversalPolytopeProps {
   /** Ref written by Scene each frame with screen-space position of the draft internal node */
   draftInternalNodeScreenPosRef?: MutableRefObject<{ x: number; y: number } | null>;
   /** Transient draft member preview */
-  draftMember?: { deptId: string; nodeId: string; member: any } | null;
+  draftMember?: { deptId: string; nodeId: string; member?: any } | null;
   /** Ref written by Scene each frame with screen-space position of the draft member */
   draftMemberScreenPosRef?: MutableRefObject<{ x: number; y: number } | null>;
   /** Optional departments list to synchronize with external state store */

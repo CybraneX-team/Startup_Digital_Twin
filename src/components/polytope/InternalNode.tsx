@@ -95,7 +95,7 @@ interface InternalNodeProps {
   setBackInfo: (info: { label: string; onClick: () => void } | null) => void;
   isDraft?: boolean;
   draftChildNode?: UInternalNode | null;
-  draftMember?: { deptId: string; nodeId: string; member: any } | null;
+  draftMember?: { deptId: string; nodeId: string; member?: any } | null;
   draftMemberScreenPosRef?: React.MutableRefObject<{ x: number; y: number } | null>;
   onNodeFocus?: (pos: THREE.Vector3, node: UInternalNode) => void;
   rootPos?: THREE.Vector3;
@@ -432,9 +432,9 @@ export function InternalNode({
           </Billboard>
         )}
 
-        {isMeActiveCenter && node.type === 'team' && (node.members?.length || draftMember) && (
+        {isMeActiveCenter && node.type === 'team' && (node.members?.length || (draftMember?.member && draftMember.nodeId === node.id)) && (
           <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
-            {[...(node.members || []), ...(draftMember && draftMember.nodeId === node.id ? [draftMember.member] : [])].map((member, i, arr) => {
+            {[...(node.members || []), ...(draftMember?.member && draftMember.nodeId === node.id ? [draftMember.member] : [])].map((member, i, arr) => {
               const angle = (i / arr.length) * Math.PI * 2;
               // Precisely scale the radius based on member count to perfectly balance spacing
               const r = radius * (5.5 + arr.length * 0.5);

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { X, Layers, CheckCircle2, Loader2 } from 'lucide-react';
+import { X, Layers, CheckCircle2, Loader2, Search, Users } from 'lucide-react';
 import type { UExternalNode, UInternalNode, UDomain } from '../lib/usePolytopeStore';
 import { U_DOMAIN_COLOR } from '../lib/usePolytopeStore';
-import { ImageUpload } from './ImageUpload';
+import type { TeamMember as WorkspaceMember } from '../lib/db/team';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -32,12 +32,13 @@ interface CreateNodePanelProps {
 interface CreateMemberPanelProps {
   mode: 'member';
   dept: UExternalNode;
-  /** Live-update node label in polytope while typing */
-  onDraftUpdate?: (patch: any) => void;
+  node: UInternalNode;
+  availableMembers: WorkspaceMember[];
+  assignedMemberIds: string[];
   /** Screen-space position ref of the draft node */
   draftNodeScreenPosRef: React.MutableRefObject<{ x: number; y: number } | null>;
   onClose: (isCancel?: boolean) => void;
-  onCreated: (data: any) => void;
+  onCreated: (data: { memberId: string }) => void;
 }
 
 type Props = CreateDeptPanelProps | CreateNodePanelProps | CreateMemberPanelProps;
@@ -468,44 +469,50 @@ function NodeFormContent({
 
 function MemberFormContent({
   dept,
-  onDraftUpdate,
+  node,
+  availableMembers,
+  assignedMemberIds,
   onSave,
   onCancel,
 }: {
   dept: UExternalNode;
-  onDraftUpdate?: (patch: any) => void;
-  onSave: (data: any) => void;
+  node: UInternalNode;
+  availableMembers: WorkspaceMember[];
+  assignedMemberIds: string[];
+  onSave: (data: { memberId: string }) => void;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState('');
-  const [role, setRole] = useState('');
-  const [avatarUrl, setAvatarUrl] = useState('');
+  const [query, setQuery] = useState('');
+  const [selectedMemberId, setSelectedMemberId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
-  const nameRef = useRef<HTMLInputElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const deptColor = U_DOMAIN_COLOR[dept.domain] ?? '#6366f1';
 
   useEffect(() => {
-    setTimeout(() => nameRef.current?.focus(), 300);
+    setTimeout(() => searchRef.current?.focus(), 300);
   }, []);
 
-  const handleNameChange = useCallback((v: string) => {
-    setName(v);
-    onDraftUpdate?.({ name: v || 'New Member' });
-  }, [onDraftUpdate]);
+  const eligibleMembers = availableMembers
+    .filter(member => member.status === 'active')
+    .filter(member => !assignedMemberIds.includes(member.id))
+    .filter(member => {
+      const haystack = [
+        member.first_name,
+        member.last_name,
+        member.title,
+        member.role_name,
+        member.role,
+      ]
+        .filter(Boolean)
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(query.trim().toLowerCase());
+    });
 
-  const handleRoleChange = useCallback((v: string) => {
-    setRole(v);
-    onDraftUpdate?.({ role: v || 'Member' });
-  }, [onDraftUpdate]);
-
-  const handleAvatarUrlChange = useCallback((v: string) => {
-    setAvatarUrl(v);
-    onDraftUpdate?.({ avatarUrl: v });
-  }, [onDraftUpdate]);
-
-  const isValid = name.trim().length > 0;
+  const selectedMember = eligibleMembers.find(member => member.id === selectedMemberId) ?? null;
+  const isValid = Boolean(selectedMemberId);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -515,7 +522,7 @@ function MemberFormContent({
       setLoading(false);
       setDone(true);
       setTimeout(() => {
-        onSave({ name: name.trim(), role: role.trim(), avatarUrl: avatarUrl.trim() });
+        onSave({ memberId: selectedMemberId! });
       }, 900);
     }, 400);
   };
@@ -526,9 +533,12 @@ function MemberFormContent({
         <div className="w-12 h-12 rounded-full flex items-center justify-center" style={{ background: `${deptColor}20` }}>
           <CheckCircle2 className="w-6 h-6" style={{ color: deptColor }} />
         </div>
-        <p className="text-white text-sm font-semibold">Member Added!</p>
+        <p className="text-white text-sm font-semibold">Teammate Assigned!</p>
         <p className="text-[11px] text-center" style={{ color: '#5E5E5E' }}>
-          <span style={{ color: deptColor }}>{name}</span> joined the team
+          <span style={{ color: deptColor }}>
+            {selectedMember?.first_name || selectedMember?.role_name || 'Member'}
+          </span>{' '}
+          is now attached to <span className="text-white">{node.label}</span>
         </p>
       </div>
     );
@@ -537,41 +547,68 @@ function MemberFormContent({
   return (
     <form onSubmit={handleSubmit} className="overflow-y-auto flex-1" style={{ scrollbarWidth: 'none' }}>
       <div className="px-4 py-3.5 flex flex-col gap-3.5">
-        {/* Name */}
-        <Field label="Member Name *">
-          <input
-            ref={nameRef}
-            type="text"
-            placeholder="e.g. Alice Doe"
-            value={name}
-            onChange={e => handleNameChange(e.target.value)}
-            style={{
-              ...inputStyle,
-              fontSize: '14px',
-              padding: '10px 12px',
-              borderColor: `${deptColor}30`,
-            }}
-            onFocus={e => e.target.style.borderColor = `${deptColor}60`}
-            onBlur={e => e.target.style.borderColor = `${deptColor}30`}
-          />
+        <Field label="Search Workspace Members">
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" style={{ color: '#5E5E5E' }} />
+            <input
+              ref={searchRef}
+              type="text"
+              placeholder="Search by name, title, or role"
+              value={query}
+              onChange={e => setQuery(e.target.value)}
+              style={{
+                ...inputStyle,
+                fontSize: '14px',
+                padding: '10px 12px 10px 34px',
+                borderColor: `${deptColor}30`,
+              }}
+              onFocus={e => e.target.style.borderColor = `${deptColor}60`}
+              onBlur={e => e.target.style.borderColor = `${deptColor}30`}
+            />
+          </div>
         </Field>
 
-        {/* Role */}
-        <Field label="Role">
-          <input
-            type="text"
-            placeholder="e.g. Developer"
-            value={role}
-            onChange={e => handleRoleChange(e.target.value)}
-            style={inputStyle}
-            onFocus={e => e.target.style.borderColor = 'rgba(255,255,255,0.2)'}
-            onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}
-          />
-        </Field>
-
-        {/* Avatar Upload */}
-        <Field label="Photo">
-          <ImageUpload value={avatarUrl} onChange={handleAvatarUrlChange} deptColor={deptColor} />
+        <Field label="Assignable Members">
+          <div className="flex flex-col gap-2 max-h-60 overflow-y-auto pr-1">
+            {eligibleMembers.length === 0 ? (
+              <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-4 text-[11px] text-white/40">
+                No eligible workspace members found for this node.
+              </div>
+            ) : (
+              eligibleMembers.map(member => {
+                const fullName = [member.first_name, member.last_name].filter(Boolean).join(' ').trim() || member.role_name || member.role;
+                const subtitle = member.title || member.role_name || member.role;
+                const selected = selectedMemberId === member.id;
+                return (
+                  <button
+                    key={member.id}
+                    type="button"
+                    onClick={() => setSelectedMemberId(member.id)}
+                    className="w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-all"
+                    style={{
+                      background: selected ? `${deptColor}14` : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${selected ? `${deptColor}50` : 'rgba(255,255,255,0.06)'}`,
+                    }}
+                  >
+                    <div
+                      className="w-9 h-9 rounded-full overflow-hidden flex items-center justify-center shrink-0 text-[11px] font-semibold"
+                      style={{ background: `${deptColor}16`, color: deptColor, border: `1px solid ${deptColor}26` }}
+                    >
+                      {member.avatar_url ? (
+                        <img src={member.avatar_url} alt={fullName} className="w-full h-full object-cover" />
+                      ) : (
+                        (fullName[0] || 'M').toUpperCase()
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-sm font-medium text-white/90 truncate">{fullName}</div>
+                      <div className="text-[11px] text-white/45 truncate">{subtitle}</div>
+                    </div>
+                  </button>
+                );
+              })
+            )}
+          </div>
         </Field>
 
         {/* Context badge */}
@@ -583,8 +620,8 @@ function MemberFormContent({
             color: deptColor,
           }}
         >
-          <Layers className="w-3 h-3 shrink-0" />
-          <span>Adding member to <strong>{dept.label}</strong></span>
+          <Users className="w-3 h-3 shrink-0" />
+          <span>Assigning a real workspace member to <strong>{node.label}</strong></span>
         </div>
       </div>
 
@@ -613,7 +650,7 @@ function MemberFormContent({
           {loading ? (
             <><Loader2 className="w-3.5 h-3.5 animate-spin" />Adding…</>
           ) : (
-            'Add Member'
+            'Assign Member'
           )}
         </button>
       </div>
@@ -647,10 +684,10 @@ export default function CreateDepartmentPanel(props: Props) {
     ? U_DOMAIN_COLOR['build']
     : U_DOMAIN_COLOR[props.dept.domain] ?? '#6366f1';
 
-  const title = props.mode === 'department' ? 'New Department' : props.mode === 'node' ? `Add Node — ${props.dept.label}` : `Add Member — ${props.dept.label}`;
+  const title = props.mode === 'department' ? 'New Department' : props.mode === 'node' ? `Add Node — ${props.dept.label}` : `Assign Member — ${props.dept.label}`;
   const subtitle = props.mode === 'department'
     ? 'New vertex in the polytope'
-    : props.mode === 'node' ? `Internal node of ${props.dept.label}` : `Member of ${props.dept.label}`;
+    : props.mode === 'node' ? `Internal node of ${props.dept.label}` : `Real teammate assignment`;
 
   const modalCenterY = modalTop + 280; // approximate center
   const modalRight = modalLeft + modalWidth;
@@ -741,7 +778,9 @@ export default function CreateDepartmentPanel(props: Props) {
         ) : (
           <MemberFormContent
             dept={props.dept}
-            onDraftUpdate={props.onDraftUpdate}
+            node={props.node}
+            availableMembers={props.availableMembers}
+            assignedMemberIds={props.assignedMemberIds}
             onSave={data => props.onCreated(data)}
             onCancel={() => props.onClose(true)}
           />

@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Plus, X, Edit3, Trash2, ChevronRight, ChevronDown, RotateCcw, AlertTriangle } from 'lucide-react';
 import type { UExternalNode, UInternalNode, UDomain } from '../lib/usePolytopeStore';
 import { U_DOMAIN_COLOR } from '../lib/usePolytopeStore';
-import { ImageUpload } from './ImageUpload';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -31,9 +30,7 @@ type View =
   | { type: 'nodes'; dept: UExternalNode }
   | { type: 'addNode'; dept: UExternalNode }
   | { type: 'editNode'; dept: UExternalNode; node: UInternalNode }
-  | { type: 'deleteNode'; dept: UExternalNode; node: UInternalNode }
-  | { type: 'editMember'; dept: UExternalNode; node: UInternalNode; memberIndex: number }
-  | { type: 'deleteMember'; dept: UExternalNode; node: UInternalNode; memberIndex: number };
+  | { type: 'deleteNode'; dept: UExternalNode; node: UInternalNode };
 
 const DOMAINS: UDomain[] = ['direction', 'build', 'delivery', 'market', 'control', 'people'];
 const NODE_TYPES: UInternalNode['type'][] = ['team', 'process', 'project', 'resource', 'decision', 'risk', 'metric'];
@@ -362,9 +359,6 @@ function NodeForm({ initial, onSave, onCancel }: {
   const [type, setType] = useState<UInternalNode['type']>(initial?.type ?? 'team');
   const [score, setScore] = useState(initial?.score ?? 75);
 
-  const [memberCount, setMemberCount] = useState(initial?.memberCount ?? 0);
-  const [membersStr, setMembersStr] = useState(JSON.stringify(initial?.members ?? [], null, 2));
-
   const [projDescription, setProjDescription] = useState(initial?.projectDetails?.description ?? '');
   const [projStatus, setProjStatus] = useState(initial?.projectDetails?.status ?? '');
   const [projDeadline, setProjDeadline] = useState(initial?.projectDetails?.deadline ?? '');
@@ -374,20 +368,10 @@ function NodeForm({ initial, onSave, onCancel }: {
 
   const handleSave = () => {
     if (!isValid) return;
-    let parsedMembers: any[] = [];
-    if (type === 'team') {
-      try {
-        parsedMembers = JSON.parse(membersStr);
-      } catch (e) {
-        console.error("Failed to parse members JSON");
-      }
-    }
-    
     onSave({
       label: label.trim(),
       type,
       score,
-      ...(type === 'team' ? { memberCount, members: parsedMembers } : {}),
       ...(type === 'project' ? { projectDetails: { description: projDescription, status: projStatus, deadline: projDeadline, budget: projBudget } } : {})
     });
   };
@@ -417,17 +401,6 @@ function NodeForm({ initial, onSave, onCancel }: {
         <ScoreSlider value={score} onChange={setScore} />
       </FieldGroup>
 
-      {type === 'team' && (
-        <>
-          <FieldGroup label="Member Count">
-            <input type="number" style={INPUT_STYLE} value={memberCount} onChange={e => setMemberCount(parseInt(e.target.value) || 0)} />
-          </FieldGroup>
-          <FieldGroup label="Members JSON">
-            <textarea style={{...INPUT_STYLE, height: 100, fontFamily: 'monospace' }} value={membersStr} onChange={e => setMembersStr(e.target.value)} />
-          </FieldGroup>
-        </>
-      )}
-
       {type === 'project' && (
         <>
           <FieldGroup label="Status">
@@ -451,40 +424,6 @@ function NodeForm({ initial, onSave, onCancel }: {
           style={{ ...BTN_PRIMARY, opacity: isValid ? 1 : 0.4, cursor: isValid ? 'pointer' : 'not-allowed' }}>
           {initial?.id ? 'Save Changes' : 'Add Node'}
         </button>
-      </div>
-    </div>
-  );
-}
-
-// ── Member Form ──────────────────────────────────────────────────────────────
-
-function MemberForm({ initial, onSave, onCancel }: {
-  initial?: any;
-  onSave: (m: any) => void;
-  onCancel: () => void;
-}) {
-  const [name, setName] = useState(initial?.name ?? '');
-  const [role, setRole] = useState(initial?.role ?? '');
-  const [avatarUrl, setAvatarUrl] = useState(initial?.avatarUrl ?? '');
-  const isValid = name.trim().length > 0;
-  
-  return (
-    <div style={{ maxHeight: 460, overflowY: 'auto', paddingRight: 4 }}>
-      <FieldGroup label="Name">
-        <input style={INPUT_STYLE} placeholder="e.g. Alice" value={name} onChange={e => setName(e.target.value)} />
-      </FieldGroup>
-      <FieldGroup label="Role">
-        <input style={INPUT_STYLE} placeholder="e.g. Lead Engineer" value={role} onChange={e => setRole(e.target.value)} />
-      </FieldGroup>
-      
-      <div style={{ marginTop: 12 }}>
-        <div style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Photo</div>
-        <ImageUpload value={avatarUrl} onChange={setAvatarUrl} deptColor="#6366f1" />
-      </div>
-
-      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24, paddingBottom: 4 }}>
-        <button onClick={onCancel} style={{ ...BTN_GHOST, width: 90 }}>Cancel</button>
-        <button onClick={() => isValid && onSave({ ...initial, name: name.trim(), role: role.trim(), avatarUrl })} style={{ ...BTN_PRIMARY, width: 90, opacity: isValid ? 1 : 0.5 }}>Save</button>
       </div>
     </div>
   );
@@ -545,8 +484,6 @@ export function PolytopeManager(props: Props) {
       case 'addNode': return `Add Node in ${view.dept.label}`;
       case 'editNode': return `Edit ${view.node.label}`;
       case 'deleteNode': return `Delete ${view.node.label}`;
-      case 'editMember': return `Edit Member`;
-      case 'deleteMember': return `Delete Member`;
     }
   };
 
@@ -564,10 +501,6 @@ export function PolytopeManager(props: Props) {
         // need to refresh dept from props since it may have been mutated
         const freshDept = props.departments.find(d => d.id === (view as any).dept.id);
         setView({ type: 'nodes', dept: freshDept ?? (view as any).dept });
-        break;
-      case 'editMember':
-      case 'deleteMember':
-        closeModal();
         break;
     }
   };
@@ -619,31 +552,6 @@ export function PolytopeManager(props: Props) {
           onCancel={goBack}
         />;
 
-      case 'editMember':
-        const memberToEdit = view.node.members?.[view.memberIndex];
-        return <MemberForm
-          initial={memberToEdit}
-          onSave={m => {
-            const newMembers = [...(view.node.members || [])];
-            newMembers[view.memberIndex] = m;
-            props.onUpdateNode(view.dept.id, view.node.id, { members: newMembers });
-            goBack();
-          }}
-          onCancel={goBack}
-        />;
-
-      case 'deleteMember':
-        const memberToDelete = view.node.members?.[view.memberIndex];
-        return <ConfirmDelete
-          title="Delete Member?"
-          message={`"${memberToDelete?.name}" will be permanently removed from ${view.node.label}.`}
-          onConfirm={() => {
-            const newMembers = view.node.members!.filter((_, i) => i !== view.memberIndex);
-            props.onUpdateNode(view.dept.id, view.node.id, { members: newMembers, memberCount: newMembers.length });
-            goBack();
-          }}
-          onCancel={goBack}
-        />;
     }
   };
 

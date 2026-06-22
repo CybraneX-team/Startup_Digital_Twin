@@ -28,7 +28,6 @@ export interface PolytopeSidePanelProps {
   onEditNode?: (dept: UExternalNode, node: UInternalNode) => void;
   onDeleteDepartmentClick?: (dept: UExternalNode) => void;
   onDeleteNodeClick?: (dept: UExternalNode, node: UInternalNode) => void;
-  onEditMember?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
   onDeleteMemberClick?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
   canEdit?: boolean;
   canCreateDepartment?: boolean;
@@ -111,7 +110,6 @@ export function PolytopeSidePanel({
   onEditNode,
   onDeleteDepartmentClick,
   onDeleteNodeClick,
-  onEditMember,
   onDeleteMemberClick,
   canEdit = true,
   canCreateDepartment = canEdit,
@@ -621,14 +619,6 @@ export function PolytopeSidePanel({
                     </div>
                     {canWriteEffectiveDept && (
                       <div className="flex items-center gap-0.5 shrink-0 opacity-0 pointer-events-none group-hover/member:opacity-100 group-hover/member:pointer-events-auto transition-opacity duration-150">
-                        <button
-                          type="button"
-                          onClick={() => onEditMember?.(effectiveDept, activeNode, index)}
-                          className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded transition-colors"
-                          title="Edit teammate"
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </button>
                         <button
                           type="button"
                           onClick={() => onDeleteMemberClick?.(effectiveDept, activeNode, index)}

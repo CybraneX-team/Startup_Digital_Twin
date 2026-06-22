@@ -11,11 +11,9 @@ import {
   resolvePolytopeNodeCount,
   type UDomain,
   type UExternalNode,
-  type UInternalNode,
 } from './bdtPolytopeData';
-import { buildDepartmentInternalNodes } from './bdtDepartmentSeed';
 
-export const BDT_CACHE_KEY = 'polytope_departments_bdt_v4';
+export const BDT_CACHE_KEY = 'polytope_departments_bdt_v5';
 
 export type BdtCatalogEntry = {
   id: string;
@@ -155,59 +153,6 @@ function cloneDepartment(dept: UExternalNode): UExternalNode {
   return JSON.parse(JSON.stringify(dept)) as UExternalNode;
 }
 
-/** Minimal internal tree for a user-added custom department (no framework seed). */
-function buildCustomDepartmentInternalNodes(label: string): UInternalNode[] {
-  return [
-    {
-      id: `custom_teams_${slugify(label)}`,
-      label: 'Teams',
-      type: 'team',
-      score: 75,
-      memberCount: 0,
-      children: [],
-    },
-    {
-      id: `custom_projects_${slugify(label)}`,
-      label: 'Projects',
-      type: 'project',
-      score: 72,
-      children: [
-        {
-          id: `custom_project_${slugify(label)}`,
-          label: `${label} Initiatives`,
-          type: 'project',
-          score: 70,
-          projectDetails: {
-            status: 'Planning',
-            description: `Core initiatives for ${label}`,
-            budget: 'TBD',
-          },
-          children: [],
-        },
-      ],
-    },
-    {
-      id: `custom_workstreams_${slugify(label)}`,
-      label: 'Core Workstreams',
-      type: 'branch',
-      score: 74,
-      children: [
-        {
-          id: `custom_action_${slugify(label)}`,
-          label: `Define ${label} scope`,
-          type: 'action',
-          score: 70,
-          owner: 'Department Lead',
-          status: 'Open',
-          output: 'Scope document',
-          metricImpact: 'Clarity',
-          children: [],
-        },
-      ],
-    },
-  ];
-}
-
 function createCustomDepartment(entry: CustomDepartmentEntry, index: number): UExternalNode {
   const id = `dept_custom_${index}_${slugify(entry.label)}`;
   return {
@@ -218,7 +163,7 @@ function createCustomDepartment(entry: CustomDepartmentEntry, index: number): UE
     color: entry.color,
     score: 75,
     metrics: { performance: 75, efficiency: 75, capacity: 75, alignment: 75, risk: 25 },
-    internalNodes: buildCustomDepartmentInternalNodes(entry.label),
+    internalNodes: [],
   };
 }
 
@@ -348,25 +293,15 @@ export async function importBdtDepartmentsForCompany(
   }
 }
 
-/** Rebuild internal tree for a framework dept id (used if API returns shells). */
 export function enrichDepartmentFromFramework(dept: UExternalNode): UExternalNode {
   const seed = BDT_FRAMEWORK_DEPARTMENTS.find(
     d => d.id === dept.id || d.label.toLowerCase() === dept.label.toLowerCase(),
   );
   if (!seed) return dept;
-  const internalNodes = buildDepartmentInternalNodes(seed.id);
-  const withMeta = {
+  return {
     ...dept,
     color: dept.color ?? seed.color,
     domain: dept.domain ?? seed.domain,
     cluster: dept.cluster ?? seed.cluster,
   };
-  if (!dept.internalNodes?.length || countTree(dept.internalNodes) < countTree(internalNodes)) {
-    return { ...withMeta, internalNodes };
-  }
-  return withMeta;
-}
-
-function countTree(nodes: UInternalNode[]): number {
-  return nodes.reduce((n, node) => n + 1 + countTree(node.children ?? []), 0);
 }

@@ -24,6 +24,9 @@ export interface TeamMember {
   name: string;
   role: string;
   avatarUrl?: string;
+  companyMemberId?: string;
+  userId?: string;
+  assignmentId?: string;
 }
 
 export interface ProjectDetails {
@@ -166,8 +169,6 @@ export function resolvePolytopeNodeCount(deptCount: number): {
   return { totalNodes: target, inactiveCount: target - deptCount };
 }
 
-import { buildDepartmentInternalNodes } from './bdtDepartmentSeed';
-
 /** Per-department accent colors — Company Department framework §6 */
 export const BDT_DEPARTMENT_COLORS: Record<string, string> = {
   dept_strategy: '#F2C94C',
@@ -201,10 +202,10 @@ const DEPT_META: Omit<UExternalNode, 'internalNodes'>[] = [
   { id: 'dept_strategy', label: 'Strategy', domain: 'direction', cluster: 'Direction', score: 95, color: BDT_DEPARTMENT_COLORS.dept_strategy, metrics: { performance: 97, efficiency: 94, capacity: 92, alignment: 98, risk: 4 } },
 ];
 
-/** 13 framework departments with full BDT internal trees (teams, projects, branches, actions). */
+/** 13 framework departments as metadata shells; internal nodes come from real data. */
 export const BDT_FRAMEWORK_DEPARTMENTS: UExternalNode[] = DEPT_META.map(meta => ({
   ...meta,
-  internalNodes: buildDepartmentInternalNodes(meta.id),
+  internalNodes: [],
 }));
 
 const DEPARTMENTS = BDT_FRAMEWORK_DEPARTMENTS;

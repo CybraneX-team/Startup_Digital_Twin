@@ -24,7 +24,7 @@ interface ExternalNodeProps {
   isHovered: boolean;
   /** Preview node while "Add internal node" form is open */
   draftChildNode?: UInternalNode | null;
-  draftMember?: { deptId: string; nodeId: string; member: any } | null;
+  draftMember?: { deptId: string; nodeId: string; member?: any } | null;
   draftMemberScreenPosRef?: React.MutableRefObject<{ x: number; y: number } | null>;
 }
 

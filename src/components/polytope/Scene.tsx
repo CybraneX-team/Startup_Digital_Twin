@@ -58,7 +58,7 @@ export interface SceneProps {
   /** Ref that Scene writes the draft internal node's screen-space position to each frame */
   draftInternalNodeScreenPosRef?: MutableRefObject<{ x: number; y: number } | null>;
   /** Transient draft member preview */
-  draftMember?: { deptId: string; nodeId: string; member: any } | null;
+  draftMember?: { deptId: string; nodeId: string; member?: any } | null;
   /** Ref that Scene writes the draft member's screen-space position to each frame */
   draftMemberScreenPosRef?: MutableRefObject<{ x: number; y: number } | null>;
   selectedInternalPathProps?: string[];

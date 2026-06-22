@@ -2,7 +2,7 @@ import { useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Text, Billboard } from '@react-three/drei';
 import { PlasmaSphere } from '../PolytopeShared';
-import { X, ChevronRight, Zap, Briefcase, Activity, Bookmark, BookmarkCheck, ExternalLink, Users, UserPlus, Pencil, Trash2, Radio, GitBranch, BarChart3, HelpCircle } from 'lucide-react';
+import { X, ChevronRight, Zap, Briefcase, Activity, Bookmark, BookmarkCheck, ExternalLink, Users, UserPlus, Trash2, Radio, GitBranch, BarChart3, HelpCircle } from 'lucide-react';
 import type { UInternalNode, UExternalNode } from '../../lib/usePolytopeStore';
 import { U_DOMAIN_COLOR } from '../../lib/usePolytopeStore';
 import { useSavedWorkflows } from '../../lib/useSavedWorkflows';
@@ -18,7 +18,6 @@ export interface BdtActionWorkspaceProps {
   isOpen?: boolean;
   canEdit?: boolean;
   onAddMember?: (deptId: string, nodeId: string) => void;
-  onEditMember?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
   onDeleteMember?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
 }
 
@@ -48,7 +47,6 @@ export function BdtActionWorkspace({
   isOpen = true,
   canEdit = false,
   onAddMember,
-  onEditMember,
   onDeleteMember,
 }: BdtActionWorkspaceProps) {
   const primaryColor = U_DOMAIN_COLOR[department.domain] || '#8b5cf6';
@@ -341,16 +339,6 @@ export function BdtActionWorkspace({
                         </div>
                         {canEdit && (
                           <div className="flex items-center gap-1 opacity-0 group-hover/member:opacity-100 transition-opacity shrink-0">
-                            {onEditMember && (
-                              <button
-                                type="button"
-                                onClick={() => onEditMember(department, node, index)}
-                                className="p-1.5 text-white/40 hover:text-white hover:bg-white/10 rounded transition-colors"
-                                title="Edit teammate"
-                              >
-                                <Pencil className="w-3.5 h-3.5" />
-                              </button>
-                            )}
                             {onDeleteMember && (
                               <button
                                 type="button"

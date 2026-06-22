@@ -243,18 +243,6 @@ export default function Universe3DPage() {
     setPolytopeManagerOpen(true);
   }, [canDeleteDept]);
 
-  const handleEditMember = useCallback((dept: UExternalNode, node: UInternalNode, memberIndex: number) => {
-    if (!canWriteDept(dept)) return;
-    setPolytopeManagerView({ type: 'editMember', dept, node, memberIndex });
-    setPolytopeManagerOpen(true);
-  }, [canWriteDept]);
-
-  const handleDeleteMemberClick = useCallback((dept: UExternalNode, node: UInternalNode, memberIndex: number) => {
-    if (!canWriteDept(dept)) return;
-    setPolytopeManagerView({ type: 'deleteMember', dept, node, memberIndex });
-    setPolytopeManagerOpen(true);
-  }, [canWriteDept]);
-
   // Separate state so clicking sidebar triggers camera fly-in without looping
   const [polytopeRequestSelectDeptId, setPolytopeRequestSelectDeptId] = useState<string | null | undefined>(undefined);
   // Counter incremented by sidebar back button to go back one internal level
@@ -265,7 +253,7 @@ export default function Universe3DPage() {
   const polytopeDraftDeptScreenPosRef = useRef<{ x: number; y: number } | null>(null);
   const [polytopeDraftInternalNode, setPolytopeDraftInternalNode] = useState<{ deptId: string; node: UInternalNode } | null>(null);
   const polytopeDraftInternalNodeScreenPosRef = useRef<{ x: number; y: number } | null>(null);
-  const [polytopeDraftMember, setPolytopeDraftMember] = useState<{ deptId: string; nodeId: string; member: any } | null>(null);
+  const [polytopeDraftMember] = useState<{ deptId: string; nodeId: string; member: any } | null>(null);
   const polytopeDraftMemberScreenPosRef = useRef<{ x: number; y: number } | null>(null);
   // Incremented on draft create/cancel to fly camera back to overview
   const [polytopeDraftResetTrigger, setPolytopeDraftResetTrigger] = useState(0);
@@ -299,22 +287,6 @@ export default function Universe3DPage() {
       children: [],
     };
     setPolytopeDraftInternalNode({ deptId, node: draftNode });
-    setPolytopeDeptId(deptId);
-    if (polytopeDeptId !== deptId) {
-      setPolytopeRequestSelectDeptId(deptId);
-    }
-  }, [canWriteDept, polytopeStore.departments, polytopeDeptId]);
-
-  const handlePolytopeAddMember = useCallback((deptId: string, nodeId: string) => {
-    const dept = polytopeStore.departments.find(d => d.id === deptId);
-    if (!canWriteDept(dept)) return;
-    const draftMemberData = {
-      name: 'New Member',
-      role: 'Member',
-      avatarUrl: '',
-      isDraft: true,
-    };
-    setPolytopeDraftMember({ deptId, nodeId, member: draftMemberData });
     setPolytopeDeptId(deptId);
     if (polytopeDeptId !== deptId) {
       setPolytopeRequestSelectDeptId(deptId);
@@ -1509,9 +1481,6 @@ export default function Universe3DPage() {
                 onEditNode={handleEditNode}
                 onDeleteDepartmentClick={handleDeleteDepartmentClick}
                 onDeleteNodeClick={handleDeleteNodeClick}
-                onAddMember={handlePolytopeAddMember}
-                onEditMember={handleEditMember}
-                onDeleteMemberClick={handleDeleteMemberClick}
                 canEdit={hasWritableDepartment}
                 canCreateDepartment={canCreateDepartments}
               />
@@ -1617,46 +1586,6 @@ export default function Universe3DPage() {
       })()}
 
       {/* Draft Member Creation Panel — BH/Company polytope */}
-      {insideBH && polytopeDraftMember && (() => {
-        const dept = polytopeStore.departments.find(d => d.id === polytopeDraftMember.deptId);
-        if (!dept || !canWriteDept(dept)) return null;
-        return (
-          <CreateDepartmentPanel
-            mode="member"
-            dept={dept}
-            draftNodeScreenPosRef={polytopeDraftMemberScreenPosRef}
-            onDraftUpdate={(patch) => setPolytopeDraftMember(prev => prev ? { ...prev, member: { ...prev.member, ...patch } } : prev)}
-            onClose={(isCancel) => {
-              if (isCancel) {
-                setPolytopeDraftMember(null);
-              }
-            }}
-            onCreated={(data) => {
-              const { deptId, nodeId } = polytopeDraftMember;
-              const deptToUpdate = polytopeStore.departments.find(d => d.id === deptId);
-              if (!deptToUpdate) return;
-              const findNode = (nodes: UInternalNode[], id: string): UInternalNode | undefined => {
-                for (const n of nodes) {
-                  if (n.id === id) return n;
-                  if (n.children) {
-                    const found = findNode(n.children, id);
-                    if (found) return found;
-                  }
-                }
-                return undefined;
-              };
-              const targetNode = findNode(deptToUpdate.internalNodes, nodeId);
-              if (targetNode && targetNode.type === 'team') {
-                const newMembers = [...(targetNode.members || []), data];
-                void polytopeStore.updateNode(deptId, nodeId, { members: newMembers, memberCount: newMembers.length });
-              }
-              setPolytopeDraftMember(null);
-              setPolytopeDeptId(deptId);
-            }}
-          />
-        );
-      })()}
-
       {/* Floating tooltip above industry core — "Click to interact with WorkOS AI" */}
       <div
         className={`absolute z-30 pointer-events-none transition duration-300 ease-[cubic-bezier(0.175,0.885,0.32,1.275)]`}
