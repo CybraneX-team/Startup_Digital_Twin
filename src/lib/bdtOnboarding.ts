@@ -11,7 +11,10 @@ import {
   resolvePolytopeNodeCount,
   type UDomain,
   type UExternalNode,
+  type UInternalNode,
 } from './bdtPolytopeData';
+import { hydrateBdtDepartment } from './bdtDepartmentSeed';
+import { normalizeDepartmentsFromApi, serializeDepartmentsForImport } from './bdtDepartmentApiMapper';
 
 export const BDT_CACHE_KEY = 'polytope_departments_bdt_v5';
 
@@ -112,7 +115,7 @@ export function getBdtCatalog(): BdtCatalogEntry[] {
     label: d.label,
     domain: d.domain,
     cluster: d.cluster,
-    color: getExternalNodeColor(d),
+    color: d.color ?? BDT_DEPARTMENT_COLORS[d.id] ?? getExternalNodeColor(d),
     description: CLUSTER_BLURB[d.cluster] ?? d.cluster,
   }));
 }
@@ -178,7 +181,7 @@ export function buildBdtDepartmentsForOnboarding(
 
   for (const id of selectedCatalogIds) {
     const dept = BDT_FRAMEWORK_DEPARTMENTS.find(d => d.id === id);
-    if (dept) active.push(cloneDepartment(dept));
+    if (dept) active.push(hydrateBdtDepartment(cloneDepartment(dept)));
   }
 
   customDepartments
@@ -190,10 +193,10 @@ export function buildBdtDepartmentsForOnboarding(
       if (existing && active.some(d => d.id === existing)) return;
       if (existing) {
         const dept = BDT_FRAMEWORK_DEPARTMENTS.find(d => d.id === existing);
-        if (dept) active.push(cloneDepartment(dept));
+        if (dept) active.push(hydrateBdtDepartment(cloneDepartment(dept)));
         return;
       }
-      active.push(createCustomDepartment(entry, i));
+      active.push(hydrateBdtDepartment(createCustomDepartment(entry, i)));
     });
 
   return active;
@@ -240,14 +243,24 @@ export function primeBdtLocalCache(departments: UExternalNode[]): void {
   primeTwinDepartmentCache(departments);
 }
 
+function countInternalTree(nodes: UInternalNode[]): number {
+  return nodes.reduce((sum, n) => sum + 1 + countInternalTree(n.children ?? []), 0);
+}
+
 function mergeDepartmentFromSelection(saved: UExternalNode, source: UExternalNode): UExternalNode {
-  return {
+  const savedCount = countInternalTree(saved.internalNodes ?? []);
+  const sourceCount = countInternalTree(source.internalNodes ?? []);
+  const frameworkId = source.id.startsWith('dept_') ? source.id : saved.id;
+  return hydrateBdtDepartment({
     ...saved,
-    color: saved.color ?? source.color,
-    domain: saved.domain ?? source.domain,
-    cluster: saved.cluster ?? source.cluster,
-    internalNodes: saved.internalNodes?.length ? saved.internalNodes : source.internalNodes,
-  };
+    id: frameworkId,
+    label: saved.label || source.label,
+    color: source.color ?? saved.color,
+    domain: source.domain ?? saved.domain,
+    cluster: source.cluster ?? saved.cluster,
+    internalNodes:
+      sourceCount >= savedCount ? (source.internalNodes ?? []) : (saved.internalNodes ?? []),
+  });
 }
 
 function mergeDepartmentsWithSelection(
@@ -262,21 +275,37 @@ function mergeDepartmentsWithSelection(
   });
 }
 
+export type BdtOnboardingSelection = {
+  sourceKeys: string[];
+  customLabels: string[];
+};
+
 /**
  * Persist selected BDT structure to backend (replace company departments) and local cache.
  */
 export async function importBdtDepartmentsForCompany(
   departments: UExternalNode[],
+  selection?: BdtOnboardingSelection,
 ): Promise<UExternalNode[]> {
-  const activeOnly = departments.filter(d => d.domain !== 'inactive');
+  const activeOnly = departments
+    .filter(d => d.domain !== 'inactive')
+    .map(hydrateBdtDepartment);
+
+  const selectionPayload = selection
+    ? {
+        source_keys: selection.sourceKeys,
+        custom_labels: selection.customLabels,
+        imported_at: new Date().toISOString(),
+      }
+    : undefined;
 
   try {
     const response = await api.post<{ departments: UExternalNode[] }>('/api/departments/import', {
-      departments: activeOnly,
+      departments: serializeDepartmentsForImport(activeOnly),
       mode: 'replace',
+      selection: selectionPayload,
     });
-    // If backend returns a full default seed, keep only what the user selected
-    const saved = response.departments ?? [];
+    const saved = normalizeDepartmentsFromApi(response.departments ?? []);
     const savedActive = saved.filter(d => d.domain !== 'inactive');
     const final =
       savedActive.length > activeOnly.length
@@ -284,7 +313,7 @@ export async function importBdtDepartmentsForCompany(
         : savedActive.length > 0
           ? mergeDepartmentsWithSelection(savedActive, activeOnly)
           : activeOnly;
-    primeBdtLocalCache(final);
+    primeBdtLocalCache(final.map(hydrateBdtDepartment));
     return final;
   } catch (err) {
     console.error('[bdt-onboarding] import failed, using local cache', err);
@@ -297,11 +326,11 @@ export function enrichDepartmentFromFramework(dept: UExternalNode): UExternalNod
   const seed = BDT_FRAMEWORK_DEPARTMENTS.find(
     d => d.id === dept.id || d.label.toLowerCase() === dept.label.toLowerCase(),
   );
-  if (!seed) return dept;
-  return {
+  if (!seed) return hydrateBdtDepartment(dept);
+  return hydrateBdtDepartment({
     ...dept,
     color: dept.color ?? seed.color,
     domain: dept.domain ?? seed.domain,
     cluster: dept.cluster ?? seed.cluster,
-  };
+  });
 }

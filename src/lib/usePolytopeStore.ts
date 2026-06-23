@@ -3,6 +3,8 @@ import { U_NODES as TWIN_DEFAULT_NODES } from './universalPolytopeData';
 import type { UExternalNode, UInternalNode, UDomain } from './bdtPolytopeData';
 import { U_DOMAIN_COLOR, isActionLeafNode, isBdtWorkspaceLeafNode } from './bdtPolytopeData';
 import { api } from './api';
+import { getBdtFrameworkSeedDepartments, stripSeededTeamMembers } from './bdtDepartmentSeed';
+import { normalizeDepartmentsFromApi } from './bdtDepartmentApiMapper';
 
 /** Twin (/3d company polytope) and BDT (/universal) use separate graphs and caches. */
 export type PolytopeStoreScope = 'twin' | 'bdt';
@@ -15,7 +17,7 @@ export type { UExternalNode, UInternalNode, UDomain };
 export { U_DOMAIN_COLOR, isActionLeafNode, isBdtWorkspaceLeafNode };
 
 const TWIN_DEFAULT_DEPARTMENTS = TWIN_DEFAULT_NODES.filter(n => n.domain !== 'inactive');
-const BDT_DEFAULT_DEPARTMENTS: UExternalNode[] = [];
+const BDT_DEFAULT_DEPARTMENTS: UExternalNode[] = getBdtFrameworkSeedDepartments();
 
 function persistCache(storageKey: string, departments: UExternalNode[]) {
   try {
@@ -124,6 +126,39 @@ function countInternalTree(nodes: UInternalNode[]): number {
   return nodes.reduce((sum, n) => sum + 1 + countInternalTree(n.children ?? []), 0);
 }
 
+function enrichInternalNodes(nodes: UInternalNode[], seedNodes: UInternalNode[]): UInternalNode[] {
+  return nodes.map(node => {
+    const seedMatch = seedNodes.find(s => s.id === node.id || s.label === node.label);
+    if (!seedMatch) {
+      if (node.children?.length) {
+        return {
+          ...node,
+          children: enrichInternalNodes(node.children, seedNodes),
+        };
+      }
+      return node;
+    }
+
+    return {
+      ...node,
+      interrelatedDepartments: node.interrelatedDepartments?.length
+        ? node.interrelatedDepartments
+        : seedMatch.interrelatedDepartments,
+      workflowSteps: node.workflowSteps?.length
+        ? node.workflowSteps
+        : seedMatch.workflowSteps,
+      projectDetails: node.projectDetails || seedMatch.projectDetails,
+      signalDetails: node.signalDetails || seedMatch.signalDetails,
+      decisionDetails: node.decisionDetails || seedMatch.decisionDetails,
+      metricDetails: node.metricDetails || seedMatch.metricDetails,
+      actionDetails: node.actionDetails || seedMatch.actionDetails,
+      members: node.type === 'team' ? (node.members ?? []) : node.members,
+      memberCount: node.type === 'team' ? (node.members?.length ?? 0) : node.memberCount,
+      children: enrichInternalNodes(node.children ?? [], seedMatch.children ?? []),
+    };
+  });
+}
+
 function enrichDepartmentsFromSeed(
   departments: UExternalNode[],
   seed: UExternalNode[],
@@ -132,7 +167,9 @@ function enrichDepartmentsFromSeed(
 
   return departments.map(dept => {
     const match = findSeedDepartment(dept, seedActive);
-    if (!match) return dept;
+    if (!match) {
+      return { ...dept, internalNodes: stripSeededTeamMembers(dept.internalNodes ?? []) };
+    }
 
     const apiCount = countInternalTree(dept.internalNodes ?? []);
     const seedCount = countInternalTree(match.internalNodes ?? []);
@@ -141,8 +178,15 @@ function enrichDepartmentsFromSeed(
     const domain = dept.domain ?? match.domain;
     const cluster = dept.cluster ?? match.cluster;
 
-    if (!needsInternal && color === dept.color && domain === dept.domain && cluster === dept.cluster) {
-      return dept;
+    let internalNodes = dept.internalNodes ?? [];
+    if (needsInternal) {
+      internalNodes = match.internalNodes ?? [];
+    } else if (match.internalNodes?.length) {
+      internalNodes = enrichInternalNodes(internalNodes, match.internalNodes);
+    }
+
+    if (!needsInternal && color === dept.color && domain === dept.domain && cluster === dept.cluster && internalNodes === dept.internalNodes) {
+      return { ...dept, internalNodes: stripSeededTeamMembers(dept.internalNodes ?? []) };
     }
 
     return {
@@ -150,7 +194,7 @@ function enrichDepartmentsFromSeed(
       ...(color !== dept.color ? { color } : {}),
       ...(domain !== dept.domain ? { domain } : {}),
       ...(cluster !== dept.cluster ? { cluster } : {}),
-      ...(needsInternal ? { internalNodes: match.internalNodes } : {}),
+      internalNodes: stripSeededTeamMembers(internalNodes),
     };
   });
 }
@@ -271,7 +315,7 @@ function createLocalPolytopeStore({ storageKey, defaultDepartments, onboardingFa
   }));
 }
 
-function createApiPolytopeStore({ storageKey, defaultDepartments }: StoreConfig) {
+export function createApiPolytopeStore({ storageKey, defaultDepartments, onboardingFallback }: StoreConfig) {
   return create<PolytopeStoreState>((set, get) => ({
     departments: enrichDepartmentsFromSeed(
       loadCachedDepartments(storageKey, defaultDepartments) ?? defaultDepartments,
@@ -286,13 +330,13 @@ function createApiPolytopeStore({ storageKey, defaultDepartments }: StoreConfig)
       set({ loading: true, error: null });
       try {
         const response = await api.get<{ departments: UExternalNode[] }>('/api/departments');
-        const raw = response.departments ?? [];
+        const raw = normalizeDepartmentsFromApi(response.departments ?? []);
         const departments = enrichDepartmentsFromSeed(raw, defaultDepartments);
         persistCache(storageKey, departments);
         set({ departments, loading: false, loaded: true, error: null });
       } catch (err) {
         console.error('[departments] load failed', err);
-        const cached = loadCachedDepartments(storageKey, defaultDepartments);
+        const cached = loadCachedDepartments(storageKey, defaultDepartments, { onboardingFallback });
         const fallback = enrichDepartmentsFromSeed(
           cached ?? (get().departments.length ? get().departments : defaultDepartments),
           defaultDepartments,
@@ -349,7 +393,10 @@ function createApiPolytopeStore({ storageKey, defaultDepartments }: StoreConfig)
       set(state => ({ departments: state.departments.filter(d => d.id !== id) }));
       try {
         const response = await api.delete<{ departments: UExternalNode[] }>(`/api/departments/${id}`);
-        const departments = enrichDepartmentsFromSeed(response.departments ?? [], defaultDepartments);
+        const departments = enrichDepartmentsFromSeed(
+          normalizeDepartmentsFromApi(response.departments ?? []),
+          defaultDepartments,
+        );
         persistCache(storageKey, departments);
         set({ departments });
       } catch (err) {
@@ -414,7 +461,10 @@ function createApiPolytopeStore({ storageKey, defaultDepartments }: StoreConfig)
       }));
       try {
         const response = await api.delete<{ departments: UExternalNode[] }>(`/api/departments/nodes/${nodeId}`);
-        const departments = enrichDepartmentsFromSeed(response.departments ?? [], defaultDepartments);
+        const departments = enrichDepartmentsFromSeed(
+          normalizeDepartmentsFromApi(response.departments ?? []),
+          defaultDepartments,
+        );
         persistCache(storageKey, departments);
         set({ departments });
       } catch (err) {
@@ -458,6 +508,7 @@ const useTwinPolytopeStore = createLocalPolytopeStore({
 const useBdtPolytopeStore = createApiPolytopeStore({
   storageKey: BDT_CACHE_KEY,
   defaultDepartments: BDT_DEFAULT_DEPARTMENTS,
+  onboardingFallback: true,
 });
 
 export function primeBdtDepartmentCache(departments: UExternalNode[]) {

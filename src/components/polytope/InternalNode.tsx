@@ -8,60 +8,7 @@ import { isActionLeafNode } from '../../lib/universalPolytopeData';
 import { PlasmaSphere } from '../PolytopeShared';
 import { useDragWorkspaceStore } from '../../lib/useDragWorkspaceStore';
 
-function DraggableHtmlCard({ children, delay = 0, style }: { children: React.ReactNode, delay?: number, style?: React.CSSProperties }) {
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const [isDragging, setIsDragging] = useState(false);
-  const dragStart = useRef({ x: 0, y: 0 });
-
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.stopPropagation();
-    setIsDragging(true);
-    dragStart.current = { x: e.clientX - offset.x, y: e.clientY - offset.y };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging) return;
-    e.stopPropagation();
-    setOffset({
-      x: e.clientX - dragStart.current.x,
-      y: e.clientY - dragStart.current.y
-    });
-  };
-
-  const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (!isDragging) return;
-    e.stopPropagation();
-    setIsDragging(false);
-    e.currentTarget.releasePointerCapture(e.pointerId);
-  };
-
-  return (
-    <div style={{
-      animation: `popIn 0.5s ${delay}s forwards cubic-bezier(0.175, 0.885, 0.32, 1.275)`,
-      opacity: 0,
-      transform: 'scale(0)',
-      pointerEvents: 'none'
-    }}>
-      <div
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        style={{
-          ...style,
-          transform: `translate(${offset.x}px, ${offset.y}px)`,
-          pointerEvents: 'auto',
-          cursor: isDragging ? 'grabbing' : 'grab',
-          userSelect: 'none',
-          WebkitUserSelect: 'none',
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  );
-}
+// DraggableHtmlCard removed per page feedback.
 
 function PosTracker({ posRef }: { posRef: React.MutableRefObject<any> }) {
   const ref = useRef<THREE.Group>(null);
@@ -448,14 +395,17 @@ export function InternalNode({
                     <PosTracker posRef={draftMemberScreenPosRef} />
                   )}
                   <Html center zIndexRange={[100, 0]}>
-                    <DraggableHtmlCard delay={i * 0.05} style={{
+                    <div style={{
                       display: 'flex',
                       flexDirection: 'column',
                       alignItems: 'center',
                       gap: '6px',
                       width: 'max-content',
                       color: '#ffffff',
-                      textAlign: 'center'
+                      textAlign: 'center',
+                      animation: `popIn 0.5s ${i * 0.05}s forwards cubic-bezier(0.175, 0.885, 0.32, 1.275)`,
+                      opacity: 0,
+                      transform: 'scale(0)'
                     }}>
                       {member.avatarUrl && (
                         <div style={{
@@ -473,7 +423,7 @@ export function InternalNode({
                         <span style={{ fontSize: '14px', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.9)' }}>{member.name}</span>
                         <span style={{ fontSize: '11px', color: '#cbd5e1', textShadow: '0 1px 3px rgba(0,0,0,0.9)', marginTop: '2px' }}>{member.role}</span>
                       </div>
-                    </DraggableHtmlCard>
+                    </div>
                   </Html>
                 </group>
               );
@@ -492,7 +442,7 @@ export function InternalNode({
         {isMeActiveCenter && node.type === 'project' && node.projectDetails && (
           <Billboard follow={true} lockX={false} lockY={false} lockZ={false}>
             <Html position={[radius * 7.5, 0, 0]} center zIndexRange={[100, 0]}>
-            <DraggableHtmlCard style={{
+            <div style={{
               background: 'rgba(15, 23, 42, 0.85)',
               backdropFilter: 'blur(8px)',
               border: `1px solid ${color}88`,
@@ -501,6 +451,9 @@ export function InternalNode({
               width: '240px',
               color: '#e2e8f0',
               boxShadow: `0 8px 32px ${color}33`,
+              animation: 'popIn 0.5s 0s forwards cubic-bezier(0.175, 0.885, 0.32, 1.275)',
+              opacity: 0,
+              transform: 'scale(0)'
             }}>
               <div style={{ fontSize: '14px', fontWeight: 'bold', borderBottom: `1px solid ${color}66`, paddingBottom: '8px', marginBottom: '8px', color: '#fff' }}>Project Summary</div>
               <div style={{ fontSize: '12px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -519,7 +472,7 @@ export function InternalNode({
                   </div>
                 )}
               </div>
-            </DraggableHtmlCard>
+            </div>
               <style>{`
                 @keyframes popIn {
                   0% { transform: scale(0); opacity: 0; }

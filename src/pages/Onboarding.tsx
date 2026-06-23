@@ -391,7 +391,13 @@ export default function Onboarding() {
     }
 
     // Persist full BDT graph (selected departments + internal node trees)
-    await importBdtDepartmentsForCompany(bdtDepartments);
+    await importBdtDepartmentsForCompany(bdtDepartments, {
+      sourceKeys: selectedCatalogIds,
+      customLabels: customDepartments
+        .filter(d => d.selected)
+        .map(d => d.label.trim())
+        .filter(Boolean),
+    });
 
     // Save metrics to metric_snapshots so they appear on the home page immediately
     const hasAnyMetric = form.mrr_usd || form.burn_rate_usd || form.employees ||

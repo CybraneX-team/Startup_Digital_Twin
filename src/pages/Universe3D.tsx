@@ -193,6 +193,13 @@ export default function Universe3DPage() {
     controllerRef.current?.setWorkspaceCompose(isTwinWorkspaceActive(twinWorkspacePhase));
   }, [twinWorkspacePhase]);
 
+  // Re-apply interaction when the canvas mounts after data load (child effects run before this).
+  useEffect(() => {
+    if (loading || !data || isTwinWorkspaceActive(twinWorkspacePhase)) return;
+    const rafId = requestAnimationFrame(() => controllerRef.current?.restoreUniverseInteraction());
+    return () => cancelAnimationFrame(rafId);
+  }, [loading, data, twinWorkspacePhase]);
+
   useEffect(() => {
     if (!isTwinWorkspaceActive(twinWorkspacePhase)) return;
     if (twinWorkspacePhase === 'closing') return;
@@ -1019,12 +1026,17 @@ export default function Universe3DPage() {
 
   useEffect(() => {
     if (pathname === '/3d') {
-      const rafId = requestAnimationFrame(() => controllerRef.current?.resize());
+      const rafId = requestAnimationFrame(() => {
+        controllerRef.current?.resize();
+        if (!isTwinWorkspaceActive(twinWorkspacePhase)) {
+          controllerRef.current?.restoreUniverseInteraction();
+        }
+      });
       return () => cancelAnimationFrame(rafId);
     }
     // We no longer clear state when leaving /3d, so that the 3D Twin state persists
     // when the user navigates away and comes back.
-  }, [pathname]);
+  }, [pathname, twinWorkspacePhase]);
 
   // Listen for signals from the action workspace (tab or inline):
   //  • ACTION_WORKSPACE_CLOSED → zoom back out
@@ -1262,10 +1274,8 @@ export default function Universe3DPage() {
            Pattern: fade opacity first (1.4s), THEN flip visibility to hidden
            so the canvas is event-dead only after the visual fade completes. */}
       <div
+        className="universe-bh-overlay"
         style={{
-          position: 'absolute',
-          inset: 0,
-          zIndex: 5,
           opacity: insideBH ? 1 : 0,
           visibility: insideBH ? 'visible' : 'hidden',
           pointerEvents: insideBH && !bhTransitioning ? 'auto' : 'none',
@@ -1311,7 +1321,7 @@ export default function Universe3DPage() {
       {/* ── Company Planet 3D root map (after role pick) ── */}
       {/* Shift-up zone: animates translateY(-100%)+fade when workspace goes fullscreen,
           matching the ws-planet-zone behaviour on industry/subdomain pages. */}
-      <div className="universe-planet-root-zone" style={{ zIndex: 6 }}>
+      <div className="universe-planet-root-zone">
       {/* Inner div: owns opacity / visibility / right — transition string changes safely here */}
       <div
         style={{

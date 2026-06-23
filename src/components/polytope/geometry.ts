@@ -29,30 +29,36 @@ export function dodecahedronDirs(): THREE.Vector3[] {
 
 /** Icosidodecahedron (30 vertices) — edge-midpoints of icosahedron */
 export function icosidodecahedronDirs(): THREE.Vector3[] {
-  const p = (1 + Math.sqrt(5)) / 2;
-  const v: [number, number, number][] = [
-    [0, 1, p], [0, -1, p], [0, 1, -p], [0, -1, -p],
-    [1, p, 0], [-1, p, 0], [1, -p, 0], [-1, -p, 0],
-    [p, 0, 1], [p, 0, -1], [-p, 0, 1], [-p, 0, -1],
-    [1, p, 0], [-1, p, 0], [1, -p, 0], [-1, -p, 0],
-    [0.5, p / 2, (p * p) / 2], [0.5, p / 2, -(p * p) / 2],
-    [0.5, -p / 2, (p * p) / 2], [0.5, -p / 2, -(p * p) / 2],
-    [-0.5, p / 2, (p * p) / 2], [-0.5, p / 2, -(p * p) / 2],
-    [-0.5, -p / 2, (p * p) / 2], [-0.5, -p / 2, -(p * p) / 2],
-    [p / 2, (p * p) / 2, 0.5], [p / 2, -(p * p) / 2, 0.5],
-    [-p / 2, (p * p) / 2, 0.5], [-p / 2, -(p * p) / 2, 0.5],
-    [(p * p) / 2, 0.5, p / 2], [-(p * p) / 2, 0.5, p / 2],
-  ];
-  return v.slice(0, 30).map(([x, y, z]) => new THREE.Vector3(x, y, z).normalize());
+  const base = icosahedronDirs();
+  const edgeMidpoints: THREE.Vector3[] = [];
+  let minDistance = Infinity;
+  for (let i = 1; i < base.length; i++) {
+    const dist = base[0].distanceTo(base[i]);
+    if (dist < minDistance) minDistance = dist;
+  }
+  for (let a = 0; a < base.length; a++) {
+    for (let b = a + 1; b < base.length; b++) {
+      const dist = base[a].distanceTo(base[b]);
+      if (Math.abs(dist - minDistance) < 0.01) {
+        edgeMidpoints.push(base[a].clone().add(base[b]).normalize());
+      }
+    }
+  }
+  return edgeMidpoints;
 }
 
 /** Geodesic fallback — greedy farthest-point sampling from icosahedron midpoints */
 export function geodesicDirs(n: number): THREE.Vector3[] {
   const base = icosahedronDirs();
   const pool: THREE.Vector3[] = [...base];
-  for (let a = 0; a < base.length; a++)
-    for (let b = a + 1; b < base.length; b++)
-      pool.push(base[a].clone().add(base[b]).normalize());
+  for (let a = 0; a < base.length; a++) {
+    for (let b = a + 1; b < base.length; b++) {
+      const sum = base[a].clone().add(base[b]);
+      if (sum.lengthSq() > 0.01) {
+        pool.push(sum.normalize());
+      }
+    }
+  }
 
   const chosen: THREE.Vector3[] = [pool[0]];
   while (chosen.length < n) {

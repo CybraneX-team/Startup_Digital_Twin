@@ -3,7 +3,9 @@
  * Teams, Projects (7–8), and 4 department-specific branch nodes from
  * Company_Department_Root_Branch_Action_Node_Framework.md
  */
-import type { UInternalNode } from './bdtPolytopeData';
+import type { UInternalNode, UExternalNode } from './bdtPolytopeData';
+import { BDT_DEPARTMENT_COLORS, BDT_FRAMEWORK_DEPARTMENTS, getExternalNodeColor } from './bdtPolytopeData';
+import { BDT_DEPARTMENT_DEPENDENCIES, BDT_NODE_DEPENDENCY_OVERRIDES } from './bdtDepartmentDependencies';
 
 type InternalDef = {
   label: string;
@@ -30,42 +32,53 @@ type InternalDef = {
 type BranchDef = { label: string; score: number; leaves: [InternalDef, InternalDef] };
 
 type DeptSeed = {
-  teams: { label: string; score: number; roles: string[]; count: number }[];
+  teams: { label: string; score: number; roles: string[] }[];
   projects: { label: string; score: number; status: string; deadline: string; description: string; budget: string }[];
   branches: BranchDef[];
 };
 
-function buildTree(parentId: string, defs: InternalDef[], depth = 1): UInternalNode[] {
-  return defs.map((d, i) => ({
-    id: `${parentId}_d${depth}_${i}`,
-    label: d.label,
-    type: d.type,
-    score: d.score,
-    memberCount: d.memberCount,
-    members: d.members,
-    projectDetails: d.projectDetails,
-    owner: d.owner,
-    dueDate: d.dueDate,
-    status: d.status,
-    output: d.output,
-    metricImpact: d.metricImpact,
-    dependencies: d.dependencies,
-    workflowSteps: d.workflowSteps,
-    interrelatedDepartments: d.interrelatedDepartments,
-    signalDetails: d.signalDetails,
-    decisionDetails: d.decisionDetails,
-    metricDetails: d.metricDetails,
-    actionDetails: d.actionDetails,
-    children: d.children ? buildTree(`${parentId}_d${depth}_${i}`, d.children, depth + 1) : [],
-  }));
+function buildTree(parentId: string, defs: InternalDef[], deptId: string, depth = 1): UInternalNode[] {
+  return defs.map((d, i) => {
+    const id = `${parentId}_d${depth}_${i}`;
+    let interrelated = d.interrelatedDepartments;
+    if (BDT_NODE_DEPENDENCY_OVERRIDES[id]) {
+      interrelated = BDT_NODE_DEPENDENCY_OVERRIDES[id];
+    } else if (!interrelated || interrelated.length === 0) {
+      interrelated = BDT_DEPARTMENT_DEPENDENCIES[deptId] || [];
+    }
+
+    return {
+      id,
+      label: d.label,
+      type: d.type,
+      score: d.score,
+      memberCount: d.memberCount,
+      members: d.members,
+      projectDetails: d.projectDetails,
+      owner: d.owner,
+      dueDate: d.dueDate,
+      status: d.status,
+      output: d.output,
+      metricImpact: d.metricImpact,
+      dependencies: d.dependencies,
+      workflowSteps: d.workflowSteps,
+      interrelatedDepartments: interrelated,
+      signalDetails: d.signalDetails,
+      decisionDetails: d.decisionDetails,
+      metricDetails: d.metricDetails,
+      actionDetails: d.actionDetails,
+      children: d.children ? buildTree(id, d.children, deptId, depth + 1) : [],
+    };
+  });
 }
 
-function genMembers(count: number, roles: string[]): UInternalNode['members'] {
-  return Array.from({ length: count }).map((_, i) => ({
-    name: `Member ${i + 1}`,
-    role: roles[i % roles.length],
-    avatarUrl: `https://i.pravatar.cc/150?u=bdt${count}${i}`,
-  }));
+export function stripSeededTeamMembers(nodes: UInternalNode[]): UInternalNode[] {
+  return nodes.map(node => {
+    const children = node.children?.length ? stripSeededTeamMembers(node.children) : node.children;
+    if (node.type !== 'team') return { ...node, children };
+    const members = (node.members ?? []).filter(m => Boolean(m.companyMemberId));
+    return { ...node, members, memberCount: members.length, children };
+  });
 }
 
 function metricLeaf(label: string, name: string, value: number, target: number, unit: string, status: 'healthy' | 'warning' | 'critical' = 'healthy'): InternalDef {
@@ -138,26 +151,16 @@ function branchNode(branch: BranchDef): InternalDef {
   };
 }
 
-const ALL_DEPTS = [
-  'dept_engineering', 'dept_product', 'dept_sales', 'dept_marketing',
-  'dept_hr', 'dept_finance', 'dept_operations', 'dept_data',
-  'dept_design', 'dept_security', 'dept_customer_success', 'dept_legal', 'dept_strategy',
-];
-
-function pickRelated(deptId: string, n = 2): string[] {
-  const others = ALL_DEPTS.filter(d => d !== deptId);
-  return others.slice(0, n);
-}
-
-function attachRelated(deptId: string, leaves: InternalDef[]): InternalDef[] {
-  return leaves.map((l, i) => ({ ...l, interrelatedDepartments: pickRelated(deptId, 2 + (i % 2)) }));
+function attachRelated(leaves: InternalDef[]): InternalDef[] {
+  // Do not assign interrelatedDepartments here; buildTree will handle curated assignment.
+  return leaves;
 }
 
 const DEPT_SEEDS: Record<string, DeptSeed> = {
   dept_engineering: {
     teams: [
-      { label: 'Backend Team', score: 90, roles: ['Tech Lead', 'Backend Engineer', 'DBA'], count: 5 },
-      { label: 'Frontend Team', score: 86, roles: ['Frontend Lead', 'UI Engineer'], count: 4 },
+      { label: 'Backend Team', score: 90, roles: ['Tech Lead', 'Backend Engineer', 'DBA'] },
+      { label: 'Frontend Team', score: 86, roles: ['Frontend Lead', 'UI Engineer'] },
     ],
     projects: [
       { label: 'DB Migrations', score: 76, status: 'In Progress', deadline: 'Q3', description: 'Migrate core database to new cluster with zero-downtime cutover', budget: '$50k' },
@@ -210,8 +213,8 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
   },
   dept_product: {
     teams: [
-      { label: 'Product Core', score: 91, roles: ['Product Manager', 'Analyst'], count: 4 },
-      { label: 'User Research', score: 89, roles: ['UX Researcher', 'Designer'], count: 3 },
+      { label: 'Product Core', score: 91, roles: ['Product Manager', 'Analyst'] },
+      { label: 'User Research', score: 89, roles: ['UX Researcher', 'Designer'] },
     ],
     projects: [
       { label: 'Q3 Milestones', score: 91, status: 'Planning', deadline: 'Q3', description: 'Quarterly product deliverables and OKR alignment', budget: '$100k' },
@@ -263,8 +266,8 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
   },
   dept_sales: {
     teams: [
-      { label: 'Enterprise Sales', score: 83, roles: ['Account Executive', 'Sales Engineer'], count: 4 },
-      { label: 'SMB Sales', score: 75, roles: ['SDR', 'Account Manager'], count: 5 },
+      { label: 'Enterprise Sales', score: 83, roles: ['Account Executive', 'Sales Engineer'] },
+      { label: 'SMB Sales', score: 75, roles: ['SDR', 'Account Manager'] },
     ],
     projects: [
       { label: 'CRM Migration', score: 65, status: 'In Progress', deadline: 'Q2', description: 'Salesforce migration and data hygiene', budget: '$80k' },
@@ -316,7 +319,7 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
     ],
   },
   dept_marketing: {
-    teams: [{ label: 'Brand & Content', score: 80, roles: ['Content Marketer', 'SEO Specialist', 'Designer'], count: 4 }],
+    teams: [{ label: 'Brand & Content', score: 80, roles: ['Content Marketer', 'SEO Specialist', 'Designer'] }],
     projects: [
       { label: 'Summer Campaign', score: 65, status: 'Active', deadline: 'Aug', description: 'Seasonal demand generation campaign', budget: '$200k' },
       { label: 'Website Refresh', score: 72, status: 'In Progress', deadline: 'Q3', description: 'New positioning and conversion pages', budget: '$45k' },
@@ -335,7 +338,7 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
     ],
   },
   dept_hr: {
-    teams: [{ label: 'Recruitment', score: 88, roles: ['Recruiter', 'Sourcer', 'Coordinator'], count: 3 }],
+    teams: [{ label: 'Recruitment', score: 88, roles: ['Recruiter', 'Sourcer', 'Coordinator'] }],
     projects: [
       { label: 'L&D Programs', score: 84, status: 'Planning', deadline: 'Q4', description: 'Learning paths by role family', budget: '$40k' },
       { label: 'Employer Brand', score: 82, status: 'Active', deadline: 'Q3', description: 'Careers site and culture content refresh', budget: '$35k' },
@@ -354,7 +357,7 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
     ],
   },
   dept_finance: {
-    teams: [{ label: 'FP&A Team', score: 96, roles: ['Financial Analyst', 'Controller'], count: 4 }],
+    teams: [{ label: 'FP&A Team', score: 96, roles: ['Financial Analyst', 'Controller'] }],
     projects: [
       { label: 'Audit 2026', score: 88, status: 'Preparation', deadline: 'Dec', description: 'Annual financial audit readiness', budget: '$10k' },
       { label: 'Billing Automation', score: 85, status: 'In Progress', deadline: 'Q3', description: 'Automate invoice generation and collections', budget: '$45k' },
@@ -373,7 +376,7 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
     ],
   },
   dept_operations: {
-    teams: [{ label: 'Logistics Team', score: 62, roles: ['Ops Manager', 'Coordinator'], count: 7 }],
+    teams: [{ label: 'Logistics Team', score: 62, roles: ['Ops Manager', 'Coordinator'] }],
     projects: [
       { label: 'Warehouse Expansion', score: 50, status: 'Delayed', deadline: 'Q4', description: 'Expand fulfillment capacity', budget: '$1M' },
       { label: 'Vendor Scorecard', score: 58, status: 'Active', deadline: 'Q2', description: 'Standardize vendor performance reviews', budget: '$12k' },
@@ -393,8 +396,8 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
   },
   dept_data: {
     teams: [
-      { label: 'Data Engineering', score: 80, roles: ['Data Engineer', 'Architect'], count: 5 },
-      { label: 'BI & Analytics', score: 75, roles: ['BI Analyst', 'Data Scientist'], count: 3 },
+      { label: 'Data Engineering', score: 80, roles: ['Data Engineer', 'Architect'] },
+      { label: 'BI & Analytics', score: 75, roles: ['BI Analyst', 'Data Scientist'] },
     ],
     projects: [
       { label: 'Dashboard Suite', score: 78, status: 'Active', deadline: 'Q3', description: 'Executive and dept self-serve dashboards', budget: '$30k' },
@@ -415,8 +418,8 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
   },
   dept_design: {
     teams: [
-      { label: 'UX Research', score: 90, roles: ['UX Researcher'], count: 3 },
-      { label: 'Visual Design', score: 87, roles: ['UI Designer', 'Motion Designer'], count: 4 },
+      { label: 'UX Research', score: 90, roles: ['UX Researcher'] },
+      { label: 'Visual Design', score: 87, roles: ['UI Designer', 'Motion Designer'] },
     ],
     projects: [
       { label: 'Prototype Tests', score: 85, status: 'Active', deadline: 'Next Month', description: 'App V2 prototyping and validation', budget: '$5k' },
@@ -436,7 +439,7 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
     ],
   },
   dept_security: {
-    teams: [{ label: 'Cloud Security', score: 78, roles: ['Security Engineer', 'Analyst'], count: 4 }],
+    teams: [{ label: 'Cloud Security', score: 78, roles: ['Security Engineer', 'Analyst'] }],
     projects: [
       { label: 'Pen Test Cycle', score: 68, status: 'In Progress', deadline: 'Q3', description: 'Annual penetration testing program', budget: '$40k' },
       { label: 'Zero Trust Network', score: 65, status: 'Planning', deadline: 'Q4', description: 'Zero trust architecture rollout', budget: '$200k' },
@@ -455,7 +458,7 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
     ],
   },
   dept_customer_success: {
-    teams: [{ label: 'Support Ops', score: 80, roles: ['Support Agent', 'CSM'], count: 8 }],
+    teams: [{ label: 'Support Ops', score: 80, roles: ['Support Agent', 'CSM'] }],
     projects: [
       { label: 'Self-Serve Portal', score: 82, status: 'Active', deadline: 'Q3', description: 'Customer self-service knowledge portal', budget: '$50k' },
       { label: 'Health Score v2', score: 84, status: 'In Progress', deadline: 'Q2', description: 'Predictive customer health model', budget: '$30k' },
@@ -474,7 +477,7 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
     ],
   },
   dept_legal: {
-    teams: [{ label: 'Compliance Team', score: 92, roles: ['Legal Counsel', 'Compliance Officer'], count: 3 }],
+    teams: [{ label: 'Compliance Team', score: 92, roles: ['Legal Counsel', 'Compliance Officer'] }],
     projects: [
       { label: 'Data Mapping', score: 86, status: 'Planning', deadline: 'Q4', description: 'Enterprise data mapping for privacy compliance', budget: '$60k' },
       { label: 'MSA Template Refresh', score: 88, status: 'In Progress', deadline: 'Q2', description: 'Update standard customer MSAs', budget: '$12k' },
@@ -493,7 +496,7 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
     ],
   },
   dept_strategy: {
-    teams: [{ label: 'Strategy Team', score: 96, roles: ['Strategist', 'Analyst'], count: 4 }],
+    teams: [{ label: 'Strategy Team', score: 96, roles: ['Strategist', 'Analyst'] }],
     projects: [
       { label: 'M&A Pipeline', score: 91, status: 'Active', deadline: 'Ongoing', description: 'Target screening and diligence tracking', budget: 'Undisclosed' },
       { label: 'Annual Planning', score: 94, status: 'In Progress', deadline: 'Q4', description: 'Next-year strategic plan and budget framing', budget: '$20k' },
@@ -542,8 +545,8 @@ export function buildDepartmentInternalNodes(deptId: string): UInternalNode[] {
       label: t.label,
       type: 'team' as const,
       score: t.score,
-      memberCount: t.count,
-      members: genMembers(t.count, t.roles),
+      memberCount: 0,
+      members: [],
       children: [],
     })),
   };
@@ -567,13 +570,35 @@ export function buildDepartmentInternalNodes(deptId: string): UInternalNode[] {
   };
 
   const branchNodes = seed.branches.map(b => {
-    const leaves = attachRelated(deptId, b.leaves);
+    const leaves = attachRelated(b.leaves);
     return branchNode({ ...b, leaves: leaves as [InternalDef, InternalDef] });
   });
 
-  return buildTree(prefix, [teamsNode, projectsNode, ...branchNodes]);
+  return stripSeededTeamMembers(buildTree(prefix, [teamsNode, projectsNode, ...branchNodes], deptId));
 }
 
 export function getFrameworkDeptIds(): string[] {
   return Object.keys(DEPT_SEEDS);
+}
+
+function countInternalTree(nodes: UInternalNode[]): number {
+  return nodes.reduce((sum, n) => sum + 1 + countInternalTree(n.children ?? []), 0);
+}
+
+/** Attach per-department color and full internal tree from framework seed. */
+export function hydrateBdtDepartment(dept: UExternalNode): UExternalNode {
+  const color = dept.color ?? BDT_DEPARTMENT_COLORS[dept.id] ?? getExternalNodeColor(dept);
+  const seeded = buildDepartmentInternalNodes(dept.id);
+  const internalNodes =
+    dept.internalNodes?.length && countInternalTree(dept.internalNodes) >= countInternalTree(seeded)
+      ? dept.internalNodes
+      : seeded.length > 0
+        ? seeded
+        : dept.internalNodes ?? [];
+  return { ...dept, color, internalNodes: stripSeededTeamMembers(internalNodes) };
+}
+
+/** Framework departments with colors + internal trees — used as BDT store seed. */
+export function getBdtFrameworkSeedDepartments(): UExternalNode[] {
+  return BDT_FRAMEWORK_DEPARTMENTS.map(meta => hydrateBdtDepartment(meta));
 }

@@ -184,6 +184,16 @@
 .twin-universe-viewport {
   position: absolute;
   inset: 0;
+  z-index: 1;
+  pointer-events: auto;
+}
+
+/* BH polytope layer — pointer-events toggled inline when insideBH is active */
+.universe-bh-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
 }
 
 /* Catches pointer events over the universe while workspace is open (grid gaps pass through shell). */
@@ -1545,16 +1555,21 @@
   transform: translateY(-100%) scale(0.9) !important;
 }
 
-/* When active canvas is fullscreen, disable pointer events on the 3D viewport */
-div:has(.ws-canvas-wrap--fullscreen) .twin-universe-viewport {
-  pointer-events: none;
+/* When active canvas is fullscreen, disable pointer events on the 3D viewport.
+   Descendant rule is required because UniverseController sets inline pointer-events on canvas. */
+div:has(.ws-canvas-wrap--fullscreen) .twin-universe-viewport,
+div:has(.ws-canvas-wrap--fullscreen) .twin-universe-viewport canvas {
+  pointer-events: none !important;
 }
 
 /* Root-nodes 3D canvas (CompanyPlanet3DView): shift up + fade when workspace goes fullscreen,
    matching the ws-planet-zone behaviour on industry/subdomain pages. */
+/* Outer shell is a pass-through; only the inner surface receives hits when active. */
 .universe-planet-root-zone {
   position: absolute;
   inset: 0;
+  z-index: 6;
+  pointer-events: none;
   transition:
     transform 2.2s cubic-bezier(0.645, 0.045, 0.355, 1),
     opacity 2.2s ease;

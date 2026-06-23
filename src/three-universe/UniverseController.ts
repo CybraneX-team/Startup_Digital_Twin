@@ -90,6 +90,7 @@ export class UniverseController {
     this.container = container;
     container.style.position = 'relative';
     container.style.overflow = 'hidden';
+    container.style.pointerEvents = 'auto';
     this._data = data;
     this._callbacks = callbacks ?? {};
     this._exitingBH = false;
@@ -962,7 +963,12 @@ export class UniverseController {
 
   /** Shift the 3D scene into the top band for twin workspace overlay (not the DOM canvas). */
   setWorkspaceCompose(active: boolean, animate = true): void {
-    this._setUniverseInteractive(!active);
+    // Keep the peek zone (top band) interactive while workspace is composed.
+    // The twin-universe-interaction-blocker div blocks the lower panel band; fullscreen
+    // is handled via CSS on .twin-universe-viewport (see index.css).
+    if (!active) {
+      this._setUniverseInteractive(true);
+    }
 
     if (this._disposed || !this.engine || !this.cameraCtrl) return;
     const { width, height } = this.engine._getSize();

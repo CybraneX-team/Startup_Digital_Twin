@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+    import { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Hexagon, LogOut, LogIn, Bookmark } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useSavedWorkflows } from '../lib/useSavedWorkflows';
+import { useBdtSavedTrails } from '../lib/useBdtSavedTrails';
 import { api } from '../lib/api';
 
 export default function TopBar() {
@@ -28,7 +29,9 @@ export default function TopBar() {
   const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
   const canManageTeam = canWrite('team');
 
-  const { totalCount: savedCount } = useSavedWorkflows();
+  const { totalCount: workspaceSavedCount } = useSavedWorkflows();
+  const { totalCount: bdtSavedCount } = useBdtSavedTrails();
+  const savedCount = isUniversal ? bdtSavedCount : workspaceSavedCount;
 
   // On /3d, hide the bookmark button until the user has entered a company planet
   const [companyEnteredIn3D, setCompanyEnteredIn3D] = useState(

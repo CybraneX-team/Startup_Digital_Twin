@@ -8,6 +8,9 @@ import { U_DOMAIN_COLOR } from '../../lib/usePolytopeStore';
 import { useSavedWorkflows } from '../../lib/useSavedWorkflows';
 import { BdtTypePanel } from './bdtWorkspacePanels';
 import { isProjectLeafNode } from '../../lib/bdtPolytopeData';
+import { filterReadableDepartments } from '../../lib/bdtTrailRbac';
+import type { BdtWorkflowTrailSession } from '../../lib/useWorkflowTrail';
+import WorkflowTrailRibbon from './WorkflowTrailRibbon';
 
 export interface BdtActionWorkspaceProps {
   node: UInternalNode;
@@ -19,6 +22,19 @@ export interface BdtActionWorkspaceProps {
   canEdit?: boolean;
   onAddMember?: (deptId: string, nodeId: string) => void;
   onDeleteMember?: (dept: UExternalNode, node: UInternalNode, memberIndex: number) => void;
+
+  // BDT workflow trails props
+  onInterrelatedDepartmentClick?: (deptId: string) => void;
+  trailSession?: BdtWorkflowTrailSession | null;
+  isTrailActive?: boolean;
+  isReplayMode?: boolean;
+  canReadDept?: (dept: UExternalNode) => boolean;
+  onSaveTrail?: (title?: string, note?: string) => void;
+  onCancelTrail?: () => void;
+  onUndoTrailHop?: () => void;
+  replayStepIndex?: number;
+  onReplayNext?: () => void;
+  onReplayPrev?: () => void;
 }
 
 function SectionTitle({ children, icon: Icon }: { children: React.ReactNode; icon?: any }) {
@@ -48,6 +64,16 @@ export function BdtActionWorkspace({
   canEdit = false,
   onAddMember,
   onDeleteMember,
+  onInterrelatedDepartmentClick,
+  trailSession = null,
+  isTrailActive = false,
+  isReplayMode = false,
+  onSaveTrail,
+  onCancelTrail,
+  onUndoTrailHop,
+  replayStepIndex = 0,
+  onReplayNext,
+  onReplayPrev,
 }: BdtActionWorkspaceProps) {
   const primaryColor = U_DOMAIN_COLOR[department.domain] || '#8b5cf6';
   const isTeamNode = node.type === 'team';
@@ -116,10 +142,11 @@ export function BdtActionWorkspace({
     }
   }, [alreadySaved, save, remove, getId, lookup.companyId, lookup.role, department.id, department.label, primaryColor, node.id, node.label, node.type]);
 
-  // Interrelated departments resolution
-  const interrelatedDepts = (node.interrelatedDepartments || []).map(id => {
-    return allDepartments.find(d => d.id === id);
-  }).filter(Boolean) as UExternalNode[];
+  // Interrelated departments resolution using RBAC filter
+  const interrelatedDepts = filterReadableDepartments(
+    node.interrelatedDepartments || [],
+    allDepartments
+  );
 
   return (
     <div 
@@ -204,12 +231,18 @@ export function BdtActionWorkspace({
             <PanelIcon className="w-5 h-5" style={{ color: primaryColor }} />
           </div>
           <div>
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
               <span className="text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-widest" style={{ background: `${primaryColor}22`, color: primaryColor, border: `1px solid ${primaryColor}44` }}>
                 {node.type}
               </span>
               <span className="text-white/20 text-[10px]">/</span>
               <span className="text-[11px] text-white/40 uppercase tracking-wider">{department.label}</span>
+              {(isTrailActive && trailSession) && (
+                <>
+                  <span className="text-white/20 text-[10px]">|</span>
+                  <span className="text-[10px] text-purple-300 font-medium">Started from {trailSession.anchor.deptLabel} ({trailSession.anchor.nodeLabel})</span>
+                </>
+              )}
             </div>
             <div className="flex items-center gap-2 text-sm font-medium">
               <span style={{ color: primaryColor }}>{department.label}</span>
@@ -241,7 +274,7 @@ export function BdtActionWorkspace({
             }}
           >
             {alreadySaved ? <BookmarkCheck className="w-3.5 h-3.5" /> : <Bookmark className="w-3.5 h-3.5" />}
-            {alreadySaved ? 'Saved to Workflow' : 'Save Workflow'}
+            {alreadySaved ? 'Bookmarked Node' : 'Bookmark Node'}
           </button>
 
           <button 
@@ -255,6 +288,20 @@ export function BdtActionWorkspace({
           </button>
         </div>
       </header>
+
+      {(isTrailActive || isReplayMode) && (
+        <WorkflowTrailRibbon
+          session={trailSession}
+          departments={allDepartments}
+          onSave={onSaveTrail}
+          onCancel={onCancelTrail}
+          onUndo={onUndoTrailHop}
+          isReplay={isReplayMode}
+          replayStepIndex={replayStepIndex}
+          onReplayNext={onReplayNext}
+          onReplayPrev={onReplayPrev}
+        />
+      )}
 
       {/* Main Workspace Layout */}
       <div className="relative z-10 flex-1 flex overflow-hidden">
@@ -413,19 +460,33 @@ export function BdtActionWorkspace({
 
               {interrelatedDepts.length > 0 && (
                 <div>
-                  <h4 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-4">INTERRELATED DEPARTMENTS</h4>
+                  <h4 className="text-[10px] font-bold text-white/40 uppercase tracking-widest mb-1.5">INTERRELATED DEPARTMENTS</h4>
+                  {!isTrailActive && !isReplayMode && (
+                    <p className="text-[10px] text-white/30 mb-3 italic">
+                      Click a related department to start a path
+                    </p>
+                  )}
                   <div className="flex flex-col gap-3">
                     {interrelatedDepts.map(d => {
                       const dColor = U_DOMAIN_COLOR[d.domain] || '#8b5cf6';
+                      const visited = trailSession && (
+                        trailSession.anchor.deptId === d.id ||
+                        trailSession.stops.some(stop => stop.deptId === d.id)
+                      );
                       return (
                         <button
                           key={d.id}
-                          onClick={() => onDepartmentClick(d.id)}
+                          onClick={() => onInterrelatedDepartmentClick ? onInterrelatedDepartmentClick(d.id) : onDepartmentClick(d.id)}
                           className="w-full flex items-center justify-between p-3 rounded-xl border border-white/5 bg-[#111] hover:bg-white/5 transition-colors text-left"
                         >
                           <div className="flex items-center gap-3">
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: dColor }} />
                             <span className="text-sm font-medium text-white/80">{d.label}</span>
+                            {visited && (
+                              <span className="text-[10px] text-purple-400 font-semibold flex items-center gap-0.5 ml-1">
+                                (✓ Visited)
+                              </span>
+                            )}
                           </div>
                           <ChevronRight className="w-4 h-4 text-white/20" />
                         </button>

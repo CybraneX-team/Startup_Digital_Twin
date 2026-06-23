@@ -17,6 +17,7 @@ import {
   COMPANY_TAG_ICONS,
 } from '../lib/useSavedWorkflows';
 import type { UserPlanetRole } from '../data/companyPlanetRoots';
+import { useBdtSavedTrails } from '../lib/useBdtSavedTrails';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -41,7 +42,7 @@ const ROLE_ICONS: Record<UserPlanetRole, any> = {
 
 // ── Empty State ───────────────────────────────────────────────────────────────
 
-function EmptyState({ onClose }: { onClose?: () => void }) {
+function EmptyState({ onClose, activeTab = 'workspaces' }: { onClose?: () => void; activeTab?: 'workspaces' | 'trails' }) {
   const navigate = useNavigate();
   return (
     <div className="flex-1 flex flex-col items-center justify-center text-center px-8">
@@ -55,14 +56,19 @@ function EmptyState({ onClose }: { onClose?: () => void }) {
         <Bookmark className="w-7 h-7" style={{ color: 'rgba(255,255,255,0.25)' }} />
       </div>
 
-      <h2 className="text-xl font-semibold text-white mb-2 tracking-tight">No saved workflows</h2>
+      <h2 className="text-xl font-semibold text-white mb-2 tracking-tight">
+        {activeTab === 'workspaces' ? 'No saved workspaces' : 'No saved BDT trails'}
+      </h2>
       <p className="text-sm text-white/35 max-w-xs leading-relaxed mb-8">
-        Explore the 3D Universe and bookmark any root, branch, or action node to build your library.
+        {activeTab === 'workspaces'
+          ? 'Explore the 3D Universe and bookmark any root, branch, or action node to build your library.'
+          : 'Record operating routes across Business Digital Twin (BDT) departments to see them here.'
+        }
       </p>
 
       <div className="flex items-center gap-2">
         <button
-          onClick={() => { onClose?.(); navigate('/3d'); }}
+          onClick={() => { onClose?.(); navigate(activeTab === 'workspaces' ? '/3d' : '/universal'); }}
           className="flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all hover:bg-white/10"
           style={{
             background: 'rgba(255,255,255,0.06)',
@@ -71,7 +77,7 @@ function EmptyState({ onClose }: { onClose?: () => void }) {
           }}
         >
           <Globe className="w-4 h-4" />
-          Open 3D Universe
+          {activeTab === 'workspaces' ? 'Open 3D Universe' : 'Open Business Twin'}
         </button>
         <button
           onClick={() => { onClose?.(); navigate('/overview'); }}
@@ -85,18 +91,20 @@ function EmptyState({ onClose }: { onClose?: () => void }) {
         </button>
       </div>
 
-      <div
-        className="mt-10 flex items-start gap-3 text-left rounded-xl px-4 py-3.5 max-w-sm"
-        style={{
-          background: 'rgba(255,255,255,0.02)',
-          border: '1px solid rgba(255,255,255,0.05)',
-        }}
-      >
-        <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'rgba(255,255,255,0.25)' }} />
-        <p className="text-[11px] text-white/25 leading-relaxed">
-          <span className="text-white/40 font-medium">Tip:</span> Hover any node in the Planet 2D view to reveal the bookmark icon.
-        </p>
-      </div>
+      {activeTab === 'workspaces' && (
+        <div
+          className="mt-10 flex items-start gap-3 text-left rounded-xl px-4 py-3.5 max-w-sm"
+          style={{
+            background: 'rgba(255,255,255,0.02)',
+            border: '1px solid rgba(255,255,255,0.05)',
+          }}
+        >
+          <Sparkles className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: 'rgba(255,255,255,0.25)' }} />
+          <p className="text-[11px] text-white/25 leading-relaxed">
+            <span className="text-white/40 font-medium">Tip:</span> Hover any node in the Planet 2D view to reveal the bookmark icon.
+          </p>
+        </div>
+      )}
     </div>
   );
 }
@@ -306,6 +314,107 @@ function SavedItemCard({
   );
 }
 
+function BdtTrailCard({
+  trail,
+  onRemove,
+  onUpdateNote,
+  onClose,
+}: {
+  trail: any;
+  onRemove: (id: string) => void;
+  onUpdateNote: (id: string, note: string) => void;
+  onClose?: () => void;
+}) {
+  const [hovered, setHovered] = useState(false);
+  const navigate = useNavigate();
+
+  return (
+    <div
+      className="relative rounded-xl transition-all duration-200 overflow-hidden group mb-3"
+      style={{
+        background: hovered ? 'rgba(255,255,255,0.04)' : 'rgba(255,255,255,0.025)',
+        border: `1px solid ${hovered ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.055)'}`,
+        padding: '12px 14px 12px 18px',
+      }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
+      {/* Left accent */}
+      <div
+        className="absolute left-0 top-3 bottom-3 w-[2px] rounded-full text-purple-400"
+        style={{ backgroundColor: 'currentColor', opacity: hovered ? 0.7 : 0.35 }}
+      />
+
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex-1 min-w-0">
+          {/* Title */}
+          <h3 className="text-xs font-semibold text-white/90 truncate mb-1">
+            {trail.title}
+          </h3>
+
+          {/* Sequence description */}
+          <div className="flex items-center gap-1.5 flex-wrap mb-2 text-[10px] text-white/50 leading-relaxed">
+            <span className="font-semibold text-purple-300">{trail.anchor.deptLabel}</span>
+            <span className="opacity-40">({trail.anchor.nodeLabel})</span>
+            {trail.stops.map((stop: any, idx: number) => (
+              <span key={idx} className="flex items-center gap-1.5">
+                <ChevronRight className="w-2.5 h-2.5 text-white/20" />
+                <span className="font-semibold text-cyan-300">{stop.deptLabel}</span>
+                {stop.nodeLabel && <span className="opacity-40">({stop.nodeLabel})</span>}
+              </span>
+            ))}
+          </div>
+
+          {/* Meta row */}
+          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+            <span className="flex items-center gap-1 text-[9px]" style={{ color: 'rgba(255,255,255,0.2)' }}>
+              <Clock className="w-2.5 h-2.5" />
+              {timeAgo(trail.savedAt)}
+            </span>
+            <span className="w-px h-2.5" style={{ background: 'rgba(255,255,255,0.08)' }} />
+            <span
+              className="text-[9px] font-semibold px-1.5 py-0.5 rounded uppercase tracking-widest"
+              style={{
+                background: 'rgba(168, 85, 247, 0.1)',
+                color: '#c084fc',
+                border: '1px solid rgba(168, 85, 247, 0.2)',
+              }}
+            >
+              {trail.stops.length + 1} Hops
+            </span>
+          </div>
+
+          {/* Note */}
+          <div className="mt-2">
+            <NoteEditor item={trail as any} onUpdate={(note) => onUpdateNote(trail.id, note)} />
+          </div>
+        </div>
+
+        {/* Right actions */}
+        <div className="flex items-center gap-1.5 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150">
+          <button
+            onClick={() => {
+              navigate(`/universal?replayTrail=${trail.id}`);
+              onClose?.();
+            }}
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-[9px] font-semibold transition-all bg-purple-600/30 hover:bg-purple-600 border border-purple-500/30 text-purple-300 hover:text-white"
+            title="Replay operating route"
+          >
+            Replay
+          </button>
+          <button
+            onClick={() => onRemove(trail.id)}
+            className="w-6 h-6 rounded-lg flex items-center justify-center transition-all hover:bg-red-500/10 text-rose-400/50 hover:text-rose-400"
+            title="Delete trail"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Company Group ─────────────────────────────────────────────────────────────
 
 function CompanyGroup({
@@ -456,7 +565,9 @@ function RoleSection({
 
 export default function SavedWorkflows({ onClose }: { onClose?: () => void }) {
   const { items: _items, totalCount, remove, updateNote, clear, grouped } = useSavedWorkflows();
+  const { savedTrails, removeTrail, updateNote: updateBdtNote, clear: clearBdtTrails, totalCount: bdtTotalCount } = useBdtSavedTrails();
 
+  const [activeTab, setActiveTab] = useState<'workspaces' | 'trails'>('workspaces');
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState<UserPlanetRole | 'all'>('all');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -493,8 +604,26 @@ export default function SavedWorkflows({ onClose }: { onClose?: () => void }) {
     return result;
   }, [grouped, roleFilter, search]);
 
-  const isEmpty = totalCount === 0;
-  const filteredEmpty = !isEmpty && filteredGroups.length === 0;
+  const filteredTrails = useMemo(() => {
+    if (activeTab !== 'trails') return [];
+    if (!search.trim()) return savedTrails;
+    const q = search.toLowerCase();
+    return savedTrails.filter(trail => 
+      trail.title.toLowerCase().includes(q) ||
+      (trail.note ?? '').toLowerCase().includes(q) ||
+      trail.anchor.deptLabel.toLowerCase().includes(q) ||
+      trail.anchor.nodeLabel.toLowerCase().includes(q) ||
+      trail.stops.some(stop => 
+        stop.deptLabel.toLowerCase().includes(q) ||
+        (stop.nodeLabel ?? '').toLowerCase().includes(q)
+      )
+    );
+  }, [savedTrails, activeTab, search]);
+
+  const isEmpty = activeTab === 'workspaces' ? totalCount === 0 : bdtTotalCount === 0;
+  const filteredEmpty = activeTab === 'workspaces' 
+    ? (!isEmpty && filteredGroups.length === 0)
+    : (!isEmpty && filteredTrails.length === 0);
 
   return (
     <div className="fixed inset-0 z-[60] flex justify-end">
@@ -525,14 +654,36 @@ export default function SavedWorkflows({ onClose }: { onClose?: () => void }) {
             background: 'rgba(10,10,15,0.95)',
           }}
         >
+          {/* Top level tabs */}
+          <div className="flex border-b border-white/5 mb-4">
+            <button
+              onClick={() => { setActiveTab('workspaces'); setRoleFilter('all'); }}
+              className={`flex-1 pb-2 text-xs font-semibold text-center transition-all ${activeTab === 'workspaces' ? 'text-purple-300 border-b-2 border-purple-500' : 'text-white/40 hover:text-white/60'}`}
+            >
+              Workspaces ({totalCount})
+            </button>
+            <button
+              onClick={() => { setActiveTab('trails'); setRoleFilter('all'); }}
+              className={`flex-1 pb-2 text-xs font-semibold text-center transition-all ${activeTab === 'trails' ? 'text-purple-300 border-b-2 border-purple-500' : 'text-white/40 hover:text-white/60'}`}
+            >
+              BDT Trails ({bdtTotalCount})
+            </button>
+          </div>
+
           {/* Row 1: Title + Close */}
           <div className="flex items-center gap-3 mb-3">
             <div className="flex-1 min-w-0">
               <h1 className="text-[14px] font-semibold text-white/85 tracking-tight">
-                {roleFilter === 'all' ? 'Saved Workflows' : `${roleFilter.charAt(0).toUpperCase() + roleFilter.slice(1)} Mode`}
+                {activeTab === 'workspaces' 
+                  ? (roleFilter === 'all' ? 'Saved Workflows' : `${roleFilter.charAt(0).toUpperCase() + roleFilter.slice(1)} Mode`)
+                  : 'Saved BDT Trails'
+                }
               </h1>
               <p className="text-[10px] text-white/20 mt-0.5 truncate">
-                Roots · Branches · Action nodes — grouped by company
+                {activeTab === 'workspaces'
+                  ? 'Roots · Branches · Action nodes — grouped by company'
+                  : 'Operating routes recorded across departments'
+                }
               </p>
             </div>
 
@@ -549,13 +700,20 @@ export default function SavedWorkflows({ onClose }: { onClose?: () => void }) {
             </button>
 
             {/* Clear all */}
-            {totalCount > 0 && (
+            {((activeTab === 'workspaces' ? totalCount : bdtTotalCount) > 0) && (
               <div className="shrink-0">
                 {showClearConfirm ? (
                   <div className="flex items-center gap-1.5">
                     <span className="text-[10px] text-white/30">Clear?</span>
                     <button
-                      onClick={() => { clear(); setShowClearConfirm(false); }}
+                      onClick={() => { 
+                        if (activeTab === 'workspaces') {
+                          clear(); 
+                        } else {
+                          clearBdtTrails();
+                        }
+                        setShowClearConfirm(false); 
+                      }}
                       className="text-[10px] px-2 py-1 rounded-md font-medium transition-all hover:brightness-110"
                       style={{ background: 'rgba(248,113,113,0.1)', color: '#f87171', border: '1px solid rgba(248,113,113,0.18)' }}
                     >
@@ -630,76 +788,78 @@ export default function SavedWorkflows({ onClose }: { onClose?: () => void }) {
           </div>
 
           {/* Row 2: Filter tabs */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <button
-              onClick={() => setRoleFilter('all')}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all"
-              style={{
-                background: roleFilter === 'all' ? 'rgba(255,255,255,0.08)' : 'transparent',
-                border: `1px solid ${roleFilter === 'all' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)'}`,
-                color: roleFilter === 'all' ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)',
-              }}
-            >
-              <Layers className="w-3 h-3" />
-              <span className="text-[11px] font-medium">All Modes</span>
-              <span
-                className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
+          {activeTab === 'workspaces' && (
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <button
+                onClick={() => setRoleFilter('all')}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all"
                 style={{
-                  background: 'rgba(255,255,255,0.08)',
-                  color: roleFilter === 'all' ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)',
+                  background: roleFilter === 'all' ? 'rgba(255,255,255,0.08)' : 'transparent',
+                  border: `1px solid ${roleFilter === 'all' ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.05)'}`,
+                  color: roleFilter === 'all' ? 'rgba(255,255,255,0.85)' : 'rgba(255,255,255,0.3)',
                 }}
               >
-                {totalCount}
-              </span>
-            </button>
-
-            {ROLE_ORDER.map(role => {
-              const g = grouped.find(gr => gr.role === role);
-              if (!g) return null;
-              const count = g.companies.reduce((s, c) => s + c.items.length, 0);
-              const RoleIcon = ROLE_ICONS[role];
-              const color = ROLE_COLORS[role];
-              const active = roleFilter === role;
-              return (
-                <button
-                  key={role}
-                  onClick={() => setRoleFilter(roleFilter === role ? 'all' : role)}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all"
+                <Layers className="w-3 h-3" />
+                <span className="text-[11px] font-medium">All Modes</span>
+                <span
+                  className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
                   style={{
-                    background: active ? `${color}12` : 'transparent',
-                    border: `1px solid ${active ? `${color}28` : 'rgba(255,255,255,0.05)'}`,
-                    color: active ? color : 'rgba(255,255,255,0.3)',
+                    background: 'rgba(255,255,255,0.08)',
+                    color: roleFilter === 'all' ? 'rgba(255,255,255,0.7)' : 'rgba(255,255,255,0.25)',
                   }}
                 >
-                  <RoleIcon className="w-3 h-3" style={{ color: active ? color : 'rgba(255,255,255,0.3)' }} />
-                  <span className="text-[11px] font-medium capitalize">{role}</span>
-                  <span
-                    className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
-                    style={{ background: `${color}12`, color: active ? color : 'rgba(255,255,255,0.25)' }}
-                  >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+                  {totalCount}
+                </span>
+              </button>
 
-            {search && (
-              <div
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] ml-auto"
-                style={{
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid rgba(255,255,255,0.06)',
-                  color: 'rgba(255,255,255,0.3)',
-                }}
-              >
-                <Filter className="w-3 h-3" />
-                "{search}"
-                <button onClick={() => setSearch('')} className="ml-1 hover:text-white/60 transition-colors">
-                  <X className="w-3 h-3" />
-                </button>
-              </div>
-            )}
-          </div>
+              {ROLE_ORDER.map(role => {
+                const g = grouped.find(gr => gr.role === role);
+                if (!g) return null;
+                const count = g.companies.reduce((s, c) => s + c.items.length, 0);
+                const RoleIcon = ROLE_ICONS[role];
+                const color = ROLE_COLORS[role];
+                const active = roleFilter === role;
+                return (
+                  <button
+                    key={role}
+                    onClick={() => setRoleFilter(roleFilter === role ? 'all' : role)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg transition-all"
+                    style={{
+                      background: active ? `${color}12` : 'transparent',
+                      border: `1px solid ${active ? `${color}28` : 'rgba(255,255,255,0.05)'}`,
+                      color: active ? color : 'rgba(255,255,255,0.3)',
+                    }}
+                  >
+                    <RoleIcon className="w-3 h-3" style={{ color: active ? color : 'rgba(255,255,255,0.3)' }} />
+                    <span className="text-[11px] font-medium capitalize">{role}</span>
+                    <span
+                      className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
+                      style={{ background: `${color}12`, color: active ? color : 'rgba(255,255,255,0.25)' }}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+
+              {search && (
+                <div
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] ml-auto"
+                  style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    color: 'rgba(255,255,255,0.3)',
+                  }}
+                >
+                  <Filter className="w-3 h-3" />
+                  "{search}"
+                  <button onClick={() => setSearch('')} className="ml-1 hover:text-white/60 transition-colors">
+                    <X className="w-3 h-3" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* ── Content ── */}
@@ -708,7 +868,7 @@ export default function SavedWorkflows({ onClose }: { onClose?: () => void }) {
           style={{ scrollbarWidth: 'thin', scrollbarColor: 'rgba(255,255,255,0.06) transparent' }}
         >
           {isEmpty ? (
-            <EmptyState onClose={onClose} />
+            <EmptyState onClose={onClose} activeTab={activeTab} />
           ) : filteredEmpty ? (
             <div className="flex flex-col items-center py-24 text-center">
               <div
@@ -729,14 +889,26 @@ export default function SavedWorkflows({ onClose }: { onClose?: () => void }) {
             </div>
           ) : (
             <div className="p-6 max-w-4xl mx-auto w-full">
-              {filteredGroups.map(group => (
-                <RoleSection
-                  key={group.role}
-                  group={group}
-                  onRemove={remove}
-                  onUpdateNote={updateNote}
-                />
-              ))}
+              {activeTab === 'workspaces' ? (
+                filteredGroups.map(group => (
+                  <RoleSection
+                    key={group.role}
+                    group={group}
+                    onRemove={remove}
+                    onUpdateNote={updateNote}
+                  />
+                ))
+              ) : (
+                filteredTrails.map(trail => (
+                  <BdtTrailCard
+                    key={trail.id}
+                    trail={trail}
+                    onRemove={removeTrail}
+                    onUpdateNote={updateBdtNote}
+                    onClose={onClose}
+                  />
+                ))
+              )}
             </div>
           )}
         </div>
