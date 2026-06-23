@@ -8,7 +8,6 @@ import { useCompany } from '../lib/db/companies';
 import { UniverseController, type NavPathEntry, type ZoomLevel, type HoverTarget, ZOOM_LEVELS } from '../three-universe/UniverseController';
 import type { UniverseIndustry, UniverseSubdomain } from '../data/universeGraph';
 import CreateCompanyModal from '../components/CreateCompanyModal';
-import type { LocalCompany } from '../lib/localCompanies';
 import UniversalPolytope from '../components/UniversalPolytope';
 import { PolytopeSidePanel } from '../components/PolytopeSidePanel';
 import { PolytopeManager } from '../components/PolytopeManager';
@@ -17,13 +16,22 @@ import CompanyPlanet3DView from '../components/CompanyPlanet3DView';
 import { EXPAND_SETTLE_MS } from '../lib/planetRootAnimation';
 import { CompanyPlanetSidePanel } from '../components/CompanyPlanetSidePanel';
 import {
-  getPlanetRootsForCompany,
+  getRoleLabel,
   getPlanetPathLabels,
   resolvePlanetRestoreTarget,
   rootsToPolytopeDepartments,
   type UserPlanetRole,
   type CompanyPlanetContext,
 } from '../data/companyPlanetRoots';
+import {
+  deleteReferenceCompany,
+  getReferenceCompany,
+  refreshReferenceCompany,
+  referenceCompanyDetailToPlanetContext,
+  pendingReferenceCompanyToPlanetContext,
+  type ReferenceCompany,
+  type ReferenceCompanyJob,
+} from '../lib/db/referenceCompanies';
 import { OpenWorkspaceCue } from '../components/OpenWorkspaceCue';
 import type { WorkspaceEntryContext } from '../context/FounderWorkspaceContext';
 import { UniverseGalaxySidebar } from '../components/universe/UniverseGalaxySidebar';
@@ -57,8 +65,16 @@ export default function Universe3DPage() {
   // Bypass users (VC/Incubator) have no company — pass null so the universe loads without waiting
   const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
   const companyId = isBypassUser ? null : (user ? (profile?.company_id ?? null) : undefined);
-  const { data, loading, error, appendLocalCompany } = useUniverseGraph(companyId);
+  const {
+    data,
+    loading,
+    error,
+    refresh: refreshUniverse,
+    appendReferenceCompany,
+  } = useUniverseGraph(companyId);
   const canCreateDepartments = canWrite('twin') && canWrite('team');
+  const canManageReferenceCompanies = Boolean(companyId)
+    && ['super_admin', 'founder', 'co_founder', 'admin'].includes(authRole ?? '');
 
   // Company name for the polytope core sphere — same fallback chain as UniversalPage
   const bhCompanyName = company?.name || (profile?.company_id
@@ -439,24 +455,80 @@ export default function Universe3DPage() {
     [rootPolytopeDepts, rootPolytopeDeptId],
   );
 
+  const resolvePlanetRole = useCallback((): UserPlanetRole => {
+    if (localStorage.getItem('active_role') === 'vc') return 'vc';
+    return (authRole === 'founder' || authRole === 'co_founder' || authRole === 'admin') ? 'founder' : 'career';
+  }, [authRole]);
+
+  const referenceIdFromCompany = useCallback((company: any): string | null => {
+    if (company?.referenceCompanyId) return company.referenceCompanyId;
+    if (typeof company?.id === 'string' && company.id.startsWith('ref-')) {
+      return company.id.slice(4);
+    }
+    return null;
+  }, []);
+
   const handleCompanyAwaitingRole = useCallback((ctx: {
-    company: { id: string; name: string };
+    company: any;
     industry: UniverseIndustry;
     subdomain: UniverseSubdomain;
   }) => {
     const planetRole: UserPlanetRole =
-      localStorage.getItem('active_role') === 'vc' ? 'vc' :
-        (authRole === 'founder' || authRole === 'co_founder' || authRole === 'admin') ? 'founder' :
-          'career';
+      resolvePlanetRole();
 
-    const pCtx = getPlanetRootsForCompany(ctx.company.id, ctx.company.name, planetRole);
-    setPlanetContext(pCtx);
+    const referenceCompanyId = referenceIdFromCompany(ctx.company);
+    if (!referenceCompanyId) {
+      setPlanetContext({
+        companyId: ctx.company.id,
+        companyName: ctx.company.name,
+        role: planetRole,
+        roleLabel: getRoleLabel(planetRole),
+        roots: [],
+        status: 'failed',
+        lastError: 'This is your workspace company. Its actual BDT lives in the 3D Twin/BDT view, not in the public reference-company research graph.',
+      });
+      setPlanetIndustryColor(ctx.industry.color);
+      setInsidePlanetRoots(true);
+      return;
+    }
+
+    if (ctx.company.referenceRaw) {
+      setPlanetContext(pendingReferenceCompanyToPlanetContext(ctx.company.referenceRaw, planetRole));
+    } else {
+      setPlanetContext({
+        companyId: ctx.company.id,
+        referenceCompanyId,
+        companyName: ctx.company.name,
+        role: planetRole,
+        roleLabel: getRoleLabel(planetRole),
+        roots: [],
+        status: ctx.company.referenceStatus ?? 'pending',
+        lastError: ctx.company.lastError ?? null,
+        sourceUrl: ctx.company.sourceUrl ?? null,
+      });
+    }
     setPlanetIndustryColor(ctx.industry.color);
     setInsidePlanetRoots(true);
+
+    void getReferenceCompany(referenceCompanyId)
+      .then(detail => {
+        setPlanetContext(referenceCompanyDetailToPlanetContext(detail, planetRole));
+        refreshUniverse();
+      })
+      .catch(err => {
+        setPlanetContext(prev => prev && prev.referenceCompanyId === referenceCompanyId
+          ? {
+              ...prev,
+              status: 'failed',
+              lastError: err instanceof Error ? err.message : 'Failed to load reference company twin.',
+            }
+          : prev);
+      });
+
     // Signal to TopBar that a company planet has been entered this session
     sessionStorage.setItem('company_entered_in_3d', '1');
     window.dispatchEvent(new Event('company_entered_in_3d'));
-  }, [authRole]);
+  }, [referenceIdFromCompany, refreshUniverse, resolvePlanetRole]);
 
   const handleExitRootPolytope = useCallback(() => {
     clearPlanetRestoreTimers();
@@ -483,8 +555,11 @@ export default function Universe3DPage() {
 
   const handleRoleChange = useCallback((role: UserPlanetRole) => {
     if (!planetContext) return;
-    const pCtx = getPlanetRootsForCompany(planetContext.companyId, planetContext.companyName, role);
-    setPlanetContext(pCtx);
+    setPlanetContext({
+      ...planetContext,
+      role,
+      roleLabel: getRoleLabel(role),
+    });
     handleExitRootPolytope();
   }, [planetContext, handleExitRootPolytope]);
 
@@ -584,12 +659,14 @@ export default function Universe3DPage() {
     }
   }, [pathname]);
 
-  // BDT zoom-out → open this company's planet root map on 3D Twin (not back to BDT).
+  // Legacy BDT zoom-out used to regenerate mock roots. Keep the navigation safe,
+  // but do not create reference-company data unless a backend reference id exists.
   useEffect(() => {
     const payload = (state as { enterPlanetRootsFromBdt?: {
       companyId: string;
       companyName: string;
       role: UserPlanetRole;
+      referenceCompanyId?: string;
       industryColor?: string;
     } })?.enterPlanetRootsFromBdt;
     if (pathname !== '/3d' || !payload) return;
@@ -608,15 +685,43 @@ export default function Universe3DPage() {
     setRootPolytopeBackStep(0);
     setActionWorkspace(null);
 
-    const ctx = getPlanetRootsForCompany(payload.companyId, payload.companyName, payload.role);
-    setPlanetContext(ctx);
+    const referenceCompanyId = payload.referenceCompanyId
+      ?? (payload.companyId.startsWith('ref-') ? payload.companyId.slice(4) : null);
+
+    if (!referenceCompanyId) {
+      setPlanetContext({
+        companyId: payload.companyId,
+        companyName: payload.companyName,
+        role: payload.role,
+        roleLabel: getRoleLabel(payload.role),
+        roots: [],
+        status: 'failed',
+        lastError: 'No generated reference-company twin exists for this workspace company.',
+      });
+    } else {
+      setPlanetContext({
+        companyId: `ref-${referenceCompanyId}`,
+        referenceCompanyId,
+        companyName: payload.companyName,
+        role: payload.role,
+        roleLabel: getRoleLabel(payload.role),
+        roots: [],
+        status: 'pending',
+      });
+      void getReferenceCompany(referenceCompanyId)
+        .then(detail => setPlanetContext(referenceCompanyDetailToPlanetContext(detail, payload.role)))
+        .catch(err => setPlanetContext(prev => prev && prev.referenceCompanyId === referenceCompanyId
+          ? { ...prev, status: 'failed', lastError: err instanceof Error ? err.message : 'Failed to restore reference twin.' }
+          : prev));
+    }
     setInsidePlanetRoots(true);
     if (payload.industryColor) {
       setPlanetIndustryColor(payload.industryColor);
     }
 
     savePlanetState({
-      companyId: payload.companyId,
+      companyId: referenceCompanyId ? `ref-${referenceCompanyId}` : payload.companyId,
+      referenceCompanyId: referenceCompanyId ?? undefined,
       companyName: payload.companyName,
       role: payload.role,
       insideRootPolytope: false,
@@ -642,6 +747,7 @@ export default function Universe3DPage() {
     setInsidePlanetRoots(false);
     setPlanetContext(null);
     setPlanetSearchQuery('');
+    clearPlanetState();
     controllerRef.current?.goBack();
   }, [handleExitRootPolytope, clearPlanetRestoreTimers]);
 
@@ -678,24 +784,34 @@ export default function Universe3DPage() {
     if (state?.actionWorkspaceContext) {
       planetSessionRestoredRef.current = true;
       const item = state.actionWorkspaceContext;
-      const ctx = getPlanetRootsForCompany(item.companyId, item.companyName, item.role);
-
-      setPlanetContext(ctx);
-      setInsidePlanetRoots(true);
-
       isPlanetRestoringRef.current = true;
-      const { rootId, internalPath } = resolvePlanetRestoreTarget(ctx, {
-        rootPolytopeDeptId: item.rootId,
-        rootPolytopeInternalPath: [item.branchId, item.actionId],
-      });
-      if (rootId) {
-        snapRestoreToTarget(
-          ctx,
-          rootId,
-          internalPath.length >= 2 ? internalPath : [item.branchId, item.actionId],
-        );
+      const referenceCompanyId =
+        item.referenceCompanyId ??
+        (typeof item.companyId === 'string' && item.companyId.startsWith('ref-') ? item.companyId.slice(4) : null);
+
+      if (referenceCompanyId) {
+        void getReferenceCompany(referenceCompanyId)
+          .then(detail => {
+            const ctx = referenceCompanyDetailToPlanetContext(detail, item.role);
+            setPlanetContext(ctx);
+            setInsidePlanetRoots(true);
+            const { rootId, internalPath } = resolvePlanetRestoreTarget(ctx, {
+              rootPolytopeDeptId: item.rootId,
+              rootPolytopeInternalPath: [item.branchId, item.actionId],
+            });
+            if (rootId) {
+              snapRestoreToTarget(
+                ctx,
+                rootId,
+                internalPath.length >= 2 ? internalPath : [item.branchId, item.actionId],
+              );
+            }
+            requestAnimationFrame(() => finishPlanetRestore());
+          })
+          .catch(() => finishPlanetRestore());
+      } else {
+        finishPlanetRestore();
       }
-      requestAnimationFrame(() => finishPlanetRestore());
 
       // Clear state so it doesn't reopen if navigating back
       navigate('/3d', { replace: true, state: {} });
@@ -711,23 +827,39 @@ export default function Universe3DPage() {
     planetSessionRestoredRef.current = true;
     isPlanetRestoringRef.current = true;
 
-    const ctx = getPlanetRootsForCompany(pState.companyId, pState.companyName, pState.role as UserPlanetRole);
-    setPlanetContext(ctx);
-    setInsidePlanetRoots(true);
-    if (pState.industryColor) {
-      setPlanetIndustryColor(pState.industryColor);
+    const referenceCompanyId =
+      pState.referenceCompanyId ??
+      (pState.companyId.startsWith('ref-') ? pState.companyId.slice(4) : null);
+    if (!referenceCompanyId) {
+      clearPlanetState();
+      requestAnimationFrame(() => finishPlanetRestore());
+      return;
     }
-    sessionStorage.setItem('company_entered_in_3d', '1');
 
-    if (pState.insideRootPolytope && (pState.rootPolytopeDeptId || pState.rootLabel)) {
-      const { rootId, internalPath } = resolvePlanetRestoreTarget(ctx, pState);
-      if (rootId) {
-        snapRestoreToTarget(ctx, rootId, internalPath);
+    void getReferenceCompany(referenceCompanyId)
+      .then(detail => {
+        const ctx = referenceCompanyDetailToPlanetContext(detail, pState.role as UserPlanetRole);
+        setPlanetContext(ctx);
+        setInsidePlanetRoots(true);
+        if (pState.industryColor) {
+          setPlanetIndustryColor(pState.industryColor);
+        }
+        sessionStorage.setItem('company_entered_in_3d', '1');
+
+        if (pState.insideRootPolytope && (pState.rootPolytopeDeptId || pState.rootLabel)) {
+          const { rootId, internalPath } = resolvePlanetRestoreTarget(ctx, pState);
+          if (rootId) {
+            snapRestoreToTarget(ctx, rootId, internalPath);
+          }
+        }
+
+        requestAnimationFrame(() => finishPlanetRestore());
+      })
+      .catch(() => {
+        clearPlanetState();
+        requestAnimationFrame(() => finishPlanetRestore());
       }
-    }
-
-    // Defer until React commits restored state — prevents persist effect from clearing sessionStorage first.
-    requestAnimationFrame(() => finishPlanetRestore());
+    );
 
     return () => {
       planetSessionRestoredRef.current = false;
@@ -745,6 +877,7 @@ export default function Universe3DPage() {
       );
       savePlanetState({
         companyId: planetContext.companyId,
+        referenceCompanyId: planetContext.referenceCompanyId,
         companyName: planetContext.companyName,
         role: planetContext.role,
         insideRootPolytope,
@@ -775,22 +908,6 @@ export default function Universe3DPage() {
     if (!insideRootPolytope || !planetContext) return;
     setRootPolytopeDepts(rootsToPolytopeDepartments(planetContext.roots));
   }, [insideRootPolytope, planetContext]);
-
-  // Listen for workflows_updated to refresh planet roots if tag changes
-  useEffect(() => {
-    const handleWorkflowsUpdated = () => {
-      if (insidePlanetRoots && planetContext) {
-        const freshCtx = getPlanetRootsForCompany(
-          planetContext.companyId,
-          planetContext.companyName,
-          planetContext.role,
-        );
-        setPlanetContext(freshCtx);
-      }
-    };
-    window.addEventListener('workflows_updated', handleWorkflowsUpdated);
-    return () => window.removeEventListener('workflows_updated', handleWorkflowsUpdated);
-  }, [insidePlanetRoots, planetContext]);
 
   const handleActionNodeClick = useCallback((rootId: string, branchId: string, actionId: string) => {
     if (!planetContext) return;
@@ -849,21 +966,116 @@ export default function Universe3DPage() {
     }
   }, []);
 
-  // Called by the modal after a successful save.
-  const handleCompanyCreated = useCallback((company: LocalCompany) => {
-    appendLocalCompany(company as any);
+  // Called by the modal after backend creates a pending reference twin.
+  const handleCompanyCreated = useCallback((result: { company: ReferenceCompany; job: ReferenceCompanyJob }) => {
+    appendReferenceCompany(result.company);
+    refreshUniverse();
     setCreateModal(null);
-  }, [appendLocalCompany]);
+  }, [appendReferenceCompany, refreshUniverse]);
 
-  const handleCloseCreate = useCallback((isCancel: boolean = true) => {
-    // If the user cancelled, we must cleanly remove the placeholder planet
-    if (isCancel && createModal?.draftPlanetId) {
+  const handleCloseCreate = useCallback((_isCancel: boolean = true) => {
+    // The placeholder planet is only a visual drafting aid. Backend data owns
+    // the real pending reference planet after submit.
+    if (createModal?.draftPlanetId) {
       controllerRef.current?.removeDraftCompany(createModal.draftPlanetId);
     }
     // Unfreeze orbits and fly camera back to subdomain overview
     controllerRef.current?.unfocusDraftPlanet();
     setCreateModal(null);
   }, [createModal]);
+
+  useEffect(() => {
+    const referenceCompanyId = planetContext?.referenceCompanyId;
+    if (!insidePlanetRoots || !referenceCompanyId) return;
+    if (planetContext.status !== 'pending' && planetContext.status !== 'running') return;
+
+    let cancelled = false;
+    const hydrate = async () => {
+      try {
+        const detail = await getReferenceCompany(referenceCompanyId);
+        if (cancelled) return;
+        setPlanetContext(referenceCompanyDetailToPlanetContext(detail, planetContext.role));
+        refreshUniverse();
+      } catch (err) {
+        if (cancelled) return;
+        setPlanetContext(prev => prev && prev.referenceCompanyId === referenceCompanyId
+          ? {
+              ...prev,
+              status: 'failed',
+              lastError: err instanceof Error ? err.message : 'Failed to refresh reference company status.',
+            }
+          : prev);
+      }
+    };
+
+    const intervalId = window.setInterval(() => void hydrate(), 5000);
+    void hydrate();
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, [
+    insidePlanetRoots,
+    planetContext?.referenceCompanyId,
+    planetContext?.status,
+    planetContext?.role,
+    refreshUniverse,
+  ]);
+
+  const handleRefreshReferenceCompany = useCallback(async () => {
+    if (!planetContext?.referenceCompanyId || !canManageReferenceCompanies) return;
+    try {
+      const result = await refreshReferenceCompany(planetContext.referenceCompanyId);
+      setPlanetContext(pendingReferenceCompanyToPlanetContext(result.company, planetContext.role, result.job));
+      appendReferenceCompany(result.company);
+      refreshUniverse();
+    } catch (err) {
+      setPlanetContext(prev => prev
+        ? {
+            ...prev,
+            status: 'failed',
+            lastError: err instanceof Error ? err.message : 'Failed to start refresh.',
+          }
+        : prev);
+    }
+  }, [appendReferenceCompany, canManageReferenceCompanies, planetContext, refreshUniverse]);
+
+  const handleDeleteReferenceCompany = useCallback(async () => {
+    if (!planetContext?.referenceCompanyId || !canManageReferenceCompanies) return;
+    const confirmed = window.confirm(`Delete the reference twin for ${planetContext.companyName}? This will remove its generated roots and citations.`);
+    if (!confirmed) return;
+
+    try {
+      await deleteReferenceCompany(planetContext.referenceCompanyId);
+      clearPlanetRestoreTimers();
+      pendingPlanetRestoreRef.current = null;
+      isPlanetRestoringRef.current = false;
+      setSessionRestoreActive(false);
+      setRestoreInternalPath([]);
+      handleExitRootPolytope();
+      setInsidePlanetRoots(false);
+      setPlanetContext(null);
+      setPlanetSearchQuery('');
+      clearPlanetState();
+      refreshUniverse();
+      controllerRef.current?.goBack();
+    } catch (err) {
+      setPlanetContext(prev => prev
+        ? {
+            ...prev,
+            status: 'failed',
+            lastError: err instanceof Error ? err.message : 'Failed to delete reference twin.',
+          }
+        : prev);
+    }
+  }, [
+    canManageReferenceCompanies,
+    clearPlanetRestoreTimers,
+    handleExitRootPolytope,
+    planetContext?.companyName,
+    planetContext?.referenceCompanyId,
+    refreshUniverse,
+  ]);
 
   const handleOpenWorkspace = useCallback(() => {
     if (twinWorkspacePhase !== 'closed' || insideBH || insideCompanyInterior) return;
@@ -1439,6 +1651,10 @@ export default function Universe3DPage() {
                 setSearchQuery={setPlanetSearchQuery}
                 industryColor={planetIndustryColor}
                 onRoleChange={handleRoleChange}
+                onRefresh={handleRefreshReferenceCompany}
+                canRefresh={canManageReferenceCompanies && Boolean(planetContext.referenceCompanyId)}
+                onDelete={handleDeleteReferenceCompany}
+                canDelete={canManageReferenceCompanies && Boolean(planetContext.referenceCompanyId)}
               />
             </div>
           ) : (insideBH || insideCompanyInterior) && voiceState === 'idle' ? (
@@ -1496,6 +1712,7 @@ export default function Universe3DPage() {
                 currentLevel={currentLevel}
                 controllerRef={controllerRef}
                 onAddCompany={handleAddCompany}
+                canAddCompany={canManageReferenceCompanies}
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
                 searchInputRef={searchInputRef}
