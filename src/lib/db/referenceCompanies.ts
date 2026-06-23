@@ -6,11 +6,19 @@ import {
   type PlanetBranchNode,
   type PlanetBranchNodeType,
   type PlanetCitation,
+  type ReferenceCompanyJob,
   type PlanetRootNode,
   type UserPlanetRole,
 } from '../../data/companyPlanetRoots';
 
 export type ReferenceCompanyStatus = 'pending' | 'running' | 'ready' | 'failed';
+export type ReferenceCompanyClassification = 'competitor' | 'customer' | 'collaborator';
+
+export interface ReferenceCompanyScores {
+  threatScore?: number;
+  customerPriority?: number;
+  partnerPotential?: number;
+}
 
 export interface ReferenceCompany {
   id: string;
@@ -24,26 +32,12 @@ export interface ReferenceCompany {
   status: ReferenceCompanyStatus;
   lastError: string | null;
   generatedAt: string | null;
+  classification: ReferenceCompanyClassification | null;
+  scores: ReferenceCompanyScores;
   createdBy: string | null;
   createdAt: string;
   updatedAt: string;
   nodeCount: number;
-}
-
-export interface ReferenceCompanyJob {
-  id: string;
-  referenceCompanyId: string;
-  companyId: string;
-  kind: 'generate' | 'refresh';
-  status: 'pending' | 'running' | 'complete' | 'failed';
-  attempts: number;
-  maxAttempts: number;
-  lastError: string | null;
-  lockedUntil?: string | null;
-  lockedBy?: string | null;
-  startedAt: string | null;
-  completedAt: string | null;
-  createdAt: string;
 }
 
 export interface ReferenceCompanyNode {
@@ -57,6 +51,7 @@ export interface ReferenceCompanyNode {
   confidence: number;
   color: string | null;
   sortOrder: number;
+  isDynamic: boolean;
   metadata: Record<string, unknown>;
   sources: PlanetCitation[];
 }
@@ -66,6 +61,7 @@ export interface ReferenceCompanyDetail {
   nodes: ReferenceCompanyNode[];
   sources: PlanetCitation[];
   job: ReferenceCompanyJob | null;
+  classifyJob: ReferenceCompanyJob | null;
 }
 
 export async function listReferenceCompanies(subdomainId?: string): Promise<ReferenceCompany[]> {
@@ -77,10 +73,12 @@ export async function listReferenceCompanies(subdomainId?: string): Promise<Refe
 export async function createReferenceCompany(input: {
   url: string;
   subdomainId: string;
+  classification?: string;
 }): Promise<{ company: ReferenceCompany; job: ReferenceCompanyJob }> {
   return api.post<{ company: ReferenceCompany; job: ReferenceCompanyJob }>('/api/reference-companies', {
     url: input.url,
     subdomainId: input.subdomainId,
+    classification: input.classification,
   });
 }
 
@@ -90,6 +88,16 @@ export async function getReferenceCompany(id: string): Promise<ReferenceCompanyD
 
 export async function refreshReferenceCompany(id: string): Promise<{ company: ReferenceCompany; job: ReferenceCompanyJob }> {
   return api.post<{ company: ReferenceCompany; job: ReferenceCompanyJob }>(`/api/reference-companies/${id}/refresh`, {});
+}
+
+export async function setReferenceCompanyClassification(
+  id: string,
+  classification: ReferenceCompanyClassification | null,
+): Promise<{ company: ReferenceCompany; classifyJob: ReferenceCompanyJob | null }> {
+  return api.patch<{ company: ReferenceCompany; classifyJob: ReferenceCompanyJob | null }>(
+    `/api/reference-companies/${id}/classification`,
+    { classification },
+  );
 }
 
 export async function deleteReferenceCompany(id: string): Promise<void> {
@@ -137,6 +145,7 @@ export function referenceCompanyDetailToPlanetContext(
             relevance: branchNode.relevance,
             confidence: branchNode.confidence,
             sources: branchNode.sources,
+            isDynamic: branchNode.isDynamic,
             actions,
           };
         });
@@ -149,6 +158,7 @@ export function referenceCompanyDetailToPlanetContext(
         confidence: rootNode.confidence,
         color: rootNode.color ?? '#C1AEFF',
         sources: rootNode.sources,
+        isDynamic: rootNode.isDynamic,
         branches,
       };
     });
@@ -166,6 +176,9 @@ export function referenceCompanyDetailToPlanetContext(
     canonicalUrl: detail.company.canonicalUrl,
     generatedAt: detail.company.generatedAt,
     job: detail.job,
+    classification: detail.company.classification,
+    scores: detail.company.scores,
+    classifyJob: detail.classifyJob,
   };
 }
 
@@ -187,5 +200,8 @@ export function pendingReferenceCompanyToPlanetContext(
     canonicalUrl: company.canonicalUrl,
     generatedAt: company.generatedAt,
     job: job ?? null,
+    classification: company.classification,
+    scores: company.scores,
+    classifyJob: null,
   };
 }

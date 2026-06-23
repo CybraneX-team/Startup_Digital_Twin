@@ -1,15 +1,24 @@
+import { Lock } from 'lucide-react';
 import type { PlanetCoreDetails } from '../../data/companyPlanetRoots';
 import { CompanyTagDropdown } from './CompanyTagDropdown';
+import type { CompanyTag } from '../../lib/useSavedWorkflows';
+import { COMPANY_TAG_LABELS, COMPANY_TAG_ICONS, COMPANY_TAG_COLORS } from '../../lib/useSavedWorkflows';
 
 export interface PlanetCoreContextCardProps {
   details: PlanetCoreDetails;
   industryColor?: string;
+  referenceCompanyId?: string;
+  activeClassification?: 'competitor' | 'customer' | 'collaborator' | null;
+  onClassificationChange?: (tag: CompanyTag | null) => void;
 }
 
 /** Company + role summary — lives in the side panel, not on the map center */
 export function PlanetCoreContextCard({
   details,
   industryColor = '#C1AEFF',
+  referenceCompanyId,
+  activeClassification,
+  onClassificationChange,
 }: PlanetCoreContextCardProps) {
 
   // For the active card styling, we can check if it's tagged right here or just rely on the inner component.
@@ -64,14 +73,34 @@ export function PlanetCoreContextCard({
           ))}
         </div>
 
-        {/* Tagging System UI */}
+        {/* Classification UI */}
         <div className="mt-4 pt-3 border-t border-white/[0.06] relative">
-          <CompanyTagDropdown 
-            companyId={details.companyId}
-            companyName={details.companyName}
-            role={details.role}
-            industryColor={industryColor}
-          />
+          {activeClassification ? (() => {
+            const Icon = COMPANY_TAG_ICONS[activeClassification];
+            const color = COMPANY_TAG_COLORS[activeClassification];
+            return (
+              <div
+                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg"
+                style={{ background: `${color}12`, border: `1px solid ${color}30` }}
+              >
+                <Icon className="w-3.5 h-3.5" style={{ color }} />
+                <span className="text-[10px] font-bold uppercase tracking-wider" style={{ color }}>
+                  {COMPANY_TAG_LABELS[activeClassification]}
+                </span>
+                <Lock className="w-3 h-3 ml-auto opacity-40" style={{ color }} />
+              </div>
+            );
+          })() : (
+            <CompanyTagDropdown
+              companyId={details.companyId}
+              companyName={details.companyName}
+              role={details.role}
+              industryColor={industryColor}
+              referenceCompanyId={referenceCompanyId}
+              activeClassification={activeClassification}
+              onClassificationChange={onClassificationChange}
+            />
+          )}
         </div>
 
         <p className="mt-3 text-[8px] text-zinc-500 leading-relaxed tracking-wide">

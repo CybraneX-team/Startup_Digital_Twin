@@ -1,79 +1,79 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, Check } from 'lucide-react';
-import { 
-  useSavedWorkflows, 
-  COMPANY_TAG_LABELS, 
-  COMPANY_TAG_ICONS, 
-  COMPANY_TAG_COLORS, 
-  type CompanyTag 
+import { ChevronRight, Check, Loader2 } from 'lucide-react';
+import {
+  COMPANY_TAG_LABELS,
+  COMPANY_TAG_ICONS,
+  COMPANY_TAG_COLORS,
+  type CompanyTag,
 } from '../../lib/useSavedWorkflows';
+import { setReferenceCompanyClassification } from '../../lib/db/referenceCompanies';
 import type { UserPlanetRole } from '../../data/companyPlanetRoots';
 
 export interface CompanyTagDropdownProps {
   companyId: string;
   companyName: string;
-  role?: UserPlanetRole; // Defaults to active_role in local storage or 'founder'
+  role?: UserPlanetRole;
   industryColor?: string;
+  referenceCompanyId?: string;
+  activeClassification?: 'competitor' | 'customer' | 'collaborator' | null;
+  onClassificationChange?: (tag: CompanyTag | null) => void;
 }
 
 export function CompanyTagDropdown({
-  companyId,
-  companyName,
-  role,
+  companyId: _companyId,
+  companyName: _companyName,
+  role: _role,
   industryColor = '#C1AEFF',
+  referenceCompanyId,
+  activeClassification,
+  onClassificationChange,
 }: CompanyTagDropdownProps) {
-  const { save, items, remove } = useSavedWorkflows();
   const [menuOpen, setMenuOpen] = useState(false);
   const [coords, setCoords] = useState({ top: 0, left: 0 });
+  const [saving, setSaving] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!menuOpen) return;
     const handleClose = () => setMenuOpen(false);
     window.addEventListener('click', handleClose);
-    // On scroll in any container, it might be better to close or reposition, but closing is safer
     window.addEventListener('scroll', handleClose, true);
     return () => {
       window.removeEventListener('click', handleClose);
       window.removeEventListener('scroll', handleClose, true);
     };
   }, [menuOpen]);
-  
-  // Resolve role
-  const resolvedRole = role ?? ((localStorage.getItem('active_role') as UserPlanetRole) || 'founder');
 
-  // Find if this specific planet is already tagged for this role
-  const savedItem = items.find(
-    i => i.level === 'planet' && i.companyId === companyId && i.role === resolvedRole
-  );
-  const activeTag = savedItem?.planetTag;
+  const activeTag = activeClassification as CompanyTag | null | undefined;
 
-  const handleTag = (tag: CompanyTag, e: React.MouseEvent) => {
+  const handleTag = async (tag: CompanyTag, e: React.MouseEvent) => {
     e.stopPropagation();
-    
-    // Map roles to labels if we are guessing it
-    const roleLabels: Record<UserPlanetRole, string> = {
-      career: 'Career User',
-      founder: 'Founder',
-      vc: 'VC Partner',
-      investor: 'Investor'
-    };
-
-    if (activeTag === tag && savedItem) {
-      remove(savedItem.id);
-    } else {
-      if (savedItem) remove(savedItem.id);
-      save({
-        level: 'planet',
-        planetTag: tag,
-        companyId,
-        companyName,
-        role: resolvedRole,
-        roleLabel: roleLabels[resolvedRole],
-      });
-    }
     setMenuOpen(false);
+
+    const newTag = activeTag === tag ? null : tag;
+
+    if (!referenceCompanyId) {
+      // No reference company yet — notify parent but can't persist
+      onClassificationChange?.(newTag);
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const result = await setReferenceCompanyClassification(referenceCompanyId, newTag);
+      onClassificationChange?.(newTag);
+      // Trigger a context refresh if the parent hasn't subscribed to onClassificationChange
+      if (!onClassificationChange) {
+        window.dispatchEvent(new CustomEvent('reference_company_classified', {
+          detail: { referenceCompanyId, classification: newTag, classifyJob: result.classifyJob },
+        }));
+      }
+    } catch (err) {
+      console.error('[CompanyTagDropdown] classification update failed', err);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const ActiveIcon = activeTag ? COMPANY_TAG_ICONS[activeTag] : null;
@@ -83,6 +83,7 @@ export function CompanyTagDropdown({
     <div className="relative w-full" onClick={e => e.stopPropagation()}>
       <button
         ref={buttonRef}
+        disabled={saving}
         onClick={(e) => {
           e.stopPropagation();
           if (!menuOpen && buttonRef.current) {
@@ -99,8 +100,12 @@ export function CompanyTagDropdown({
         }}
       >
         <div className="flex items-center gap-2">
-          {ActiveIcon && <ActiveIcon className="w-3.5 h-3.5" />}
-          {activeTag ? COMPANY_TAG_LABELS[activeTag] : 'Tag Company'}
+          {saving ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : (
+            ActiveIcon && <ActiveIcon className="w-3.5 h-3.5" />
+          )}
+          {activeTag ? COMPANY_TAG_LABELS[activeTag] : saving ? 'Saving…' : 'Classify'}
         </div>
         <ChevronRight className="w-3.5 h-3.5 transition-transform" />
       </button>

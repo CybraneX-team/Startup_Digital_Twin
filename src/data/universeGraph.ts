@@ -13,6 +13,7 @@ import { getAllIndustries, type DbIndustry } from '../lib/db/industries';
 import { getAllSubdomains, type DbSubdomain } from '../lib/db/subdomains';
 import { getActiveCompanies } from '../lib/db/companies';
 import { getAllLocalCompanies } from '../lib/localCompanies';
+import { listReferenceCompanies, type ReferenceCompany } from '../lib/db/referenceCompanies';
 import type { DbCompany } from '../lib/supabase';
 
 /* ──────────────────────────────────────────────────
@@ -27,6 +28,7 @@ export interface UniverseCompany {
   employees?: number;
   stage?: string;
   isLive: boolean;
+  referenceCompanyId?: string;
   departments?: { id: string; name: string; headcount?: number; focus?: string; metrics?: Record<string, number> }[];
   raw?: DbCompany;
 }
@@ -64,9 +66,10 @@ export function buildUniverseData(args: {
   industries: DbIndustry[];
   subdomains: DbSubdomain[];
   liveCompanies: DbCompany[];
+  referenceCompanies?: ReferenceCompany[];
   myCompanyId?: string | null;
 }): UniverseData {
-  const { industries, subdomains, liveCompanies, myCompanyId } = args;
+  const { industries, subdomains, liveCompanies, referenceCompanies = [], myCompanyId } = args;
 
   // ── Index subdomains by industry ─────────────────────────────────
   const subsByInd = new Map<string, DbSubdomain[]>();
@@ -103,6 +106,18 @@ export function buildUniverseData(args: {
       isLive: true,
       departments: [],
       raw: c,
+    });
+  }
+
+  // 2. Reference companies (backend-researched public companies)
+  for (const rc of referenceCompanies) {
+    if (!rc.subdomainId) continue;
+    addToSub(rc.subdomainId, {
+      id: `ref-${rc.id}`,
+      name: rc.name || new URL(rc.sourceUrl).hostname.replace(/^www\./, ''),
+      description: rc.description ?? undefined,
+      isLive: false,
+      referenceCompanyId: rc.id,
     });
   }
 
@@ -149,19 +164,20 @@ export function useUniverseGraph(authCompanyId?: string | null): {
   loading: boolean;
   error: string | null;
   refresh: () => void;
-  appendLocalCompany: (company: DbCompany) => void;
+  appendReferenceCompany: (company: ReferenceCompany) => void;
 } {
-  const [industries, setIndustries]  = useState<DbIndustry[]>([]);
-  const [subdomains, setSubdomains]  = useState<DbSubdomain[]>([]);
-  const [liveCompanies, setLive]     = useState<DbCompany[]>([]);
-  const [loading, setLoading]        = useState(true);
-  const [error, setError]            = useState<string | null>(null);
-  const [refreshKey, setRefreshKey]  = useState(0);
+  const [industries, setIndustries]       = useState<DbIndustry[]>([]);
+  const [subdomains, setSubdomains]       = useState<DbSubdomain[]>([]);
+  const [liveCompanies, setLive]          = useState<DbCompany[]>([]);
+  const [refCompanies, setRefCompanies]   = useState<ReferenceCompany[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState<string | null>(null);
+  const [refreshKey, setRefreshKey]       = useState(0);
 
   const refresh = () => setRefreshKey(k => k + 1);
 
-  const appendLocalCompany = (company: DbCompany) => {
-    setLive(prev => [...prev, company]);
+  const appendReferenceCompany = (company: ReferenceCompany) => {
+    setRefCompanies(prev => [...prev.filter(c => c.id !== company.id), company]);
   };
 
   useEffect(() => {
@@ -172,13 +188,15 @@ export function useUniverseGraph(authCompanyId?: string | null): {
       getAllIndustries(),
       getAllSubdomains(),
       getActiveCompanies(),
+      listReferenceCompanies().catch(() => [] as ReferenceCompany[]),
     ])
-      .then(([inds, sds, live]) => {
+      .then(([inds, sds, live, refs]) => {
         if (!alive) return;
         setIndustries(inds);
         setSubdomains(sds);
         const localCos = getAllLocalCompanies() as unknown as DbCompany[];
         setLive([...live, ...localCos]);
+        setRefCompanies(refs);
         setLoading(false);
       })
       .catch(err => {
@@ -196,9 +214,10 @@ export function useUniverseGraph(authCompanyId?: string | null): {
       industries,
       subdomains,
       liveCompanies,
+      referenceCompanies: refCompanies,
       myCompanyId: authCompanyId ?? null,
     });
-  }, [loading, industries, subdomains, liveCompanies, authCompanyId]);
+  }, [loading, industries, subdomains, liveCompanies, refCompanies, authCompanyId]);
 
-  return { data, loading, error, refresh, appendLocalCompany };
+  return { data, loading, error, refresh, appendReferenceCompany };
 }

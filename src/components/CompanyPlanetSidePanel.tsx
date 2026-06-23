@@ -1,5 +1,5 @@
-import { useMemo, useRef, useEffect } from 'react';
-import { Search, Command, ArrowLeft, ChevronRight } from 'lucide-react';
+import { useMemo, useRef, useEffect, useState } from 'react';
+import { Search, Command, ArrowLeft, ChevronRight, Globe, Loader2 } from 'lucide-react';
 // import { Briefcase, Rocket, TrendingUp} from 'lucide-react';
 import type {
   CompanyPlanetContext,
@@ -11,6 +11,8 @@ import type {
 import { getExploreLevel, getPlanetCoreDetails, PLANET_BRANCH_TYPE_LABELS } from '../data/companyPlanetRoots';
 import { PlanetCoreContextCard } from './planet/PlanetCoreContextCard';
 import { UniverseNavBackButton } from './UniverseNavBackButton';
+import type { CompanyTag } from '../lib/useSavedWorkflows';
+import { COMPANY_TAG_LABELS, COMPANY_TAG_ICONS, COMPANY_TAG_COLORS } from '../lib/useSavedWorkflows';
 
 export interface CompanyPlanetSidePanelProps {
   context: CompanyPlanetContext;
@@ -26,6 +28,8 @@ export interface CompanyPlanetSidePanelProps {
   setSearchQuery: (q: string) => void;
   industryColor?: string;
   onRoleChange?: (role: UserPlanetRole) => void;
+  onResearchCompany?: (url: string, subdomainId: string, classification: CompanyTag) => Promise<void>;
+  onClassificationChange?: (tag: CompanyTag | null) => void;
 }
 
 function findRoot(ctx: CompanyPlanetContext, rootId: string): PlanetRootNode | undefined {
@@ -56,8 +60,14 @@ export function CompanyPlanetSidePanel({
   setSearchQuery,
   industryColor = '#C1AEFF',
   // onRoleChange,
+  onResearchCompany,
+  onClassificationChange,
 }: CompanyPlanetSidePanelProps) {
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [researchUrl, setResearchUrl] = useState(context.companyWebsite ?? '');
+  const [researchClassification, setResearchClassification] = useState<CompanyTag | null>(null);
+  const [researching, setResearching] = useState(false);
+  const [researchError, setResearchError] = useState<string | null>(null);
   const level = getExploreLevel(depth);
   const isSearchActive = searchQuery.trim().length > 0;
   const coreDetails = useMemo(() => getPlanetCoreDetails(context), [context]);
@@ -278,8 +288,97 @@ export function CompanyPlanetSidePanel({
       </div>
       */}
 
-      {showCoreCard && (
-        <PlanetCoreContextCard details={coreDetails} industryColor={industryColor} />
+      {context.needsResearch && (
+        <div
+          className="rounded-2xl overflow-hidden"
+          style={{
+            width: '196px',
+            background: 'rgba(0, 0, 0, 0.78)',
+            border: `1px solid ${industryColor}33`,
+            backdropFilter: 'blur(14px)',
+          }}
+        >
+          <div
+            className="h-1 w-full"
+            style={{ background: `linear-gradient(90deg, transparent, ${industryColor}, transparent)` }}
+          />
+          <div className="px-3.5 py-3.5">
+            <div className="flex items-center gap-2 mb-2">
+              <Globe className="w-4 h-4" style={{ color: industryColor }} />
+              <span className="text-[11px] font-bold text-white">Research this company</span>
+            </div>
+            <p className="text-[10px] text-white/50 mb-3 leading-snug">
+              Add the company URL to build an AI-powered intelligence planet.
+            </p>
+            <input
+              type="url"
+              placeholder="https://company.com"
+              value={researchUrl}
+              onChange={e => { setResearchUrl(e.target.value); setResearchError(null); }}
+              className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-[11px] text-white placeholder:text-white/25 outline-none focus:border-white/20 mb-2"
+            />
+            {/* Classification picker */}
+            <div className="flex gap-1.5 mb-2">
+              {(Object.keys(COMPANY_TAG_LABELS) as CompanyTag[]).map(tag => {
+                const Icon = COMPANY_TAG_ICONS[tag];
+                const color = COMPANY_TAG_COLORS[tag];
+                const isActive = researchClassification === tag;
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => setResearchClassification(isActive ? null : tag)}
+                    className="flex-1 flex flex-col items-center gap-0.5 py-1.5 rounded-lg text-[9px] font-bold uppercase tracking-wider transition-all"
+                    style={{
+                      background: isActive ? `${color}22` : 'rgba(255,255,255,0.04)',
+                      border: `1px solid ${isActive ? color + '55' : 'rgba(255,255,255,0.08)'}`,
+                      color: isActive ? color : 'rgba(255,255,255,0.35)',
+                    }}
+                  >
+                    <Icon className="w-3 h-3" />
+                    {COMPANY_TAG_LABELS[tag]}
+                  </button>
+                );
+              })}
+            </div>
+            {researchError && (
+              <p className="text-[10px] text-red-400 mb-2">{researchError}</p>
+            )}
+            <button
+              disabled={researching || !researchUrl.trim() || !researchClassification}
+              onClick={async () => {
+                if (!onResearchCompany || !context.subdomainId || !researchClassification) return;
+                setResearching(true);
+                setResearchError(null);
+                try {
+                  await onResearchCompany(researchUrl.trim(), context.subdomainId, researchClassification);
+                } catch (err) {
+                  setResearchError(err instanceof Error ? err.message : 'Research failed');
+                  setResearching(false);
+                }
+              }}
+              className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg text-[11px] font-semibold transition-all"
+              style={{
+                background: researching || !researchUrl.trim() || !researchClassification ? 'rgba(255,255,255,0.05)' : `${industryColor}22`,
+                border: `1px solid ${researching || !researchUrl.trim() || !researchClassification ? 'rgba(255,255,255,0.08)' : industryColor + '44'}`,
+                color: researching || !researchUrl.trim() || !researchClassification ? 'rgba(255,255,255,0.3)' : industryColor,
+              }}
+            >
+              {researching ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Globe className="w-3.5 h-3.5" />}
+              {researching ? 'Researching…' : 'Launch Research'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {showCoreCard && !context.needsResearch && (
+        <PlanetCoreContextCard
+          details={coreDetails}
+          industryColor={industryColor}
+          referenceCompanyId={context.referenceCompanyId}
+          activeClassification={context.classification}
+          onClassificationChange={onClassificationChange}
+        />
       )}
 
       <div className="rounded-2xl overflow-hidden flex flex-col" style={panelStyle}>

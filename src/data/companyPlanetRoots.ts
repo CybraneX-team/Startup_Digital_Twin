@@ -19,10 +19,28 @@ export type PlanetBranchNodeType =
   | 'evidence'
   | 'decision';
 
+export interface PlanetCitation {
+  id?: string;
+  url: string;
+  title?: string | null;
+  snippet?: string | null;
+  retrievedAt?: string | null;
+}
+
 export interface PlanetActionNode {
   id: string;
   label: string;
-  hint?: string;
+  summary?: string | null;
+  hint?: string | null;
+  confidence?: number;
+  nextSteps?: string[];
+  sources?: PlanetCitation[];
+  // Action execution fields (data model only — no execution engine yet)
+  owner?: string | null;
+  status?: 'suggested' | 'planned' | 'active' | 'done' | null;
+  dueDate?: string | null;
+  output?: string | null;
+  impactScore?: 'low' | 'medium' | 'high' | null;
 }
 
 export interface PlanetBranchNode {
@@ -30,6 +48,11 @@ export interface PlanetBranchNode {
   label: string;
   nodeType: PlanetBranchNodeType;
   actions: PlanetActionNode[];
+  summary?: string | null;
+  relevance?: number;
+  confidence?: number;
+  sources?: PlanetCitation[];
+  isDynamic?: boolean;
 }
 
 interface PlanetBranchTemplate {
@@ -45,6 +68,19 @@ export interface PlanetRootNode {
   relevance: number;
   color: string;
   branches: PlanetBranchNode[];
+  confidence?: number;
+  sources?: PlanetCitation[];
+  isDynamic?: boolean;
+}
+
+export interface ReferenceCompanyJob {
+  id: string;
+  kind: 'generate' | 'refresh' | 'classify';
+  status: 'pending' | 'running' | 'complete' | 'failed';
+  lastError?: string | null;
+  startedAt?: string | null;
+  completedAt?: string | null;
+  createdAt?: string;
 }
 
 export interface CompanyPlanetContext {
@@ -53,6 +89,26 @@ export interface CompanyPlanetContext {
   role: UserPlanetRole;
   roleLabel: string;
   roots: PlanetRootNode[];
+  // Reference company fields
+  referenceCompanyId?: string;
+  status?: 'pending' | 'running' | 'ready' | 'failed';
+  lastError?: string | null;
+  sourceUrl?: string | null;
+  canonicalUrl?: string | null;
+  generatedAt?: string | null;
+  job?: ReferenceCompanyJob | null;
+  // Classification + scoring
+  classification?: 'competitor' | 'customer' | 'collaborator' | null;
+  scores?: {
+    threatScore?: number;
+    customerPriority?: number;
+    partnerPotential?: number;
+  };
+  classifyJob?: ReferenceCompanyJob | null;
+  // Research prompt state — set when this is a live company with no reference twin yet
+  needsResearch?: boolean;
+  subdomainId?: string;
+  companyWebsite?: string | null;
 }
 
 export interface PlanetTreeNode {
@@ -74,6 +130,7 @@ type PlanetRootTemplate = Omit<PlanetRootNode, 'id' | 'branches'> & {
   branches: PlanetBranchTemplate[];
 };
 
+// 6 fixed roots — always generated for every company planet
 const FIXED_ROOTS_TEMPLATE: PlanetRootTemplate[] = [
   {
     label: 'Identity',
@@ -187,11 +244,7 @@ const FIXED_ROOTS_TEMPLATE: PlanetRootTemplate[] = [
       },
     ],
   },
-];
-
-/** Relationship-specific roots — 3 per company tag (+ untagged default). */
-const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
-  'People & Access': {
+  {
     label: 'People & Access',
     description: 'Founders, key contacts, warm intro paths',
     relevance: 80,
@@ -219,7 +272,7 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
       },
     ],
   },
-  'Engagement History': {
+  {
     label: 'Engagement History',
     description: 'Past interactions, deal stage, notes, next action',
     relevance: 75,
@@ -247,11 +300,43 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
       },
     ],
   },
+];
+
+/** Classification-specific dynamic root templates — placeholder nodes for non-research state. */
+const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
+  'ICP Overlap': {
+    label: 'ICP Overlap',
+    description: 'Customer segment overlap between you and them',
+    relevance: 90,
+    color: '#f87171',
+    branches: [
+      {
+        label: 'Shared Segment',
+        nodeType: 'metric',
+        actions: [{ label: 'Map ICP overlap', hint: 'Segment, size, and vertical match' }],
+      },
+      {
+        label: 'Buyer Persona Overlap',
+        nodeType: 'metric',
+        actions: [{ label: 'Compare buyer personas', hint: 'Title, role, and pain point alignment' }],
+      },
+      {
+        label: 'Geo Overlap',
+        nodeType: 'metric',
+        actions: [{ label: 'Identify geo overlap', hint: 'Markets where you both operate' }],
+      },
+      {
+        label: 'Displacement Risk',
+        nodeType: 'decision',
+        actions: [{ label: 'Assess displacement risk', hint: 'Likelihood of deal collision' }],
+      },
+    ],
+  },
   'Product Delta': {
     label: 'Product Delta',
     description: 'Feature gaps between you and them',
     relevance: 88,
-    color: '#38bdf8',
+    color: '#fb923c',
     branches: [
       {
         label: 'Feature Comparison',
@@ -279,7 +364,7 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
     label: 'GTM & Win/Loss',
     description: 'Where you\'ve met in deals, who won, why',
     relevance: 85,
-    color: '#a78bfa',
+    color: '#facc15',
     branches: [
       {
         label: 'Deal Collision Log',
@@ -307,7 +392,7 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
     label: 'Velocity & Threat',
     description: 'Headcount growth, funding pace, and threat level',
     relevance: 78,
-    color: '#34d399',
+    color: '#ef4444',
     branches: [
       {
         label: 'Headcount Growth',
@@ -328,6 +413,34 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
         label: 'Threat Escalation',
         nodeType: 'decision',
         actions: [{ label: 'Schedule strategy review', hint: 'Escalate to leadership if needed' }],
+      },
+    ],
+  },
+  'ICP Fit': {
+    label: 'ICP Fit',
+    description: 'How well this company matches your ideal customer profile',
+    relevance: 90,
+    color: '#4ade80',
+    branches: [
+      {
+        label: 'Segment Fit Score',
+        nodeType: 'metric',
+        actions: [{ label: 'Score ICP fit', hint: 'Quantify segment, size, and vertical match' }],
+      },
+      {
+        label: 'Persona Alignment',
+        nodeType: 'metric',
+        actions: [{ label: 'Map buyer persona', hint: 'Titles, pain points, and decision authority' }],
+      },
+      {
+        label: 'Use Case Match',
+        nodeType: 'evidence',
+        actions: [{ label: 'Document use case', hint: 'Where your product solves their problem' }],
+      },
+      {
+        label: 'Qualification Decision',
+        nodeType: 'decision',
+        actions: [{ label: 'Set qualification status', hint: 'Move to qualified or disqualify' }],
       },
     ],
   },
@@ -387,8 +500,8 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
       },
     ],
   },
-  'Stack Intel / Deal Urgency': {
-    label: 'Stack Intel / Deal Urgency',
+  'Deal Urgency': {
+    label: 'Deal Urgency',
     description: 'Current tooling, integration fit, and buying window',
     relevance: 78,
     color: '#34d399',
@@ -415,11 +528,39 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
       },
     ],
   },
+  'Complementary Capability': {
+    label: 'Complementary Capability',
+    description: 'Where their capability complements yours',
+    relevance: 88,
+    color: '#60a5fa',
+    branches: [
+      {
+        label: 'Capability Gap',
+        nodeType: 'metric',
+        actions: [{ label: 'Map capability gap', hint: 'What they have that you lack' }],
+      },
+      {
+        label: 'Customer Benefit',
+        nodeType: 'information',
+        actions: [{ label: 'Define joint value prop', hint: 'How customers benefit from the combination' }],
+      },
+      {
+        label: 'Build vs Partner',
+        nodeType: 'decision',
+        actions: [{ label: 'Run build vs partner analysis', hint: 'Cost, time, and risk of building vs partnering' }],
+      },
+      {
+        label: 'Joint Use Case',
+        nodeType: 'evidence',
+        actions: [{ label: 'Document joint use case', hint: 'End-to-end scenario combining both products' }],
+      },
+    ],
+  },
   'Integration Fit': {
     label: 'Integration Fit',
     description: 'API compatibility, data model overlap',
     relevance: 88,
-    color: '#38bdf8',
+    color: '#818cf8',
     branches: [
       {
         label: 'API Compatibility',
@@ -447,7 +588,7 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
     label: 'Value Split',
     description: 'Rev share, referral, white-label model',
     relevance: 85,
-    color: '#a78bfa',
+    color: '#c084fc',
     branches: [
       {
         label: 'Revenue Model',
@@ -471,6 +612,34 @@ const DYNAMIC_NODES: Record<string, PlanetRootTemplate> = {
       },
     ],
   },
+  'Conflict Risk': {
+    label: 'Conflict Risk',
+    description: 'Where partnership interests may diverge',
+    relevance: 72,
+    color: '#f472b6',
+    branches: [
+      {
+        label: 'Overlap Zones',
+        nodeType: 'signal',
+        actions: [{ label: 'Map competitive overlap', hint: 'Areas where both companies compete directly' }],
+      },
+      {
+        label: 'Future Trajectory',
+        nodeType: 'signal',
+        actions: [{ label: 'Assess roadmap conflict', hint: 'Where roadmaps may collide' }],
+      },
+      {
+        label: 'IP Exposure',
+        nodeType: 'decision',
+        actions: [{ label: 'Review IP terms', hint: 'Data ownership, licensing, and exclusivity' }],
+      },
+      {
+        label: 'Exit Clauses',
+        nodeType: 'decision',
+        actions: [{ label: 'Define exit conditions', hint: 'What triggers partnership dissolution' }],
+      },
+    ],
+  },
 };
 
 /** Short labels for branch node types (side panel + 3D hints). */
@@ -483,14 +652,12 @@ export const PLANET_BRANCH_TYPE_LABELS: Record<PlanetBranchNodeType, string> = {
   decision: 'Decision',
 };
 
+// 4 dynamic roots per classification — shown after classify job completes
 const DYNAMIC_SETS: Record<CompanyTag, string[]> = {
-  competitor: ['Velocity & Threat', 'Product Delta', 'GTM & Win/Loss'],
-  potential_client: ['Stack Intel / Deal Urgency', 'Buyer Map', 'Pain & Trigger'],
-  partner: ['Product Delta', 'Integration Fit', 'Value Split'],
+  competitor:   ['ICP Overlap', 'Product Delta', 'GTM & Win/Loss', 'Velocity & Threat'],
+  customer:     ['ICP Fit', 'Buyer Map', 'Pain & Trigger', 'Deal Urgency'],
+  collaborator: ['Complementary Capability', 'Integration Fit', 'Value Split', 'Conflict Risk'],
 };
-
-/** 3 dynamic roots when the company has no tag. */
-const UNTAGGED_DYNAMIC_SET = ['Buyer Map', 'People & Access', 'Engagement History'] as const;
 
 function expandTemplate(
   companyId: string,
@@ -528,18 +695,6 @@ export interface PlanetCoreDetails {
   focusHint: string;
 }
 
-function getTagForCompany(companyId: string, role: string): CompanyTag | undefined {
-  try {
-    const raw = localStorage.getItem('industry_os_saved_workflows_v1');
-    if (!raw) return undefined;
-    const items = JSON.parse(raw);
-    const item = items.find((i: any) => i.level === 'planet' && i.companyId === companyId && i.role === role);
-    return item?.planetTag;
-  } catch {
-    return undefined;
-  }
-}
-
 export function getPlanetCoreDetails(ctx: CompanyPlanetContext): PlanetCoreDetails {
   const rootCount = ctx.roots.length;
   const sorted = [...ctx.roots].sort((a, b) => b.relevance - a.relevance);
@@ -556,31 +711,34 @@ export function getPlanetCoreDetails(ctx: CompanyPlanetContext): PlanetCoreDetai
     roleLabel: ctx.roleLabel,
   };
 
-  const tag = getTagForCompany(ctx.companyId, ctx.role);
-  const tagLabel = tag === 'competitor' ? 'Competitor' 
-                 : tag === 'potential_client' ? 'Client' 
-                 : tag === 'partner' ? 'Partner' 
-                 : 'Untagged';
+  const classification = ctx.classification;
+  const classificationLabel =
+    classification === 'competitor' ? 'Competitor'
+    : classification === 'customer' ? 'Customer'
+    : classification === 'collaborator' ? 'Collaborator'
+    : 'Unclassified';
+
+  const scoreMetric =
+    classification === 'competitor' && ctx.scores?.threatScore != null
+      ? { label: 'Threat score', value: `${ctx.scores.threatScore}%` }
+    : classification === 'customer' && ctx.scores?.customerPriority != null
+      ? { label: 'Customer priority', value: `${ctx.scores.customerPriority}%` }
+    : classification === 'collaborator' && ctx.scores?.partnerPotential != null
+      ? { label: 'Partner potential', value: `${ctx.scores.partnerPotential}%` }
+    : { label: 'Avg relevance', value: `${avgRel}%` };
 
   return {
     ...base,
-    roleTag: `${tagLabel} lens`,
+    roleTag: `${classificationLabel} lens`,
     headline: ctx.companyName,
-    subline: tagLabel,
+    subline: classificationLabel,
     metrics: [
       { label: 'Root systems', value: String(rootCount) },
       { label: 'Top signal', value: topRoot?.label ?? '—' },
-      { label: 'Avg relevance', value: `${avgRel}%` },
+      scoreMetric,
     ],
-    focusHint: 'Identity · Product · Market · Commercial + 3 context roots',
+    focusHint: 'Identity · Product · Market · Commercial · People · History',
   };
-}
-
-function resolveDynamicRootKeys(tag: CompanyTag | undefined): string[] {
-  if (tag && DYNAMIC_SETS[tag]) {
-    return DYNAMIC_SETS[tag];
-  }
-  return [...UNTAGGED_DYNAMIC_SET];
 }
 
 export function getPlanetRootsForCompany(
@@ -588,13 +746,7 @@ export function getPlanetRootsForCompany(
   companyName: string,
   role: UserPlanetRole,
 ): CompanyPlanetContext {
-  const tag = getTagForCompany(companyId, role);
-  const dynamicKeys = resolveDynamicRootKeys(tag);
-  const dynamicTemplates = dynamicKeys.map(key => DYNAMIC_NODES[key]);
-
-  const template = [...FIXED_ROOTS_TEMPLATE, ...dynamicTemplates];
-
-  const roots = expandTemplate(companyId, template, role);
+  const roots = expandTemplate(companyId, FIXED_ROOTS_TEMPLATE, role);
   return {
     companyId,
     companyName,
@@ -602,6 +754,20 @@ export function getPlanetRootsForCompany(
     roleLabel: ROLE_LABELS[role],
     roots,
   };
+}
+
+/** Return placeholder dynamic root nodes for the given classification (pre-research). */
+export function getPlaceholderDynamicRoots(
+  companyId: string,
+  classification: CompanyTag,
+  role: UserPlanetRole,
+): PlanetRootNode[] {
+  const keys = DYNAMIC_SETS[classification] ?? [];
+  const templates = keys.map(key => DYNAMIC_NODES[key]).filter(Boolean);
+  return expandTemplate(companyId, templates, `${role}_${classification}_dyn`).map(r => ({
+    ...r,
+    isDynamic: true,
+  }));
 }
 
 export function getPlanetPathLabels(
@@ -748,7 +914,7 @@ export function getPlanetNodesAtPath(
     id: action.id,
     label: action.label,
     color: root.color,
-    hint: action.hint,
+    hint: action.hint ?? undefined,
     hasChildren: false,
   }));
 }

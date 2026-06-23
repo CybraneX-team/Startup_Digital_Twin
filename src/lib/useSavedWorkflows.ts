@@ -15,26 +15,24 @@ const STORAGE_KEY = 'industry_os_saved_workflows_v1';
 
 export type SavedItemLevel = 'planet' | 'root' | 'branch' | 'action';
 
-export type CompanyTag = 'competitor' | 'potential_client' | 'partner';
+export type CompanyTag = 'competitor' | 'customer' | 'collaborator';
 
 export const COMPANY_TAG_LABELS: Record<CompanyTag, string> = {
   competitor: 'Competitor',
-  potential_client: 'Client',
-  partner: 'Partner',
+  customer: 'Customer',
+  collaborator: 'Collaborator',
 };
-
-
 
 export const COMPANY_TAG_ICONS: Record<CompanyTag, any> = {
   competitor: Swords,
-  potential_client: Target,
-  partner: Handshake,
+  customer: Target,
+  collaborator: Handshake,
 };
 
 export const COMPANY_TAG_COLORS: Record<CompanyTag, string> = {
   competitor: '#ef4444',
-  potential_client: '#10b981',
-  partner: '#3b82f6',
+  customer: '#10b981',
+  collaborator: '#3b82f6',
 };
 
 export type CardSyncStatus = 'draft' | 'proposed' | 'approved' | 'synced';
@@ -70,8 +68,6 @@ export interface SavedWorkflowItem {
   id: string;
   savedAt: string;         // ISO timestamp
   level: SavedItemLevel;   // which level was saved
-
-  planetTag?: CompanyTag;
 
   // Context
   companyId: string;
@@ -129,12 +125,7 @@ function saveToStorage(items: SavedWorkflowItem[]): void {
 /** Build a stable lookup key for deduplication */
 function buildKey(item: Omit<SavedWorkflowItem, 'id' | 'savedAt' | 'note'>): string {
   if (item.level === 'planet') {
-    return [
-      'planet',
-      item.companyId,
-      item.role,
-      item.planetTag ?? '',
-    ].join('::');
+    return ['planet', item.companyId, item.role].join('::');
   }
   return [
     item.companyId,
@@ -224,8 +215,8 @@ export interface UseSavedWorkflowsReturn {
   remove: (id: string) => void;
   updateNote: (id: string, note: string) => void;
   updateItem: (id: string, updates: Partial<Pick<SavedWorkflowItem, 'syncStatus' | 'note'>>) => void;
-  has: (lookup: Pick<SavedWorkflowItem, 'companyId' | 'role' | 'rootId'> & { branchId?: string; actionId?: string }) => boolean;
-  getId: (lookup: Pick<SavedWorkflowItem, 'companyId' | 'role' | 'rootId'> & { branchId?: string; actionId?: string }) => string | null;
+  has: (lookup: Pick<SavedWorkflowItem, 'companyId' | 'role'> & { rootId?: string; branchId?: string; actionId?: string }) => boolean;
+  getId: (lookup: Pick<SavedWorkflowItem, 'companyId' | 'role'> & { rootId?: string; branchId?: string; actionId?: string }) => string | null;
   clear: () => void;
   grouped: SavedWorkflowGroup[];
   connections: CardConnection[];
@@ -308,15 +299,14 @@ export function useSavedWorkflows(): UseSavedWorkflowsReturn {
   }, []);
 
   const has = useCallback((
-    lookup: Pick<SavedWorkflowItem, 'companyId' | 'role'> & { rootId?: string; branchId?: string; actionId?: string; planetTag?: CompanyTag }
+    lookup: Pick<SavedWorkflowItem, 'companyId' | 'role'> & { rootId?: string; branchId?: string; actionId?: string }
   ): boolean => {
-    const level: SavedItemLevel = lookup.planetTag ? 'planet' : lookup.actionId ? 'action' : lookup.branchId ? 'branch' : 'root';
+    const level: SavedItemLevel = !lookup.rootId ? 'planet' : lookup.actionId ? 'action' : lookup.branchId ? 'branch' : 'root';
     const key = buildKey({
       companyId: lookup.companyId,
       role: lookup.role,
       roleLabel: '',
       companyName: '',
-      planetTag: lookup.planetTag,
       rootId: lookup.rootId,
       rootLabel: '',
       rootColor: '',
@@ -328,15 +318,14 @@ export function useSavedWorkflows(): UseSavedWorkflowsReturn {
   }, [items]);
 
   const getId = useCallback((
-    lookup: Pick<SavedWorkflowItem, 'companyId' | 'role'> & { rootId?: string; branchId?: string; actionId?: string; planetTag?: CompanyTag }
+    lookup: Pick<SavedWorkflowItem, 'companyId' | 'role'> & { rootId?: string; branchId?: string; actionId?: string }
   ): string | null => {
-    const level: SavedItemLevel = lookup.planetTag ? 'planet' : lookup.actionId ? 'action' : lookup.branchId ? 'branch' : 'root';
+    const level: SavedItemLevel = !lookup.rootId ? 'planet' : lookup.actionId ? 'action' : lookup.branchId ? 'branch' : 'root';
     const key = buildKey({
       companyId: lookup.companyId,
       role: lookup.role,
       roleLabel: '',
       companyName: '',
-      planetTag: lookup.planetTag,
       rootId: lookup.rootId,
       rootLabel: '',
       rootColor: '',

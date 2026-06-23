@@ -12,9 +12,6 @@ import {
   type SavedWorkflowItem,
   type SavedWorkflowGroup,
   type SavedWorkflowCompanyGroup,
-  COMPANY_TAG_LABELS,
-  COMPANY_TAG_COLORS,
-  COMPANY_TAG_ICONS,
 } from '../lib/useSavedWorkflows';
 import type { UserPlanetRole } from '../data/companyPlanetRoots';
 import { useBdtSavedTrails } from '../lib/useBdtSavedTrails';
@@ -185,7 +182,7 @@ function SavedItemCard({
   ].filter(Boolean);
 
   const isPlanetLevel = item.level === 'planet';
-  const tagColor = isPlanetLevel && item.planetTag ? COMPANY_TAG_COLORS[item.planetTag] : item.rootColor || ROLE_COLORS[item.role];
+  const tagColor = item.rootColor || ROLE_COLORS[item.role];
 
   return (
     <div
@@ -209,24 +206,7 @@ function SavedItemCard({
         <div className="flex-1 min-w-0">
           {/* Breadcrumb or Tag Badge */}
           <div className="flex items-center gap-1 flex-wrap mb-1">
-            {isPlanetLevel && item.planetTag ? (() => {
-              const Icon = COMPANY_TAG_ICONS[item.planetTag];
-              return (
-                <span
-                  className="flex items-center gap-1.5 px-2 py-0.5 rounded-md"
-                  style={{
-                    background: `${tagColor}12`,
-                    border: `1px solid ${tagColor}30`,
-                    color: tagColor,
-                  }}
-                >
-                  <Icon className="w-3 h-3" />
-                  <span className="text-[11px] font-semibold tracking-wide uppercase">
-                    {COMPANY_TAG_LABELS[item.planetTag]}
-                  </span>
-                </span>
-              );
-            })() : breadcrumb.map((crumb, i) => (
+            {breadcrumb.map((crumb, i) => (
               <span key={i} className="flex items-center gap-1">
                 {i > 0 && <ChevronRight className="w-2.5 h-2.5 flex-shrink-0" style={{ color: 'rgba(255,255,255,0.15)' }} />}
                 <span

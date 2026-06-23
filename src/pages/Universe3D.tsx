@@ -24,14 +24,15 @@ import {
   type CompanyPlanetContext,
 } from '../data/companyPlanetRoots';
 import {
+  createReferenceCompany,
   deleteReferenceCompany,
   getReferenceCompany,
   refreshReferenceCompany,
   referenceCompanyDetailToPlanetContext,
   pendingReferenceCompanyToPlanetContext,
   type ReferenceCompany,
-  type ReferenceCompanyJob,
 } from '../lib/db/referenceCompanies';
+import type { ReferenceCompanyJob } from '../data/companyPlanetRoots';
 import { OpenWorkspaceCue } from '../components/OpenWorkspaceCue';
 import type { WorkspaceEntryContext } from '../context/FounderWorkspaceContext';
 import { UniverseGalaxySidebar } from '../components/universe/UniverseGalaxySidebar';
@@ -53,6 +54,7 @@ import type { UExternalNode, UInternalNode } from '../lib/usePolytopeStore';
 import { ActionNodeWorkspace } from '../components/workspace/ActionNodeWorkspace';
 import { DragWorkspaceOverlay } from '../components/workspace/DragWorkspaceOverlay';
 import { CompanyTagDropdown } from '../components/planet/CompanyTagDropdown';
+import type { CompanyTag } from '../lib/useSavedWorkflows';
 import { useVoice } from '../context/VoiceContext';
 
 // ── Page ─────────────────────────────────────────────────────────────────────
@@ -491,8 +493,9 @@ export default function Universe3DPage() {
         role: planetRole,
         roleLabel: getRoleLabel(planetRole),
         roots: [],
-        status: 'failed',
-        lastError: 'This is your workspace company. Its actual BDT lives in the 3D Twin/BDT view, not in the public reference-company research graph.',
+        needsResearch: true,
+        subdomainId: ctx.subdomain.id,
+        companyWebsite: ctx.company.raw?.website ?? ctx.company.website ?? null,
       });
       setPlanetIndustryColor(ctx.industry.color);
       setInsidePlanetRoots(true);
@@ -979,6 +982,15 @@ export default function Universe3DPage() {
     refreshUniverse();
     setCreateModal(null);
   }, [appendReferenceCompany, refreshUniverse]);
+
+  // Called from the planet side panel when a live company has no reference twin yet.
+  const handleResearchCompany = useCallback(async (url: string, subdomainId: string, classification: CompanyTag) => {
+    const planetRole = resolvePlanetRole();
+    const result = await createReferenceCompany({ url, subdomainId, classification });
+    appendReferenceCompany(result.company);
+    refreshUniverse();
+    setPlanetContext(pendingReferenceCompanyToPlanetContext(result.company, planetRole, result.job));
+  }, [appendReferenceCompany, refreshUniverse, resolvePlanetRole]);
 
   const handleCloseCreate = useCallback((_isCancel: boolean = true) => {
     // The placeholder planet is only a visual drafting aid. Backend data owns
@@ -1665,6 +1677,10 @@ export default function Universe3DPage() {
                 canRefresh={canManageReferenceCompanies && Boolean(planetContext.referenceCompanyId)}
                 onDelete={handleDeleteReferenceCompany}
                 canDelete={canManageReferenceCompanies && Boolean(planetContext.referenceCompanyId)}
+                onResearchCompany={handleResearchCompany}
+                onClassificationChange={(tag) => {
+                  setPlanetContext(prev => prev ? { ...prev, classification: tag } : prev);
+                }}
               />
             </div>
           ) : (insideBH || insideCompanyInterior) && voiceState === 'idle' ? (
