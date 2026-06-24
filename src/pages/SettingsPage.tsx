@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Settings, Palette, Bell, Layers, Plus, Trash2, ImagePlus, Save, Loader2 } from 'lucide-react';
-import PageHeader from '../components/PageHeader';
+import {
+  Settings, Palette, Bell, Layers, Plus, Trash2, ImagePlus, Save, Loader2,
+} from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/db/companies';
 import { INDUSTRIES } from '../db/industries';
@@ -19,13 +20,32 @@ interface DeptConfig {
   name: string;
   size: number;
   hod: string;
-  access?: {
-    read: boolean;
-    write: boolean;
-    delete: boolean;
-    manage: boolean;
-  };
+  access?: { read: boolean; write: boolean; delete: boolean; manage: boolean };
 }
+
+type Section = 'organization' | 'profile' | 'departments' | 'workspace' | 'notifications';
+
+const NAV: { id: Section; icon: React.ReactNode; label: string }[] = [
+  { id: 'organization',  icon: <Layers   size={15} />, label: 'Organization'  },
+  { id: 'profile',       icon: <ImagePlus size={15} />, label: 'Profile'       },
+  { id: 'departments',   icon: <Plus     size={15} />, label: 'Departments'   },
+  { id: 'workspace',     icon: <Palette  size={15} />, label: 'Workspace'     },
+  { id: 'notifications', icon: <Bell     size={15} />, label: 'Notifications' },
+];
+
+const B  = 'rgba(255,255,255,0.06)';
+const AC = '#C1AEFF';
+const DIM = 'rgba(255,255,255,0.28)';
+
+const inputStyle: React.CSSProperties = {
+  width: '100%', boxSizing: 'border-box',
+  background: 'rgba(255,255,255,0.04)',
+  border: `1px solid ${B}`,
+  borderRadius: 8, padding: '9px 12px',
+  fontSize: 13, color: '#fff', outline: 'none',
+  transition: 'border-color 0.15s',
+  fontFamily: 'inherit',
+};
 
 export default function SettingsPage() {
   const { user, profile, refreshProfile, canWrite, role } = useAuth();
@@ -34,30 +54,18 @@ export default function SettingsPage() {
   const canCreateDepartments = canWrite('twin') && canWrite('team');
   const departmentStore = usePolytopeStore('bdt');
 
-  // Company config — populated from real data
+  const [section, setSection] = useState<Section>('organization');
+
   const [config, setConfig] = useState({
-    companyName: '',
-    stage: '' as string,
-    industry_id: '',
-    country: '',
-    website: '',
-    description: '',
-    aiAgents: true,
-    theme: 'dark',
-    notifications: true,
-    logoUrl: '',
+    companyName: '', stage: '' as string, industry_id: '',
+    country: '', website: '', description: '', aiAgents: true, notifications: true,
   });
 
-  // Profile config
-  const [profileForm, setProfileForm] = useState({
-    first_name: '',
-    last_name: '',
-    title: '',
-  });
+  const [profileForm, setProfileForm] = useState({ first_name: '', last_name: '', title: '' });
 
   const [depts, setDepts] = useState<DeptConfig[]>([
     { name: 'Product', size: 4, hod: 'Founder' },
-    { name: 'Growth', size: 3, hod: 'Growth Lead' },
+    { name: 'Growth',  size: 3, hod: 'Growth Lead' },
     { name: 'Engineering', size: 6, hod: 'CTO' },
     { name: 'Support', size: 2, hod: 'Support Lead' },
   ]);
@@ -80,7 +88,6 @@ export default function SettingsPage() {
       access: d.access,
     }));
 
-  // Load real data from company + profile
   useEffect(() => {
     if (company) {
       setConfig(c => ({
@@ -99,18 +106,15 @@ export default function SettingsPage() {
     if (profile) {
       setProfileForm({
         first_name: profile.first_name ?? '',
-        last_name: profile.last_name ?? '',
-        title: profile.title ?? '',
+        last_name:  profile.last_name  ?? '',
+        title:      profile.title      ?? '',
       });
     }
   }, [profile]);
 
-  // Save company settings
   async function handleSaveCompany() {
     if (!company || !canEditSettings) return;
-    setSaving(true);
-    setSaveMsg(null);
-
+    setSaving(true); setSaveMsg(null);
     try {
       await api.patch(`/api/companies/${company.id}`, {
         name: config.companyName.trim(),
@@ -121,38 +125,34 @@ export default function SettingsPage() {
         website: config.website.trim() || null,
         description: config.description.trim() || null,
       });
-      setSaveMsg('Company settings saved');
-    } catch (error) {
-      setSaveMsg('Failed to save: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      setSaveMsg('Saved');
+    } catch (err) {
+      setSaveMsg('Failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
     setSaving(false);
     setTimeout(() => setSaveMsg(null), 3000);
   }
 
-  // Save profile settings
   async function handleSaveProfile() {
     if (!user) return;
-    setSaving(true);
-    setSaveMsg(null);
-
+    setSaving(true); setSaveMsg(null);
     try {
       await api.patch('/api/profile', {
         first_name: profileForm.first_name.trim() || null,
-        last_name: profileForm.last_name.trim() || null,
-        title: profileForm.title.trim() || null,
+        last_name:  profileForm.last_name.trim()  || null,
+        title:      profileForm.title.trim()      || null,
       });
       await refreshProfile();
-      setSaveMsg('Profile updated');
-    } catch (error) {
-      setSaveMsg('Failed to save: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      setSaveMsg('Saved');
+    } catch (err) {
+      setSaveMsg('Failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
     }
     setSaving(false);
     setTimeout(() => setSaveMsg(null), 3000);
   }
 
   const addDept = () => {
-    if (!canCreateDepartments) return;
-    if (!newDept.trim()) return;
+    if (!canCreateDepartments || !newDept.trim()) return;
     void departmentStore.addDepartment({
       label: newDept.trim(),
       domain: 'build',
@@ -169,374 +169,334 @@ export default function SettingsPage() {
   };
 
   const updateDept = (idx: number, field: keyof DeptConfig, value: string | number) => {
-    setDepts((prev) => prev.map((d, i) => (i === idx ? { ...d, [field]: value } : d)));
+    setDepts(prev => prev.map((d, i) => (i === idx ? { ...d, [field]: value } : d)));
   };
 
   const applyTemplate = (template: string) => {
     const templates: Record<string, DeptConfig[]> = {
-      'SaaS B2B': [
-        { name: 'Product', size: 4, hod: 'CPO' },
-        { name: 'Engineering', size: 8, hod: 'CTO' },
-        { name: 'Growth', size: 3, hod: 'Growth Lead' },
-        { name: 'Sales', size: 4, hod: 'Sales Lead' },
-        { name: 'Support', size: 3, hod: 'Support Lead' },
-      ],
-      Marketplace: [
-        { name: 'Product', size: 3, hod: 'CPO' },
-        { name: 'Engineering', size: 6, hod: 'CTO' },
-        { name: 'Supply Ops', size: 4, hod: 'Ops Lead' },
-        { name: 'Demand Growth', size: 3, hod: 'Growth Lead' },
-        { name: 'Trust & Safety', size: 2, hod: 'T&S Lead' },
-      ],
-      D2C: [
-        { name: 'Product', size: 3, hod: 'CPO' },
-        { name: 'Engineering', size: 4, hod: 'CTO' },
-        { name: 'Marketing', size: 5, hod: 'CMO' },
-        { name: 'Supply Chain', size: 3, hod: 'SCM Lead' },
-        { name: 'CX', size: 3, hod: 'CX Lead' },
-      ],
-      FinTech: [
-        { name: 'Product', size: 3, hod: 'CPO' },
-        { name: 'Engineering', size: 6, hod: 'CTO' },
-        { name: 'Risk & Compliance', size: 4, hod: 'CRO' },
-        { name: 'Growth', size: 3, hod: 'Growth Lead' },
-        { name: 'Operations', size: 3, hod: 'COO' },
-      ],
-      HealthTech: [
-        { name: 'Product', size: 3, hod: 'CPO' },
-        { name: 'Engineering', size: 5, hod: 'CTO' },
-        { name: 'Clinical Ops', size: 4, hod: 'Clinical Lead' },
-        { name: 'Regulatory', size: 2, hod: 'Regulatory Lead' },
-        { name: 'Growth', size: 2, hod: 'Growth Lead' },
-      ],
-      ClimateTech: [
-        { name: 'Product', size: 3, hod: 'CPO' },
-        { name: 'Engineering', size: 5, hod: 'CTO' },
-        { name: 'Science', size: 3, hod: 'CSO' },
-        { name: 'Partnerships', size: 2, hod: 'BD Lead' },
-        { name: 'Impact', size: 2, hod: 'Impact Lead' },
-      ],
+      'SaaS B2B':   [{ name: 'Product', size: 4, hod: 'CPO' }, { name: 'Engineering', size: 8, hod: 'CTO' }, { name: 'Growth', size: 3, hod: 'Growth Lead' }, { name: 'Sales', size: 4, hod: 'Sales Lead' }, { name: 'Support', size: 3, hod: 'Support Lead' }],
+      'Marketplace':[{ name: 'Product', size: 3, hod: 'CPO' }, { name: 'Engineering', size: 6, hod: 'CTO' }, { name: 'Supply Ops', size: 4, hod: 'Ops Lead' }, { name: 'Demand Growth', size: 3, hod: 'Growth Lead' }, { name: 'Trust & Safety', size: 2, hod: 'T&S Lead' }],
+      'D2C':        [{ name: 'Product', size: 3, hod: 'CPO' }, { name: 'Engineering', size: 4, hod: 'CTO' }, { name: 'Marketing', size: 5, hod: 'CMO' }, { name: 'Supply Chain', size: 3, hod: 'SCM Lead' }, { name: 'CX', size: 3, hod: 'CX Lead' }],
+      'FinTech':    [{ name: 'Product', size: 3, hod: 'CPO' }, { name: 'Engineering', size: 6, hod: 'CTO' }, { name: 'Risk & Compliance', size: 4, hod: 'CRO' }, { name: 'Growth', size: 3, hod: 'Growth Lead' }, { name: 'Operations', size: 3, hod: 'COO' }],
+      'HealthTech': [{ name: 'Product', size: 3, hod: 'CPO' }, { name: 'Engineering', size: 5, hod: 'CTO' }, { name: 'Clinical Ops', size: 4, hod: 'Clinical Lead' }, { name: 'Regulatory', size: 2, hod: 'Regulatory Lead' }, { name: 'Growth', size: 2, hod: 'Growth Lead' }],
+      'ClimateTech':[{ name: 'Product', size: 3, hod: 'CPO' }, { name: 'Engineering', size: 5, hod: 'CTO' }, { name: 'Science', size: 3, hod: 'CSO' }, { name: 'Partnerships', size: 2, hod: 'BD Lead' }, { name: 'Impact', size: 2, hod: 'Impact Lead' }],
     };
-    if (templates[template]) {
-      setDepts(templates[template]);
-    }
+    if (templates[template]) setDepts(templates[template]);
   };
 
   if (companyLoading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <Loader2 className="w-6 h-6 text-gray-500 animate-spin" />
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'center', padding:'80px 0' }}>
+        <Loader2 className="w-5 h-5 text-gray-500 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div>
-      <PageHeader
-        title="Settings"
-        subtitle="Configure your digital twin workspace and preferences"
-        icon={<Settings className="w-6 h-6" />}
-        badge={role ?? undefined}
-      />
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
 
-      {/* Save status */}
-      {saveMsg && (
-        <div className={`mb-4 px-4 py-2.5 rounded-xl text-sm ${
-          saveMsg.startsWith('Failed') ? 'bg-red-500/10 text-red-400' : 'bg-emerald-500/10 text-emerald-400'
-        }`}>
-          {saveMsg}
+      {/* ── Page header ───────────────────────────────────────── */}
+      <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', paddingBottom:26, borderBottom:`1px solid ${B}` }}>
+        <div>
+          <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:10, fontSize:10, color:'rgba(255,255,255,0.22)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600 }}>
+            <Settings size={11} color={AC} /> Settings
+          </div>
+          <h1 style={{ fontSize:28, fontWeight:800, color:'#fff', letterSpacing:'-0.025em', margin:0, lineHeight:1 }}>Workspace Config</h1>
+          <p style={{ fontSize:13, color:DIM, margin:'6px 0 0' }}>{role ?? 'Member'} · {company?.name ?? 'Your Company'}</p>
         </div>
-      )}
+        {saveMsg && (
+          <div style={{ fontSize:13, padding:'8px 16px', borderRadius:8,
+            background: saveMsg.startsWith('Failed') ? 'rgba(239,68,68,0.08)' : 'rgba(16,185,129,0.08)',
+            border: `1px solid ${saveMsg.startsWith('Failed') ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)'}`,
+            color: saveMsg.startsWith('Failed') ? '#f87171' : '#34d399',
+          }}>
+            {saveMsg}
+          </div>
+        )}
+      </div>
 
-      <div className="grid grid-cols-2 gap-6">
-        {/* ===== Left Column: Organization + Profile ===== */}
-        <div className="space-y-6">
-          {/* Organization Config */}
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                <Layers className="w-4 h-4" /> Organization
-              </h3>
-              {canEditSettings && (
-                <button
-                  onClick={handleSaveCompany}
-                  disabled={saving}
-                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/15 transition-all disabled:opacity-50"
-                >
-                  {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                  Save
-                </button>
-              )}
-            </div>
-            <div className="space-y-4">
-              <div>
-                <label className="text-xs text-gray-400 mb-1.5 block">Company Name</label>
-                <input
-                  type="text"
-                  value={config.companyName}
-                  onChange={(e) => setConfig({ ...config, companyName: e.target.value })}
-                  disabled={!canEditSettings}
-                  className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors disabled:opacity-50"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1.5 block">Industry</label>
-                <select
-                  value={config.industry_id}
-                  onChange={(e) => setConfig({ ...config, industry_id: e.target.value })}
-                  disabled={!canEditSettings}
-                  className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors disabled:opacity-50"
-                >
-                  <option value="">Select industry</option>
-                  {INDUSTRIES.map(ind => (
-                    <option key={ind.id} value={ind.id}>{ind.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
+      {/* ── Body: sidebar + content ───────────────────────────── */}
+      <div style={{ display:'grid', gridTemplateColumns:'180px 1fr', gap:0 }}>
+
+        {/* Sidebar nav */}
+        <div style={{ borderRight:`1px solid ${B}`, paddingTop:24, paddingRight:12 }}>
+          {NAV.map(n => {
+            const active = section === n.id;
+            return (
+              <button key={n.id} onClick={() => setSection(n.id)}
+                style={{
+                  display:'flex', alignItems:'center', gap:10,
+                  width:'100%', padding:'10px 14px', borderRadius:10, marginBottom:3,
+                  background: active ? 'rgba(193,174,255,0.08)' : 'transparent',
+                  border:'none', cursor:'pointer', textAlign:'left',
+                  color: active ? AC : 'rgba(255,255,255,0.38)',
+                  fontSize:13, fontWeight: active ? 600 : 400,
+                  transition:'all 0.15s',
+                }}
+              >
+                {n.icon}
+                {n.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Section content */}
+        <div style={{ paddingTop:28, paddingLeft:40 }}>
+
+          {/* ── Organization ────────────────────────────────── */}
+          {section === 'organization' && (
+            <div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:28 }}>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1.5 block">Funding Stage</label>
-                  <select
-                    value={config.stage}
-                    onChange={(e) => setConfig({ ...config, stage: e.target.value })}
+                  <h2 style={{ fontSize:18, fontWeight:700, color:'#fff', margin:0 }}>Organization</h2>
+                  <p style={{ fontSize:13, color:DIM, marginTop:4, margin:'4px 0 0' }}>Company details and workspace identity</p>
+                </div>
+                {canEditSettings && (
+                  <button onClick={handleSaveCompany} disabled={saving}
+                    style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 16px', borderRadius:8, fontSize:13, fontWeight:600,
+                      background:'rgba(193,174,255,0.1)', border:`1px solid rgba(193,174,255,0.2)`, color:AC,
+                      cursor:saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, transition:'all 0.15s', fontFamily:'inherit' }}>
+                    {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
+                  </button>
+                )}
+              </div>
+
+              {[
+                { label: 'Company Name', content: (
+                  <input style={inputStyle} type="text" value={config.companyName}
                     disabled={!canEditSettings}
-                    className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors disabled:opacity-50"
-                  >
+                    onChange={e => setConfig({ ...config, companyName: e.target.value })}
+                    onFocus={e => (e.target.style.borderColor = `${AC}40`)}
+                    onBlur={e => (e.target.style.borderColor = B)}
+                  />
+                )},
+                { label: 'Industry', content: (
+                  <select style={inputStyle} value={config.industry_id} disabled={!canEditSettings}
+                    onChange={e => setConfig({ ...config, industry_id: e.target.value })}>
+                    <option value="">Select industry</option>
+                    {INDUSTRIES.map(ind => <option key={ind.id} value={ind.id}>{ind.label}</option>)}
+                  </select>
+                )},
+                { label: 'Funding Stage', content: (
+                  <select style={inputStyle} value={config.stage} disabled={!canEditSettings}
+                    onChange={e => setConfig({ ...config, stage: e.target.value })}>
                     {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                   </select>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1.5 block">Country</label>
-                  <select
-                    value={config.country}
-                    onChange={(e) => setConfig({ ...config, country: e.target.value })}
-                    disabled={!canEditSettings}
-                    className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors disabled:opacity-50"
-                  >
+                )},
+                { label: 'Country', content: (
+                  <select style={inputStyle} value={config.country} disabled={!canEditSettings}
+                    onChange={e => setConfig({ ...config, country: e.target.value })}>
+                    <option value="">Select country</option>
                     {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
+                )},
+                { label: 'Website', content: (
+                  <input style={inputStyle} type="url" value={config.website} disabled={!canEditSettings}
+                    placeholder="https://yourcompany.com"
+                    onChange={e => setConfig({ ...config, website: e.target.value })}
+                    onFocus={e => (e.target.style.borderColor = `${AC}40`)}
+                    onBlur={e => (e.target.style.borderColor = B)}
+                  />
+                )},
+                { label: 'Description', content: (
+                  <textarea style={{ ...inputStyle, resize:'none' }} rows={3} value={config.description} disabled={!canEditSettings}
+                    onChange={e => setConfig({ ...config, description: e.target.value })}
+                    onFocus={e => (e.target.style.borderColor = `${AC}40`)}
+                    onBlur={e => (e.target.style.borderColor = B)}
+                  />
+                )},
+              ].map((row, i) => (
+                <div key={row.label} style={{ display:'flex', alignItems:'flex-start', padding:'18px 0', borderBottom:`1px solid ${B}`, gap:24 }}>
+                  <div style={{ width:140, flexShrink:0, fontSize:13, color:'rgba(255,255,255,0.38)', paddingTop:10 }}>{row.label}</div>
+                  <div style={{ flex:1 }}>{row.content}</div>
                 </div>
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1.5 block">Website</label>
-                <input
-                  type="url"
-                  value={config.website}
-                  onChange={(e) => setConfig({ ...config, website: e.target.value })}
-                  disabled={!canEditSettings}
-                  placeholder="https://yourcompany.com"
-                  className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors disabled:opacity-50"
-                />
-              </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1.5 block">Description</label>
-                <textarea
-                  value={config.description}
-                  onChange={(e) => setConfig({ ...config, description: e.target.value })}
-                  disabled={!canEditSettings}
-                  rows={2}
-                  className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors resize-none disabled:opacity-50"
-                />
-              </div>
+              ))}
+
               {!canEditSettings && (
-                <p className="text-[10px] text-amber-400/70">You need Admin or Founder role to edit company settings.</p>
+                <p style={{ fontSize:11, color:'rgba(255,187,0,0.5)', marginTop:16 }}>Admin or Founder role required to edit company settings.</p>
               )}
             </div>
-          </div>
+          )}
 
-          {/* Profile */}
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
-                <ImagePlus className="w-4 h-4" /> Your Profile
-              </h3>
-              <button
-                onClick={handleSaveProfile}
-                disabled={saving}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/15 transition-all disabled:opacity-50"
-              >
-                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-                Save
-              </button>
-            </div>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+          {/* ── Profile ─────────────────────────────────────── */}
+          {section === 'profile' && (
+            <div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:28 }}>
                 <div>
-                  <label className="text-xs text-gray-400 mb-1.5 block">First Name</label>
-                  <input
-                    type="text"
-                    value={profileForm.first_name}
-                    onChange={(e) => setProfileForm({ ...profileForm, first_name: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors"
-                  />
+                  <h2 style={{ fontSize:18, fontWeight:700, color:'#fff', margin:0 }}>Your Profile</h2>
+                  <p style={{ fontSize:13, color:DIM, marginTop:4, margin:'4px 0 0' }}>How you appear to your team</p>
                 </div>
-                <div>
-                  <label className="text-xs text-gray-400 mb-1.5 block">Last Name</label>
-                  <input
-                    type="text"
-                    value={profileForm.last_name}
-                    onChange={(e) => setProfileForm({ ...profileForm, last_name: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors"
-                  />
-                </div>
+                <button onClick={handleSaveProfile} disabled={saving}
+                  style={{ display:'flex', alignItems:'center', gap:6, padding:'8px 16px', borderRadius:8, fontSize:13, fontWeight:600,
+                    background:'rgba(193,174,255,0.1)', border:`1px solid rgba(193,174,255,0.2)`, color:AC,
+                    cursor:saving ? 'not-allowed' : 'pointer', opacity: saving ? 0.6 : 1, transition:'all 0.15s', fontFamily:'inherit' }}>
+                  {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />} Save
+                </button>
               </div>
-              <div>
-                <label className="text-xs text-gray-400 mb-1.5 block">Title / Role</label>
-                <input
-                  type="text"
-                  value={profileForm.title}
-                  onChange={(e) => setProfileForm({ ...profileForm, title: e.target.value })}
-                  placeholder="e.g. Founder & CEO"
-                  className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white focus:outline-none focus:border-sky-500 transition-colors"
-                />
-              </div>
-              <div className="flex items-center gap-3 p-3 rounded-lg bg-gray-900/30">
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0"
-                  style={{ background: 'linear-gradient(135deg, #F9C6FF, #C1AEFF)', color: '#161618' }}
-                >
-                  {(profileForm.first_name?.[0] ?? '?').toUpperCase()}
-                  {(profileForm.last_name?.[0] ?? '').toUpperCase()}
+
+              {/* Avatar preview */}
+              <div style={{ display:'flex', alignItems:'center', gap:16, padding:'20px 0', borderBottom:`1px solid ${B}`, marginBottom:0 }}>
+                <div style={{ width:56, height:56, borderRadius:'50%', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, fontWeight:700, color:'#161618',
+                  background:'linear-gradient(135deg, #F9C6FF, #C1AEFF)' }}>
+                  {(profileForm.first_name?.[0] ?? '?').toUpperCase()}{(profileForm.last_name?.[0] ?? '').toUpperCase()}
                 </div>
                 <div>
-                  <p className="text-sm text-white font-medium">
+                  <div style={{ fontSize:16, fontWeight:600, color:'#fff' }}>
                     {[profileForm.first_name, profileForm.last_name].filter(Boolean).join(' ') || 'Your Name'}
-                  </p>
-                  <p className="text-[10px] text-gray-500">{profileForm.title || 'No title set'}</p>
-                  <p className="text-[10px] text-gray-600">{user?.email}</p>
+                  </div>
+                  <div style={{ fontSize:12, color:DIM, marginTop:2 }}>{profileForm.title || 'No title set'}</div>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.18)', marginTop:1 }}>{user?.email}</div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* ===== Right Column ===== */}
-        <div className="space-y-6">
-          {/* Department Config */}
-          <div className="glass-card p-6">
-            <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
-              <Layers className="w-4 h-4" /> Departments
-            </h3>
-            <div className="space-y-2 mb-4">
+              {[
+                { label: 'First Name', content: (
+                  <input style={inputStyle} type="text" value={profileForm.first_name}
+                    onChange={e => setProfileForm({ ...profileForm, first_name: e.target.value })}
+                    onFocus={e => (e.target.style.borderColor = `${AC}40`)}
+                    onBlur={e => (e.target.style.borderColor = B)}
+                  />
+                )},
+                { label: 'Last Name', content: (
+                  <input style={inputStyle} type="text" value={profileForm.last_name}
+                    onChange={e => setProfileForm({ ...profileForm, last_name: e.target.value })}
+                    onFocus={e => (e.target.style.borderColor = `${AC}40`)}
+                    onBlur={e => (e.target.style.borderColor = B)}
+                  />
+                )},
+                { label: 'Title / Role', content: (
+                  <input style={inputStyle} type="text" value={profileForm.title} placeholder="e.g. Founder & CEO"
+                    onChange={e => setProfileForm({ ...profileForm, title: e.target.value })}
+                    onFocus={e => (e.target.style.borderColor = `${AC}40`)}
+                    onBlur={e => (e.target.style.borderColor = B)}
+                  />
+                )},
+              ].map(row => (
+                <div key={row.label} style={{ display:'flex', alignItems:'flex-start', padding:'18px 0', borderBottom:`1px solid ${B}`, gap:24 }}>
+                  <div style={{ width:140, flexShrink:0, fontSize:13, color:'rgba(255,255,255,0.38)', paddingTop:10 }}>{row.label}</div>
+                  <div style={{ flex:1 }}>{row.content}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* ── Departments ─────────────────────────────────── */}
+          {section === 'departments' && (
+            <div>
+              <div style={{ marginBottom:28 }}>
+                <h2 style={{ fontSize:18, fontWeight:700, color:'#fff', margin:0 }}>Departments</h2>
+                <p style={{ fontSize:13, color:DIM, marginTop:4, margin:'4px 0 0' }}>
+                  {(displayDepts.length ? displayDepts : depts).reduce((s, d) => s + d.size, 0)} people across {(displayDepts.length ? displayDepts : depts).length} departments
+                </p>
+              </div>
+
               {(displayDepts.length ? displayDepts : depts).map((d, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 py-2.5 px-3 rounded-lg bg-gray-900/50 border border-gray-800/50"
-                >
-                  <input
-                    type="text"
-                    value={d.name}
-                    onChange={(e) => updateDept(i, 'name', e.target.value)}
-                    disabled
-                    className="flex-1 bg-transparent text-sm text-white outline-none disabled:opacity-50"
-                  />
-                  <div className="flex items-center gap-1">
-                    <input
-                      type="number"
-                      value={d.size}
-                      onChange={(e) => updateDept(i, 'size', Number(e.target.value))}
-                      disabled
-                      className="w-12 bg-gray-800 rounded px-1.5 py-0.5 text-xs text-gray-300 text-center outline-none border border-gray-700 disabled:opacity-50"
-                    />
-                    <span className="text-[10px] text-gray-500">ppl</span>
-                  </div>
-                  <input
-                    type="text"
-                    value={d.hod}
-                    onChange={(e) => updateDept(i, 'hod', e.target.value)}
-                    disabled
-                    placeholder="HOD"
-                    className="w-28 bg-transparent text-xs text-gray-400 outline-none border-b border-gray-800 focus:border-sky-500 disabled:opacity-50"
-                  />
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:16, padding:'14px 0', borderBottom:`1px solid ${B}` }}>
+                  <div style={{ width:8, height:8, borderRadius:'50%', background: AC, flexShrink:0, opacity:0.5 }} />
+                  <div style={{ flex:1, fontSize:14, color:'#fff', fontWeight:500 }}>{d.name}</div>
+                  <div style={{ fontSize:13, color:DIM }}>{d.size} <span style={{ fontSize:11 }}>ppl</span></div>
+                  <div style={{ fontSize:12, color:'rgba(255,255,255,0.22)', width:100, textAlign:'right' }}>{d.hod}</div>
                   {d.access?.delete && displayDepts.length > 0 && (
-                    <button
-                      onClick={() => removeDept(i)}
-                      className="text-gray-600 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
+                    <button onClick={() => removeDept(i)} style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.2)', padding:4, display:'flex' }}>
+                      <Trash2 size={14} />
                     </button>
                   )}
                 </div>
               ))}
-            </div>
-            {canCreateDepartments && (
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newDept}
-                  onChange={(e) => setNewDept(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && addDept()}
-                  placeholder="New department name"
-                  className="flex-1 px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-sky-500 transition-colors"
-                />
-                <button
-                  onClick={addDept}
-                  className="flex items-center gap-1 px-3 py-2 bg-sky-600 hover:bg-sky-500 text-white text-sm rounded-lg transition-colors"
-                >
-                  <Plus className="w-4 h-4" /> Add
-                </button>
-              </div>
-            )}
-            <p className="text-[10px] text-gray-600 mt-2">
-              Total team: {(displayDepts.length ? displayDepts : depts).reduce((s, d) => s + d.size, 0)} across {(displayDepts.length ? displayDepts : depts).length} departments
-            </p>
-          </div>
 
-          {/* Workspace */}
-          <div className="glass-card p-6">
-            <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
-              <Palette className="w-4 h-4" /> Workspace
-            </h3>
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-300">AI Agents</span>
-                <button
-                  onClick={() => setConfig({ ...config, aiAgents: !config.aiAgents })}
-                  className={`w-10 h-6 rounded-full transition-colors ${config.aiAgents ? 'bg-sky-600' : 'bg-gray-700'}`}
-                >
-                  <div className={`w-4 h-4 rounded-full bg-white transition-transform mx-1 ${config.aiAgents ? 'translate-x-4' : ''}`} />
-                </button>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-gray-300">Dark Theme</span>
-                <span className="text-xs text-gray-500 px-2 py-1 bg-gray-800 rounded-lg">Active</span>
-              </div>
-            </div>
-          </div>
+              {canCreateDepartments && (
+                <div style={{ display:'flex', gap:10, marginTop:20 }}>
+                  <input style={{ ...inputStyle, flex:1 }} type="text" value={newDept} placeholder="New department name"
+                    onChange={e => setNewDept(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && addDept()}
+                    onFocus={e => (e.target.style.borderColor = `${AC}40`)}
+                    onBlur={e => (e.target.style.borderColor = B)}
+                  />
+                  <button onClick={addDept}
+                    style={{ padding:'9px 18px', borderRadius:8, background:'rgba(193,174,255,0.1)', border:`1px solid rgba(193,174,255,0.2)`, color:AC, fontSize:13, fontWeight:600, cursor:'pointer', fontFamily:'inherit' }}>
+                    Add
+                  </button>
+                </div>
+              )}
 
-          {/* Notifications */}
-          <div className="glass-card p-6">
-            <h3 className="text-sm font-medium text-gray-300 mb-4 flex items-center gap-2">
-              <Bell className="w-4 h-4" /> Notifications
-            </h3>
-            <div className="space-y-3">
-              {['KPI threshold alerts', 'Environment signal updates', 'Simulation completed', 'Data sync status'].map((item) => (
-                <div key={item} className="flex items-center justify-between py-1">
-                  <span className="text-sm text-gray-400">{item}</span>
-                  <div className="w-2 h-2 rounded-full bg-emerald-500" />
+              {canEditSettings && (
+                <div style={{ marginTop:32 }}>
+                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.22)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:12 }}>Quick Templates</div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:8 }}>
+                    {['SaaS B2B','Marketplace','D2C','FinTech','HealthTech','ClimateTech'].map(t => (
+                      <button key={t} onClick={() => applyTemplate(t)}
+                        style={{ padding:'10px 14px', borderRadius:8, background:'rgba(255,255,255,0.03)', border:`1px solid ${B}`, color:'rgba(255,255,255,0.45)', fontSize:12, cursor:'pointer', textAlign:'left', transition:'all 0.15s', fontFamily:'inherit' }}
+                        onMouseEnter={e => { e.currentTarget.style.borderColor = `rgba(193,174,255,0.25)`; e.currentTarget.style.color = AC; }}
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = B; e.currentTarget.style.color = 'rgba(255,255,255,0.45)'; }}
+                      >
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* ── Workspace ───────────────────────────────────── */}
+          {section === 'workspace' && (
+            <div>
+              <div style={{ marginBottom:28 }}>
+                <h2 style={{ fontSize:18, fontWeight:700, color:'#fff', margin:0 }}>Workspace</h2>
+                <p style={{ fontSize:13, color:DIM, marginTop:4, margin:'4px 0 0' }}>Platform behaviour and preferences</p>
+              </div>
+
+              {[
+                { label: 'AI Agents', desc: 'Enable autonomous AI agents across your digital twin', toggle: true, key: 'aiAgents' as const },
+                { label: 'Dark Theme', desc: 'System enforced — always active', toggle: false },
+              ].map(item => (
+                <div key={item.label} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'20px 0', borderBottom:`1px solid ${B}` }}>
+                  <div>
+                    <div style={{ fontSize:14, color:'#fff', fontWeight:500 }}>{item.label}</div>
+                    <div style={{ fontSize:12, color:DIM, marginTop:3 }}>{item.desc}</div>
+                  </div>
+                  {item.toggle ? (
+                    <button
+                      onClick={() => setConfig({ ...config, [item.key as string]: !config[item.key as keyof typeof config] })}
+                      style={{ width:44, height:24, borderRadius:100, border:'none', cursor:'pointer', padding:0, position:'relative', transition:'background 0.2s',
+                        background: config[item.key as keyof typeof config] ? AC : 'rgba(255,255,255,0.12)' }}>
+                      <div style={{ width:18, height:18, borderRadius:'50%', background:'#fff', position:'absolute', top:3, transition:'left 0.2s',
+                        left: config[item.key as keyof typeof config] ? 23 : 3 }} />
+                    </button>
+                  ) : (
+                    <span style={{ fontSize:11, color:'rgba(255,255,255,0.3)', padding:'4px 10px', borderRadius:6, border:`1px solid ${B}` }}>Active</span>
+                  )}
                 </div>
               ))}
             </div>
-          </div>
+          )}
 
-          {/* Stage Templates */}
-          {canEditSettings && (
-            <div className="glass-card p-6">
-              <h3 className="text-sm font-medium text-gray-300 mb-3">Quick Templates</h3>
-              <p className="text-[10px] text-gray-500 mb-3">Apply a preset department structure based on your sector</p>
-              <div className="grid grid-cols-2 gap-2">
-                {['SaaS B2B', 'Marketplace', 'D2C', 'FinTech', 'HealthTech', 'ClimateTech'].map((t) => (
-                  <button
-                    key={t}
-                    onClick={() => applyTemplate(t)}
-                    className="px-3 py-2 text-xs text-gray-400 bg-gray-900/50 border border-gray-800 rounded-lg hover:border-sky-500/30 hover:text-sky-300 transition-all"
-                  >
-                    {t}
-                  </button>
-                ))}
+          {/* ── Notifications ───────────────────────────────── */}
+          {section === 'notifications' && (
+            <div>
+              <div style={{ marginBottom:28 }}>
+                <h2 style={{ fontSize:18, fontWeight:700, color:'#fff', margin:0 }}>Notifications</h2>
+                <p style={{ fontSize:13, color:DIM, marginTop:4, margin:'4px 0 0' }}>Events and alerts that matter to you</p>
               </div>
+
+              {[
+                { label: 'KPI Threshold Alerts', desc: 'Notify when a metric exceeds its set threshold', active: true },
+                { label: 'Environment Signal Updates', desc: 'Market signals affecting your twin', active: true },
+                { label: 'Simulation Completed', desc: 'When a scenario simulation finishes', active: true },
+                { label: 'Data Sync Status', desc: 'Integration sync success or failure', active: true },
+              ].map(item => (
+                <div key={item.label} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'18px 0', borderBottom:`1px solid ${B}` }}>
+                  <div>
+                    <div style={{ fontSize:14, color:'#fff', fontWeight:500 }}>{item.label}</div>
+                    <div style={{ fontSize:12, color:DIM, marginTop:3 }}>{item.desc}</div>
+                  </div>
+                  <div style={{ width:8, height:8, borderRadius:'50%', background: item.active ? '#10b981' : 'rgba(255,255,255,0.2)', flexShrink:0 }} />
+                </div>
+              ))}
             </div>
           )}
+
         </div>
       </div>
     </div>

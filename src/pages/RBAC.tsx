@@ -4,7 +4,6 @@ import {
   Check, X, ChevronDown, Clock, Trash2, UserCheck, AlertCircle,
   Mail, Copy, Archive, Save, Pencil,
 } from 'lucide-react';
-import PageHeader from '../components/PageHeader';
 import { useAuth } from '../lib/auth';
 import { api } from '../lib/api';
 import {
@@ -340,48 +339,60 @@ export default function RBAC() {
   const selectedMeta = roleMeta(selectedRole, selectedRoleId);
   const SelectedIcon = selectedMeta.icon;
 
-  return (
-    <div>
-      <PageHeader
-        title="Team & Access"
-        subtitle="Manage workspace members, roles, and join requests"
-        icon={<ShieldCheck className="w-6 h-6" />}
-        badge={`${activeMembers.length} member${activeMembers.length !== 1 ? 's' : ''}`}
-      />
+  const B  = 'rgba(255,255,255,0.06)';
+  const AC = '#C1AEFF';
+  const DIM = 'rgba(255,255,255,0.28)';
 
-      <div className="grid grid-cols-3 gap-3 mb-6">
+  return (
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', paddingBottom:26, borderBottom:`1px solid ${B}` }}>
+        <div>
+          <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:10, fontSize:10, color:'rgba(255,255,255,0.22)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600 }}>
+            <ShieldCheck size={11} color={AC} /> Access Control
+          </div>
+          <h1 style={{ fontSize:28, fontWeight:800, color:'#fff', letterSpacing:'-0.025em', margin:0, lineHeight:1 }}>Team & Access</h1>
+          <p style={{ fontSize:13, color:DIM, margin:'7px 0 0' }}>Manage workspace members, roles, and permissions</p>
+        </div>
+      </div>
+
+      {/* ── Stat strip ────────────────────────────────────────── */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', borderBottom:`1px solid ${B}` }}>
         {[
-          { label: 'Total Members', value: activeMembers.length, color: 'text-sky-400' },
-          { label: 'Pending Requests', value: pendingCount, color: pendingCount > 0 ? 'text-amber-400' : 'text-gray-500' },
-          { label: 'Your Role', value: roleName ?? roleLabel(roleById.get(myRole ?? ''), myRole), color: roleMeta(roleById.get(myRole ?? ''), myRole).color },
-        ].map(s => (
-          <div key={s.label} className="glass-card p-4">
-            <p className="text-[10px] text-gray-500 uppercase tracking-wider mb-1">{s.label}</p>
-            <p className={`text-xl font-bold ${s.color}`}>{s.value}</p>
+          { label: 'Total Members',    value: activeMembers.length, valueColor: '#0ea5e9' },
+          { label: 'Pending Requests', value: pendingCount, valueColor: pendingCount > 0 ? '#fbbf24' : 'rgba(255,255,255,0.3)' },
+          { label: 'Your Role',        value: roleName ?? roleLabel(roleById.get(myRole ?? ''), myRole), valueColor: roleMeta(roleById.get(myRole ?? ''), myRole).color.replace('text-', '').includes('-') ? undefined : undefined },
+        ].map((s, i) => (
+          <div key={s.label} style={{ padding:'20px', borderLeft: i > 0 ? `1px solid ${B}` : 'none' }}>
+            <div style={{ fontSize:10, color:'rgba(255,255,255,0.25)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:8 }}>{s.label}</div>
+            <div style={{ fontSize:24, fontWeight:700, color:'#fff', letterSpacing:'-0.02em' }} className={roleMeta(roleById.get(myRole ?? ''), myRole).color && i === 2 ? roleMeta(roleById.get(myRole ?? ''), myRole).color : ''}>
+              {s.value}
+            </div>
           </div>
         ))}
       </div>
 
-      <div className="flex gap-1 mb-6 p-1 rounded-xl bg-gray-900/50 border border-gray-800 w-fit">
+      {/* ── Tab bar ───────────────────────────────────────────── */}
+      <div style={{ display:'flex', gap:2, padding:'16px 0', borderBottom:`1px solid ${B}` }}>
         {([
-          { key: 'members',     label: 'Members',       count: activeMembers.length,                  show: true },
-          { key: 'requests',    label: 'Join Requests', count: pendingCount, alert: pendingCount > 0, show: canManage },
-          { key: 'invites',     label: 'Invite',        count: null,                                  show: canManage },
-          { key: 'permissions', label: 'Permissions',   count: null,                                  show: true },
-          { key: 'departmentAccess', label: 'Dept Access', count: null,                              show: can('team', 'read') },
+          { key: 'members',          label: 'Members',       count: activeMembers.length, show: true },
+          { key: 'requests',         label: 'Requests',      count: pendingCount,         show: canManage },
+          { key: 'invites',          label: 'Invite',        count: null,                 show: canManage },
+          { key: 'permissions',      label: 'Permissions',   count: null,                 show: true },
+          { key: 'departmentAccess', label: 'Dept Access',   count: null,                 show: can('team', 'read') },
         ] as const).filter(t => t.show).map(t => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-2 px-4 py-2 text-xs rounded-lg transition-all ${
-              tab === t.key ? 'bg-gray-800 text-white font-medium' : 'text-gray-500 hover:text-gray-300'
-            }`}
-          >
+          <button key={t.key} onClick={() => setTab(t.key)} style={{
+            display:'flex', alignItems:'center', gap:7,
+            padding:'7px 14px', borderRadius:8, fontSize:13, fontWeight: tab === t.key ? 600 : 400,
+            background: tab === t.key ? 'rgba(193,174,255,0.1)' : 'transparent',
+            border: `1px solid ${tab === t.key ? 'rgba(193,174,255,0.22)' : 'transparent'}`,
+            color: tab === t.key ? AC : 'rgba(255,255,255,0.35)',
+            cursor:'pointer', transition:'all 0.15s', fontFamily:'inherit',
+          }}>
             {t.label}
             {t.count !== null && t.count > 0 && (
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                t.key === 'requests' && pendingCount > 0 ? 'bg-amber-500/20 text-amber-400' : 'bg-gray-700 text-gray-400'
-              }`}>
+              <span style={{ fontSize:10, padding:'1px 6px', borderRadius:100, background: t.key === 'requests' && pendingCount > 0 ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.08)', color: t.key === 'requests' && pendingCount > 0 ? '#fbbf24' : 'rgba(255,255,255,0.4)' }}>
                 {t.count}
               </span>
             )}
@@ -390,31 +401,27 @@ export default function RBAC() {
       </div>
 
       {tab === 'members' && (
-        <div className="glass-card overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800/50">
-            <h3 className="text-sm font-medium text-gray-200 flex items-center gap-2">
-              <Users className="w-4 h-4 text-sky-400" />
-              Workspace Members
-            </h3>
+        <div style={{ paddingTop:8 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'16px 0', borderBottom:`1px solid ${B}` }}>
+            <div style={{ display:'flex', alignItems:'center', gap:8, fontSize:13, color:'rgba(255,255,255,0.45)' }}>
+              <Users size={14} /> {activeMembers.length} member{activeMembers.length !== 1 ? 's' : ''}
+            </div>
             {canManage && (
-              <button
-                onClick={() => setTab('invites')}
-                className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-sky-500/10 border border-sky-500/20 text-sky-400 hover:bg-sky-500/15 transition-all"
-              >
-                <Plus className="w-3.5 h-3.5" /> Invite Member
+              <button onClick={() => setTab('invites')} style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:8, fontSize:12, fontWeight:600, background:'rgba(14,165,233,0.08)', border:'1px solid rgba(14,165,233,0.2)', color:'#7dd3fc', cursor:'pointer', fontFamily:'inherit' }}>
+                <Plus size={13} /> Invite Member
               </button>
             )}
           </div>
 
           {loadingMembers ? (
-            <div className="p-8 text-center text-gray-500 text-sm">Loading members...</div>
+            <div style={{ padding:'48px 0', textAlign:'center', fontSize:13, color:'rgba(255,255,255,0.25)' }}>Loading…</div>
           ) : activeMembers.length === 0 ? (
-            <div className="p-8 text-center">
-              <Users className="w-8 h-8 text-gray-700 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">No members yet.</p>
+            <div style={{ padding:'48px 0', textAlign:'center' }}>
+              <Users size={32} style={{ color:'rgba(255,255,255,0.1)', margin:'0 auto 12px', display:'block' }} />
+              <div style={{ fontSize:13, color:'rgba(255,255,255,0.3)' }}>No members yet</div>
             </div>
           ) : (
-            <div className="divide-y divide-gray-800/40">
+            <div>
               {activeMembers.map(m => {
                 const role = roleById.get(m.role);
                 const meta = roleMeta(role, m.role);
@@ -422,26 +429,23 @@ export default function RBAC() {
                 const isMe = m.user_id === user?.id;
                 const isProtectedMember = m.is_protected_role;
                 return (
-                  <div key={m.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-white/[0.02] transition-colors">
+                  <div key={m.id} style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 0', borderBottom:`1px solid ${B}`, transition:'background 0.15s' }}>
                     <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 ${meta.bg} ${meta.color}`}>
                       {initials(m)}
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm text-white font-medium truncate">{memberName(m)}</span>
-                        {isMe && <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-sky-500/15 text-sky-400">You</span>}
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+                        <span style={{ fontSize:14, color:'#fff', fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{memberName(m)}</span>
+                        {isMe && <span style={{ fontSize:9, padding:'2px 6px', borderRadius:100, background:'rgba(14,165,233,0.1)', color:'#7dd3fc' }}>You</span>}
                       </div>
-                      <p className="text-[10px] text-gray-500 mt-0.5 truncate">{m.email ?? m.title ?? '-'}</p>
+                      <div style={{ fontSize:11, color:'rgba(255,255,255,0.25)', marginTop:2, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{m.email ?? m.title ?? '—'}</div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div style={{ display:'flex', alignItems:'center', gap:8 }}>
                       {canManage && !isMe && !isProtectedMember ? (
-                        <div className="relative">
-                          <select
-                            value={m.role}
+                        <div style={{ position:'relative' }}>
+                          <select value={m.role} disabled={actionLoading === m.id}
                             onChange={e => handleRoleChange(m.id, e.target.value)}
-                            disabled={actionLoading === m.id}
-                            className={`text-[11px] px-2.5 py-1.5 pr-6 rounded-lg border appearance-none cursor-pointer transition-colors ${meta.bg} ${meta.border} ${meta.color} bg-transparent`}
-                          >
+                            className={`text-[11px] px-2.5 py-1.5 pr-6 rounded-lg border appearance-none cursor-pointer transition-colors ${meta.bg} ${meta.border} ${meta.color} bg-transparent`}>
                             {assignableRoles.map(r => (
                               <option key={r.id} value={r.id} className="bg-gray-900 text-white">{r.name}</option>
                             ))}
@@ -450,18 +454,15 @@ export default function RBAC() {
                         </div>
                       ) : (
                         <span className={`flex items-center gap-1.5 text-[11px] px-2.5 py-1.5 rounded-lg border ${meta.bg} ${meta.border} ${meta.color}`}>
-                          <Icon className="w-3 h-3" />
-                          {roleLabel(role, m.role)}
+                          <Icon className="w-3 h-3" /> {roleLabel(role, m.role)}
                         </span>
                       )}
                       {canRemoveMembers && !isMe && !isProtectedMember && (
-                        <button
-                          onClick={() => handleRemove(m.id)}
-                          disabled={actionLoading === m.id}
-                          className="p-1.5 rounded-lg text-gray-600 hover:text-red-400 hover:bg-red-500/10 transition-all"
-                          title="Remove member"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
+                        <button onClick={() => handleRemove(m.id)} disabled={actionLoading === m.id}
+                          style={{ background:'none', border:'none', cursor:'pointer', color:'rgba(255,255,255,0.2)', padding:6, borderRadius:6, display:'flex', transition:'all 0.15s' }}
+                          onMouseEnter={e => { e.currentTarget.style.color = '#f87171'; e.currentTarget.style.background = 'rgba(239,68,68,0.08)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.color = 'rgba(255,255,255,0.2)'; e.currentTarget.style.background = 'none'; }}>
+                          <Trash2 size={14} />
                         </button>
                       )}
                     </div>

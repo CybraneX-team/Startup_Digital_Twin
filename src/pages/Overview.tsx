@@ -4,8 +4,6 @@ import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   RadarChart, PolarGrid, PolarAngleAxis, Radar,
 } from 'recharts';
-import PageHeader from '../components/PageHeader';
-import MetricCard from '../components/MetricCard';
 import { keyMetrics, revenueHistory, departmentHealth, environmentSignals, activeTasks } from '../data/mockData';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/db/companies';
@@ -16,10 +14,10 @@ import { getCurrencyCodeForCountry, getCurrencySymbol } from '../lib/currency';
 import type { Metric } from '../types';
 
 const statusConfig = {
-  running: { icon: Loader2, color: 'text-sky-400', bg: 'bg-sky-500/10', border: 'border-sky-500/20', animate: 'animate-spin' },
-  completed: { icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', animate: '' },
-  queued: { icon: Clock, color: 'text-gray-400', bg: 'bg-gray-500/10', border: 'border-gray-500/20', animate: '' },
-  failed: { icon: CircleDot, color: 'text-red-400', bg: 'bg-red-500/10', border: 'border-red-500/20', animate: '' },
+  running:   { icon: Loader2,      color: 'text-sky-400',     animate: 'animate-spin' },
+  completed: { icon: CheckCircle2, color: 'text-emerald-400', animate: '' },
+  queued:    { icon: Clock,        color: 'text-gray-400',    animate: '' },
+  failed:    { icon: CircleDot,    color: 'text-red-400',     animate: '' },
 };
 
 export default function Overview() {
@@ -54,61 +52,39 @@ export default function Overview() {
   const liveKeyMetrics = useMemo<Metric[]>(() => {
     const c = currencySymbol;
     const ordered = [
-      // Financial summary
-      { key: 'revenue',             name: 'Monthly Revenue',      unit: c },
-      { key: 'burn',                name: 'Monthly Burn',         unit: c },
-      { key: 'rent',                name: 'Monthly Rent',         unit: c },
-      { key: 'salaries',            name: 'Salaries',             unit: c },
-      // Team & acquisition
-      { key: 'headcount',           name: 'Team Size',            unit: 'people' },
-      { key: 'signups',             name: 'User Acquisition',     unit: '/mo' },
-      { key: 'ad_spend',            name: 'Ad Spend',             unit: c },
-      { key: 'cost_of_sales',       name: 'Cost of Sales',        unit: c },
-      // Core startup metrics
-      { key: 'buyer_count',         name: 'Buyers',               unit: 'count' },
-      { key: 'conversion_rate',     name: 'Conversion Rate',      unit: '%' },
-      { key: 'avg_order_value',     name: 'Avg Order Value',      unit: c },
-      { key: 'cogs',                name: 'COGS',                 unit: c },
-      { key: 'avg_payment_count',   name: 'Avg Payment Count',    unit: 'x' },
-      { key: 'customer_ltv',        name: 'Customer LTV',         unit: c },
-      { key: 'arpu',                name: 'ARPU',                 unit: c },
-      { key: 'cpa',                 name: 'CPA',                  unit: c },
-      { key: 'contribution_margin', name: 'Contribution Margin',  unit: c },
+      { key: 'revenue',             name: 'Monthly Revenue',     unit: c },
+      { key: 'burn',                name: 'Monthly Burn',        unit: c },
+      { key: 'headcount',           name: 'Team Size',           unit: 'people' },
+      { key: 'signups',             name: 'User Acquisition',    unit: '/mo' },
+      { key: 'buyer_count',         name: 'Buyers',              unit: 'count' },
+      { key: 'conversion_rate',     name: 'Conversion',          unit: '%' },
+      { key: 'avg_order_value',     name: 'Avg Order Value',     unit: c },
+      { key: 'cogs',                name: 'COGS',                unit: c },
+      { key: 'customer_ltv',        name: 'Customer LTV',        unit: c },
+      { key: 'arpu',                name: 'ARPU',                unit: c },
+      { key: 'cpa',                 name: 'CPA',                 unit: c },
+      { key: 'contribution_margin', name: 'Contribution Margin', unit: c },
     ];
-
     return ordered
       .map(({ key, name, unit }) => {
         const m = metrics[key];
         if (!m) return null;
-        // Company currency is authoritative for monetary metrics. Source units are
-        // still used for percentages, counts, and other non-currency measurements.
-        const displayUnit = unit === c
-          ? c
-          : m.unit && m.unit !== 'count' ? m.unit : unit;
-        return {
-          name,
-          value: Number(m.value),
-          unit: displayUnit,
-          change: 0,
-        } as Metric;
+        const displayUnit = unit === c ? c : m.unit && m.unit !== 'count' ? m.unit : unit;
+        return { name, value: Number(m.value), unit: displayUnit, change: 0 } as Metric;
       })
       .filter(Boolean) as Metric[];
   }, [metrics, currencySymbol]);
 
-  // Fall back to company record data when no normalized metrics exist yet.
-  // Always returns a full 8-card grid so the dashboard is never empty.
   const companyFallbackMetrics = useMemo<Metric[]>(() => {
     if (!company) return [];
     const c = currencySymbol;
     return [
-      { name: 'Monthly Revenue', value: company.mrr_usd       ?? 0, unit: c,        change: 0 },
-      { name: 'Monthly Burn',    value: company.burn_rate_usd  ?? 0, unit: c,        change: 0 },
-      { name: 'Team Size',       value: company.employees      ?? 0, unit: 'people', change: 0 },
-      { name: 'Runway',          value: company.runway_months  ?? 0, unit: 'months', change: 0 },
-      { name: 'CAC',             value: 0,                           unit: c,        change: 0 },
-      { name: 'LTV / CLTV',     value: 0,                           unit: c,        change: 0 },
-      { name: 'Churn Rate',      value: 0,                           unit: '%',      change: 0 },
-      { name: 'NPS Score',       value: 0,                           unit: '',       change: 0 },
+      { name: 'Revenue',    value: company.mrr_usd      ?? 0, unit: c,        change: 0 },
+      { name: 'Burn Rate',  value: company.burn_rate_usd ?? 0, unit: c,        change: 0 },
+      { name: 'Team Size',  value: company.employees     ?? 0, unit: 'people', change: 0 },
+      { name: 'Runway',     value: company.runway_months ?? 0, unit: 'months', change: 0 },
+      { name: 'CAC',        value: 0,                          unit: c,        change: 0 },
+      { name: 'Churn',      value: 0,                          unit: '%',      change: 0 },
     ];
   }, [company, currencySymbol]);
 
@@ -116,162 +92,177 @@ export default function Overview() {
     if (simSnapshot) {
       const c = currencySymbol;
       return [
-        { name: 'MRR',        value: simSnapshot.revenue   ?? 0, unit: c,        change: 0 },
-        { name: 'CAC',        value: simSnapshot.cpa        ?? 0, unit: c,        change: 0 },
-        { name: 'LTV',        value: simSnapshot.cltv       ?? 0, unit: c,        change: 0 },
-        { name: 'Churn Rate', value: simSnapshot.churn      ?? 0, unit: '%',      change: 0 },
-        { name: 'Burn Rate',  value: simSnapshot.burn       ?? 0, unit: c,        change: 0 },
-        { name: 'NPS Score',  value: simSnapshot.nps        ?? 0, unit: '',       change: 0 },
-        { name: 'Runway',     value: simSnapshot.runway     ?? 0, unit: 'months', change: 0 },
-        { name: 'Team Size',  value: simSnapshot.headcount  ?? 0, unit: 'people', change: 0 },
+        { name: 'MRR',       value: simSnapshot.revenue  ?? 0, unit: c,        change: 0 },
+        { name: 'CAC',       value: simSnapshot.cpa       ?? 0, unit: c,        change: 0 },
+        { name: 'LTV',       value: simSnapshot.cltv      ?? 0, unit: c,        change: 0 },
+        { name: 'Churn',     value: simSnapshot.churn     ?? 0, unit: '%',      change: 0 },
+        { name: 'Burn',      value: simSnapshot.burn      ?? 0, unit: c,        change: 0 },
+        { name: 'Runway',    value: simSnapshot.runway    ?? 0, unit: 'months', change: 0 },
       ];
     }
-    if (liveKeyMetrics.length > 0) return liveKeyMetrics;
+    if (liveKeyMetrics.length > 0) return liveKeyMetrics.slice(0, 6);
     if (companyFallbackMetrics.length > 0) return companyFallbackMetrics;
-    return keyMetrics.slice(0, 8);
+    return keyMetrics.slice(0, 6);
   }, [simSnapshot, liveKeyMetrics, companyFallbackMetrics, currencySymbol]);
 
+  /* ─────────────────── design tokens ─────────────────── */
+  const B  = 'rgba(255,255,255,0.06)';
+  const AC = '#C1AEFF';
+
   return (
-    <div>
-      <PageHeader
-        title="Digital Twin Overview"
-        subtitle={`${displayName} — ${displayStage} · ${industryLabel}`}
-        icon={<LayoutDashboard className="w-6 h-6" />}
-        badge="Live"
-      />
+    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <style>{`@keyframes tw-pulse{0%,100%{opacity:1}50%{opacity:0.35}}`}</style>
 
-      {/* Twin Status Bar */}
-      <div className="glass-card p-4 mb-6 flex items-center justify-between">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 status-pulse" />
-            <span className="text-sm text-gray-300">System Twin: <span className="text-emerald-400">Synced</span></span>
+      {/* ── Header ────────────────────────────────────────────── */}
+      <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', paddingBottom:26, borderBottom:`1px solid ${B}` }}>
+        <div>
+          <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:10, fontSize:10, color:'rgba(255,255,255,0.22)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600 }}>
+            <LayoutDashboard size={11} color={AC} /> Overview
           </div>
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-cyan-500 status-pulse" />
-            <span className="text-sm text-gray-300">Environment Twin: <span className="text-cyan-400">Synced</span></span>
-          </div>
-          <div className="flex items-center gap-2">
-            <Activity className="w-3.5 h-3.5 text-sky-400" />
-            <span className="text-sm text-gray-300">Last sync: <span className="text-gray-400">2 min ago</span></span>
-          </div>
+          <h1 style={{ fontSize:30, fontWeight:800, color:'#fff', letterSpacing:'-0.025em', margin:0, lineHeight:1 }}>{displayName}</h1>
+          <p style={{ fontSize:13, color:'rgba(255,255,255,0.3)', margin:'7px 0 0' }}>{displayStage} · {industryLabel}</p>
         </div>
-        <div className="flex items-center gap-4 text-xs text-gray-500">
-          <span className="flex items-center gap-1"><Zap className="w-3 h-3 text-amber-400" /> 3 AI Agents Active</span>
-          <span className="flex items-center gap-1"><Shield className="w-3 h-3 text-sky-400" /> Data: Real + Simulated</span>
+        <div style={{ display:'flex', alignItems:'center', gap:22 }}>
+          {([{c:'#10b981',l:'System Twin'},{c:'#06b6d4',l:'Env Twin'}] as {c:string,l:string}[]).map(s => (
+            <div key={s.l} style={{ display:'flex', alignItems:'center', gap:8 }}>
+              <span style={{ width:7,height:7,borderRadius:'50%',background:s.c,boxShadow:`0 0 8px ${s.c}80`,display:'inline-block',animation:'tw-pulse 3s ease-in-out infinite' }} />
+              <div>
+                <div style={{ fontSize:10, color:'rgba(255,255,255,0.2)', letterSpacing:'0.06em' }}>{s.l}</div>
+                <div style={{ fontSize:12, color:s.c, fontWeight:600 }}>Synced</div>
+              </div>
+            </div>
+          ))}
+          <div style={{ display:'flex', alignItems:'center', gap:6, paddingLeft:18, borderLeft:`1px solid ${B}`, fontSize:11, color:'rgba(255,255,255,0.2)' }}>
+            <Activity size={11} /> 2m ago
+          </div>
         </div>
       </div>
 
-      {/* Key Metrics Grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 mb-6">
-        {displayMetrics.map((m) => (
-          <MetricCard key={m.name} metric={m} />
-        ))}
-      </div>
+      {/* ── Metric Strip ──────────────────────────────────────── */}
+      {displayMetrics.length > 0 && (
+        <div style={{ display:'grid', gridTemplateColumns:`repeat(${Math.min(displayMetrics.length,6)},1fr)`, borderBottom:`1px solid ${B}` }}>
+          {displayMetrics.slice(0,6).map((m, i) => (
+            <div key={m.name} style={{ padding:'24px 20px', borderLeft: i > 0 ? `1px solid ${B}` : 'none' }}>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.25)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:10, fontWeight:500, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                {m.name}
+              </div>
+              <div style={{ fontSize:30, fontWeight:700, color:'#fff', letterSpacing:'-0.025em', lineHeight:1 }}>
+                {m.unit === currencySymbol && <span style={{ fontSize:18, color:AC, fontWeight:600, marginRight:1, verticalAlign:'baseline' }}>{currencySymbol}</span>}
+                {m.value.toLocaleString()}
+              </div>
+              {m.unit && m.unit !== currencySymbol && (
+                <div style={{ fontSize:11, color:'rgba(255,255,255,0.22)', marginTop:5 }}>{m.unit}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* Charts + Tasks Row */}
-      <div className="grid grid-cols-3 gap-6 mb-6">
-        {/* Revenue & Burn Chart */}
-        <div className="glass-card p-6">
-          <h3 className="text-sm font-medium text-gray-300 mb-4">Revenue vs Burn</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <AreaChart data={chartData}>
+      {/* ── Bento: Charts + Tasks ─────────────────────────────── */}
+      <div style={{ display:'grid', gridTemplateColumns:'1fr 296px', borderBottom:`1px solid ${B}` }}>
+
+        {/* Revenue vs Burn — full-bleed in its cell */}
+        <div style={{ borderRight:`1px solid ${B}`, padding:'20px 20px 12px' }}>
+          <div style={{ fontSize:10, color:'rgba(255,255,255,0.25)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:18 }}>Revenue vs Burn</div>
+          <ResponsiveContainer width="100%" height={246}>
+            <AreaChart data={chartData} margin={{ left:-16, right:4, top:4, bottom:0 }}>
               <defs>
-                <linearGradient id="mrrGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3} />
+                <linearGradient id="ovMrr" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#0ea5e9" stopOpacity={0.22} />
                   <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0} />
                 </linearGradient>
-                <linearGradient id="burnGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.2} />
+                <linearGradient id="ovBurn" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#ef4444" stopOpacity={0.12} />
                   <stop offset="95%" stopColor="#ef4444" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-              <XAxis dataKey="month" stroke="#6b7280" fontSize={12} />
-              <YAxis stroke="#6b7280" fontSize={12} />
-              <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '8px' }} labelStyle={{ color: '#9ca3af' }} />
-              <Area type="monotone" dataKey="mrr" stroke="#0ea5e9" fill="url(#mrrGrad)" name={`MRR (${currencySymbol})`} />
-              <Area type="monotone" dataKey="burn" stroke="#ef4444" fill="url(#burnGrad)" name={`Burn (${currencySymbol})`} />
+              <CartesianGrid strokeDasharray="2 4" stroke="rgba(255,255,255,0.04)" vertical={false} />
+              <XAxis dataKey="month" stroke="rgba(255,255,255,0)" tick={{ fill:'rgba(255,255,255,0.22)', fontSize:11 }} tickLine={false} />
+              <YAxis stroke="rgba(255,255,255,0)" tick={{ fill:'rgba(255,255,255,0.22)', fontSize:11 }} tickLine={false} width={48} />
+              <Tooltip contentStyle={{ background:'#0d0d14', border:`1px solid ${B}`, borderRadius:8, fontSize:12 }} labelStyle={{ color:'rgba(255,255,255,0.4)' }} />
+              <Area type="monotone" dataKey="mrr"  stroke="#0ea5e9" fill="url(#ovMrr)"  strokeWidth={1.5} name={`MRR (${currencySymbol})`}  dot={false} />
+              <Area type="monotone" dataKey="burn" stroke="#ef4444" fill="url(#ovBurn)" strokeWidth={1.5} name={`Burn (${currencySymbol})`} dot={false} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
 
-        {/* Department Health Radar */}
-        <div className="glass-card p-6">
-          <h3 className="text-sm font-medium text-gray-300 mb-4">Department Health</h3>
-          <ResponsiveContainer width="100%" height={220}>
-            <RadarChart data={departmentHealth}>
-              <PolarGrid stroke="#1f2937" />
-              <PolarAngleAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 12 }} />
-              <Radar name="Health" dataKey="health" stroke="#0ea5e9" fill="#0ea5e9" fillOpacity={0.2} />
-              <Radar name="Velocity" dataKey="velocity" stroke="#06b6d4" fill="#06b6d4" fillOpacity={0.15} />
-              <Radar name="Satisfaction" dataKey="satisfaction" stroke="#10b981" fill="#10b981" fillOpacity={0.1} />
-              <Tooltip contentStyle={{ background: '#111827', border: '1px solid #374151', borderRadius: '8px' }} />
-            </RadarChart>
-          </ResponsiveContainer>
-        </div>
+        {/* Right column: Radar + Tasks */}
+        <div style={{ display:'flex', flexDirection:'column' }}>
 
-        {/* Live Task Execution */}
-        <div className="glass-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-300">Tasks Executing</h3>
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-sky-500/15 text-sky-300 border border-sky-500/20">
-              {activeTasks.filter((t) => t.status === 'running').length} running
-            </span>
+          {/* Dept Health radar */}
+          <div style={{ borderBottom:`1px solid ${B}`, padding:'20px 16px 8px' }}>
+            <div style={{ fontSize:10, color:'rgba(255,255,255,0.25)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:4 }}>Dept Health</div>
+            <ResponsiveContainer width="100%" height={178}>
+              <RadarChart data={departmentHealth}>
+                <PolarGrid stroke="rgba(255,255,255,0.05)" />
+                <PolarAngleAxis dataKey="name" tick={{ fill:'rgba(255,255,255,0.25)', fontSize:10 }} />
+                <Radar name="Health"   dataKey="health"   stroke={AC}       fill={AC}       fillOpacity={0.1}  strokeWidth={1.5} />
+                <Radar name="Velocity" dataKey="velocity" stroke="#06b6d4"  fill="#06b6d4"  fillOpacity={0.07} strokeWidth={1.5} />
+                <Tooltip contentStyle={{ background:'#0d0d14', border:`1px solid ${B}`, borderRadius:8, fontSize:12 }} />
+              </RadarChart>
+            </ResponsiveContainer>
           </div>
-          <div className="space-y-3 max-h-[220px] overflow-y-auto pr-1">
-            {activeTasks.map((task) => {
-              const cfg = statusConfig[task.status];
-              const Icon = cfg.icon;
-              return (
-                <div key={task.id} className={`p-3 rounded-lg ${cfg.bg} border ${cfg.border}`}>
-                  <div className="flex items-start gap-2.5">
-                    <Icon className={`w-3.5 h-3.5 mt-0.5 ${cfg.color} ${cfg.animate} shrink-0`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-200 truncate">{task.title}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[10px] text-gray-500">{task.department}</span>
-                        <span className="text-[10px] text-gray-600">·</span>
-                        {task.aiPowered ? (
-                          <span className="flex items-center gap-0.5 text-[10px] text-sky-400"><Bot className="w-2.5 h-2.5" /> AI</span>
-                        ) : (
-                          <span className="flex items-center gap-0.5 text-[10px] text-gray-400"><User className="w-2.5 h-2.5" /> {task.assignee}</span>
-                        )}
-                        {task.eta && <span className="text-[10px] text-gray-600 ml-auto">{task.eta}</span>}
+
+          {/* Active Tasks */}
+          <div style={{ flex:1, padding:'16px', overflowY:'auto' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
+              <span style={{ fontSize:10, color:'rgba(255,255,255,0.25)', letterSpacing:'0.1em', textTransform:'uppercase' }}>Tasks</span>
+              <span style={{ fontSize:10, color:'#0ea5e9', background:'rgba(14,165,233,0.08)', padding:'2px 8px', borderRadius:100, border:'1px solid rgba(14,165,233,0.18)' }}>
+                {activeTasks.filter(t => t.status === 'running').length} running
+              </span>
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+              {activeTasks.slice(0, 6).map(task => {
+                const cfg = statusConfig[task.status];
+                const Icon = cfg.icon;
+                return (
+                  <div key={task.id} style={{ display:'flex', gap:9, alignItems:'flex-start' }}>
+                    <Icon className={`${cfg.color} ${cfg.animate} shrink-0`} style={{ width:12, height:12, marginTop:2 }} />
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontSize:12, color:'rgba(255,255,255,0.78)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{task.title}</div>
+                      <div style={{ display:'flex', gap:6, marginTop:2, alignItems:'center' }}>
+                        <span style={{ fontSize:10, color:'rgba(255,255,255,0.22)' }}>{task.department}</span>
+                        {task.aiPowered && <Bot size={9} color="#0ea5e9" />}
                       </div>
                       {task.status === 'running' && (
-                        <div className="mt-1.5 h-1 rounded-full bg-gray-800 overflow-hidden">
-                          <div className="h-full rounded-full bg-sky-500 transition-all" style={{ width: `${task.progress}%` }} />
+                        <div style={{ marginTop:4, height:2, borderRadius:2, background:'rgba(255,255,255,0.06)' }}>
+                          <div style={{ width:`${task.progress}%`, height:'100%', borderRadius:2, background:'#0ea5e9', transition:'width 0.5s ease' }} />
                         </div>
                       )}
                     </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Environment Signals */}
-      <div className="glass-card p-6">
-        <h3 className="text-sm font-medium text-gray-300 mb-4">Latest Environment Signals</h3>
-        <div className="space-y-3">
-          {environmentSignals.slice(0, 4).map((signal, i) => (
-            <div key={i} className="flex items-center justify-between py-2 px-3 rounded-lg bg-gray-900/50 border border-gray-800/50">
-              <div className="flex items-center gap-3">
-                <span className={`w-2 h-2 rounded-full ${
-                  signal.impact === 'positive' ? 'bg-emerald-500' : signal.impact === 'negative' ? 'bg-red-500' : 'bg-gray-500'
-                }`} />
-                <span className="text-sm text-gray-300">{signal.title}</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-gray-800 text-gray-400 uppercase">{signal.type}</span>
-                <span className="text-xs text-gray-500">{signal.timestamp}</span>
-              </div>
+      {/* ── Environment Signals ───────────────────────────────── */}
+      <div style={{ display:'flex', borderBottom:`1px solid ${B}` }}>
+        {environmentSignals.slice(0, 4).map((sig, i) => (
+          <div key={i} style={{ flex:1, display:'flex', alignItems:'center', gap:10, padding:'13px 20px', borderLeft: i > 0 ? `1px solid ${B}` : 'none' }}>
+            <span style={{ width:6, height:6, borderRadius:'50%', flexShrink:0,
+              background: sig.impact === 'positive' ? '#10b981' : sig.impact === 'negative' ? '#ef4444' : '#52525b' }} />
+            <div style={{ minWidth:0 }}>
+              <div style={{ fontSize:12, color:'rgba(255,255,255,0.62)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{sig.title}</div>
+              <div style={{ fontSize:10, color:'rgba(255,255,255,0.2)', marginTop:1 }}>{sig.type} · {sig.timestamp}</div>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Footer strip ──────────────────────────────────────── */}
+      <div style={{ display:'flex', padding:'11px 0' }}>
+        {[
+          { icon: <Zap   size={12} color="#f59e0b" />, label: '3 AI Agents Active' },
+          { icon: <Shield size={12} color="#0ea5e9" />, label: 'Data: Real + Simulated' },
+          { icon: <User   size={12} color={AC}     />, label: `${displayMetrics.length} metrics tracked` },
+        ].map((item, i) => (
+          <div key={i} style={{ display:'flex', alignItems:'center', gap:7, padding:'2px 20px', borderRight: i < 2 ? `1px solid ${B}` : 'none', fontSize:12, color:'rgba(255,255,255,0.28)' }}>
+            {item.icon} {item.label}
+          </div>
+        ))}
       </div>
     </div>
   );

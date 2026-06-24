@@ -208,7 +208,7 @@ function AppRoutes() {
               />
             </Routes>
           ) : (
-            <main className={isUniversal ? 'overflow-hidden' : 'pt-14  pb-8 overflow-y-auto'}>
+            <main className={isUniversal ? 'overflow-hidden' : 'pt-14 pb-10 px-8 overflow-y-auto'}>
               <Routes>
                 {/* Authenticated app routes */}
                 <Route path="/overview" element={

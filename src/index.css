@@ -26,19 +26,24 @@
 /* Custom Components */
 /* Foreground cards — no stroke, relative bg */
 .glass-card {
-  background: #1B1B1D;
+  background: rgba(27, 27, 29, 0.85);
   border-radius: 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
 
 .metric-card {
-  background: #1B1B1D;
+  background: rgba(27, 27, 29, 0.85);
   border-radius: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.06);
   padding: 1.25rem;
-  transition: background 0.2s ease;
+  transition: background 0.2s ease, border-color 0.2s ease;
 }
 
 .metric-card:hover {
-  background: #202024;
+  background: rgba(32, 32, 36, 0.9);
+  border-color: rgba(255, 255, 255, 0.09);
 }
 
 .status-pulse {

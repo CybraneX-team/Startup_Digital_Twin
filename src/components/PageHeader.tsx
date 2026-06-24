@@ -13,7 +13,7 @@ export default function PageHeader({ title, subtitle, icon, badge }: Props) {
       <div className="flex items-center gap-4">
         <div
           className="w-10 h-10 rounded-xl flex items-center justify-center"
-          style={{ background: '#1B1B1D', color: '#C1AEFF' }}
+          style={{ background: 'rgba(27,27,29,0.9)', border: '1px solid rgba(255,255,255,0.07)', color: '#C1AEFF' }}
         >
           {icon}
         </div>

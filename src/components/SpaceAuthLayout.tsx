@@ -1,96 +1,68 @@
 import React from 'react';
 
-/* ── Deterministic star field ── */
-const STAR_BG = Array.from({ length: 60 }, (_, i) => {
-  const x = (((i * 173 + 37) + i * i * 7) % 1000) / 10;
-  const y = (((i * 97 + 13) + i * i * 3) % 1000) / 10;
-  const sz = i % 9 === 0 ? 1.5 : i % 5 === 0 ? 1.2 : 1;
-  const op = (0.2 + ((i * 11) % 50) / 100).toFixed(2);
-  return `radial-gradient(${sz}px ${sz}px at ${x.toFixed(1)}% ${y.toFixed(1)}%, rgba(255,255,255,${op}) 0%, transparent 100%)`;
-}).join(', ');
+export const AUTH_KEYFRAMES = `
+@keyframes blob-a {
+  0%,100% { transform: translate(0px, 0px) scale(1); }
+  33%      { transform: translate(40px, -35px) scale(1.06); }
+  66%      { transform: translate(-25px, 20px) scale(0.96); }
+}
+@keyframes blob-b {
+  0%,100% { transform: translate(0px, 0px) scale(1); }
+  33%      { transform: translate(-30px, 25px) scale(1.04); }
+  66%      { transform: translate(35px, -20px) scale(0.98); }
+}
+@keyframes blob-c {
+  0%,100% { transform: translate(0px, 0px) scale(1); }
+  50%      { transform: translate(20px, 30px) scale(1.08); }
+}
+@keyframes auth-scan {
+  0%   { top: -2px; opacity: 0; }
+  4%   { opacity: 0.25; }
+  96%  { opacity: 0.25; }
+  100% { top: 100%; opacity: 0; }
+}
+`;
 
 interface Props {
-  /** CSS color for planet's main body (e.g. '#5b21b6') */
-  planetCore: string;
-  /** CSS color for atmospheric glow on lower edge (e.g. '#ec4899') */
-  atmosphereGlow: string;
+  leftPanel: React.ReactNode;
   children: React.ReactNode;
 }
 
-export default function SpaceAuthLayout({ planetCore, atmosphereGlow, children }: Props) {
+export default function SpaceAuthLayout({ leftPanel, children }: Props) {
   return (
-    <div style={{
-      minHeight: '100vh',
-      background: '#06060e',
-      position: 'relative',
-      overflow: 'hidden',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-    }}>
-      {/* Star field */}
-      <div style={{ position: 'absolute', inset: 0, backgroundImage: STAR_BG, zIndex: 0, pointerEvents: 'none' }} />
-
-      {/* Planet outer haze */}
+    <>
+      <style>{AUTH_KEYFRAMES}</style>
       <div style={{
-        position: 'absolute',
-        top: '-240px', right: '-260px',
-        width: '820px', height: '820px',
-        borderRadius: '50%',
-        background: `radial-gradient(circle, transparent 42%, ${planetCore}0e 56%, ${planetCore}05 68%, transparent 76%)`,
-        zIndex: 0,
-        pointerEvents: 'none',
-      }} />
-
-      {/* Planet body */}
-      <div style={{
-        position: 'absolute',
-        top: '-160px', right: '-190px',
-        width: '700px', height: '700px',
-        borderRadius: '50%',
+        minHeight: '100vh',
+        background: '#07070f',
+        display: 'flex',
         overflow: 'hidden',
-        zIndex: 1,
-        pointerEvents: 'none',
+        fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif',
       }}>
-        {/* Core surface */}
+        {/* ── LEFT PANEL ── */}
         <div style={{
-          position: 'absolute', inset: 0,
-          background: `radial-gradient(circle at 40% 50%, ${planetCore} 0%, ${planetCore}aa 18%, #1a0e3a 44%, #080514 68%)`,
-        }} />
-        {/* Atmospheric glow — lower-left */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: `radial-gradient(ellipse at 28% 78%, ${atmosphereGlow}90 0%, ${atmosphereGlow}38 32%, transparent 56%)`,
-          filter: 'blur(2px)',
-        }} />
-        {/* Upper-right edge highlight */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: `radial-gradient(ellipse at 70% 20%, ${planetCore}50 0%, transparent 42%)`,
-        }} />
-        {/* Terminator (dark-side gradient) */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'radial-gradient(ellipse at 90% 50%, transparent 30%, rgba(2,2,8,0.55) 65%, rgba(2,2,8,0.85) 85%)',
-        }} />
-      </div>
+          flex: '0 0 54%',
+          position: 'relative',
+          overflow: 'hidden',
+        }}>
+          {leftPanel}
+        </div>
 
-      {/* Small moon — far left */}
-      <div style={{
-        position: 'absolute',
-        left: '11%', top: '21%',
-        width: '46px', height: '46px',
-        borderRadius: '50%',
-        background: `radial-gradient(circle at 36% 36%, #3a3260 0%, #100d20 70%)`,
-        boxShadow: `0 0 22px ${planetCore}22`,
-        zIndex: 1,
-        pointerEvents: 'none',
-      }} />
-
-      {/* Content */}
-      <div style={{ position: 'relative', zIndex: 10, width: '100%', maxWidth: '420px', padding: '0 24px' }}>
-        {children}
+        {/* ── RIGHT PANEL ── */}
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '60px 48px',
+          background: 'rgba(8,8,18,0.96)',
+          position: 'relative',
+        }}>
+          <div style={{ width: '100%', maxWidth: '380px' }}>
+            {children}
+          </div>
+        </div>
       </div>
-    </div>
+    </>
   );
 }

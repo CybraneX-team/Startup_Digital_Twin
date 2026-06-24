@@ -4,7 +4,6 @@ import {
   Database, Upload, PenLine, FileSpreadsheet, Check, AlertCircle,
   Link2, Globe2, Wifi, WifiOff, Clock, XCircle, RefreshCw,
 } from 'lucide-react';
-import PageHeader from '../components/PageHeader';
 import IntegrationModal from '../components/IntegrationModal';
 import { integrations } from '../data/mockData';
 import { useAuth } from '../lib/auth';
@@ -292,25 +291,38 @@ export default function DataIngestion() {
   const intCats = ['finance', 'crm', 'analytics', 'project'] as const;
   const pubCats = ['market', 'social', 'government'] as const;
 
-  return (
-    <div>
-      <PageHeader
-        title="Data Ingestion"
-        subtitle="Feed real operational data into your digital twin"
-        icon={<Database className="w-6 h-6" />}
-      />
+  const B  = 'rgba(255,255,255,0.06)';
+  const AC = '#C1AEFF';
+  const DIM = 'rgba(255,255,255,0.28)';
 
-      {/* Mode Tabs */}
-      <div className="flex gap-2 mb-6">
+  return (
+    <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <div style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', paddingBottom:26, borderBottom:`1px solid ${B}` }}>
+        <div>
+          <div style={{ display:'flex', alignItems:'center', gap:7, marginBottom:10, fontSize:10, color:'rgba(255,255,255,0.22)', letterSpacing:'0.12em', textTransform:'uppercase', fontWeight:600 }}>
+            <Database size={11} color={AC} /> Data
+          </div>
+          <h1 style={{ fontSize:28, fontWeight:800, color:'#fff', letterSpacing:'-0.025em', margin:0, lineHeight:1 }}>Data Ingestion</h1>
+          <p style={{ fontSize:13, color:DIM, margin:'7px 0 0' }}>Feed real operational data into your digital twin</p>
+        </div>
+      </div>
+
+      {/* ── Tab bar ────────────────────────────────────────────── */}
+      <div style={{ display:'flex', gap:2, padding:'20px 0', borderBottom:`1px solid ${B}` }}>
         {tabs.map((t) => (
           <button
             key={t.id}
             onClick={() => setActiveTab(t.id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm rounded-lg border transition-all ${
-              activeTab === t.id
-                ? 'bg-sky-600/15 border-sky-500/30 text-sky-300 font-medium'
-                : 'bg-gray-900/50 border-gray-800 text-gray-400 hover:border-gray-700'
-            }`}
+            style={{
+              display:'flex', alignItems:'center', gap:7,
+              padding:'8px 16px', borderRadius:8, fontSize:13, fontWeight: activeTab === t.id ? 600 : 400,
+              background: activeTab === t.id ? 'rgba(193,174,255,0.1)' : 'transparent',
+              border: `1px solid ${activeTab === t.id ? 'rgba(193,174,255,0.22)' : 'transparent'}`,
+              color: activeTab === t.id ? AC : 'rgba(255,255,255,0.35)',
+              cursor:'pointer', transition:'all 0.15s', fontFamily:'inherit',
+            }}
           >
             {t.icon} {t.label}
           </button>
@@ -320,93 +332,102 @@ export default function DataIngestion() {
       {/* ===== MANUAL ===== */}
       {activeTab === 'manual' && (
         <form onSubmit={handleSubmit}>
-          <div className="glass-card p-6 mb-6">
-            <h3 className="text-sm font-medium text-gray-300 mb-4">Operational Metrics</h3>
-            <div className="grid grid-cols-2 gap-4">
-              {fields.map((f) => (
-                <div key={f.key}>
-                  <label className="text-xs text-gray-400 mb-1.5 block">{f.label}</label>
-                  <div className="flex items-center gap-2">
-                    {f.unit && f.unit !== '%' && f.unit !== 'people' && (
-                      <span className="text-sm text-gray-500">{f.unit}</span>
-                    )}
-                    <input
-                      type="number"
-                      value={formData[f.key as keyof FormData]}
-                      onChange={(e) => setFormData({ ...formData, [f.key]: e.target.value })}
-                      placeholder={f.placeholder}
-                      className="w-full px-3 py-2 bg-gray-900/70 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-600 focus:outline-none focus:border-sky-500 transition-colors"
-                    />
-                    {(f.unit === '%' || f.unit === 'people') && (
-                      <span className="text-xs text-gray-500">{f.unit}</span>
-                    )}
+
+          {/* Field list — label | unit | input pattern */}
+          <div style={{ marginTop:4 }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'18px 0', borderBottom:`1px solid ${B}` }}>
+              <span style={{ fontSize:11, color:'rgba(255,255,255,0.22)', letterSpacing:'0.1em', textTransform:'uppercase' }}>Operational Metrics</span>
+              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                {saveError && (
+                  <span style={{ display:'flex', alignItems:'center', gap:6, fontSize:12, color:'#f87171' }}>
+                    <AlertCircle size={13} /> {saveError}
+                  </span>
+                )}
+                <button type="submit" style={{
+                  display:'flex', alignItems:'center', gap:7, padding:'8px 18px', borderRadius:8, fontSize:13, fontWeight:600,
+                  background: submitted ? 'rgba(16,185,129,0.12)' : 'rgba(193,174,255,0.1)',
+                  border: `1px solid ${submitted ? 'rgba(16,185,129,0.25)' : 'rgba(193,174,255,0.22)'}`,
+                  color: submitted ? '#34d399' : AC,
+                  cursor:'pointer', transition:'all 0.2s', fontFamily:'inherit',
+                }}>
+                  {submitted ? <Check size={13} /> : <Upload size={13} />}
+                  {submitted ? 'Synced!' : 'Sync to Twin'}
+                </button>
+              </div>
+            </div>
+
+            {fields.map((f) => (
+              <div key={f.key} style={{ display:'flex', alignItems:'center', padding:'16px 0', borderBottom:`1px solid ${B}`, gap:24 }}>
+                <div style={{ width:220, flexShrink:0, fontSize:13, color:'rgba(255,255,255,0.45)' }}>{f.label}</div>
+                <div style={{ display:'flex', alignItems:'center', gap:8, flex:1 }}>
+                  {f.unit && f.unit !== '%' && f.unit !== 'people' && (
+                    <span style={{ fontSize:13, color:'rgba(255,255,255,0.25)', width:12 }}>{f.unit}</span>
+                  )}
+                  <input
+                    type="number"
+                    value={formData[f.key as keyof FormData]}
+                    onChange={e => setFormData({ ...formData, [f.key]: e.target.value })}
+                    placeholder="0"
+                    style={{
+                      background:'transparent', border:'none', borderBottom:`1px solid ${B}`,
+                      borderRadius:0, padding:'4px 0', fontSize:16, fontWeight:600,
+                      color:'#fff', outline:'none', width:160, fontFamily:'inherit',
+                      transition:'border-color 0.15s',
+                    }}
+                    onFocus={e => (e.target.style.borderBottomColor = `${AC}60`)}
+                    onBlur={e => (e.target.style.borderBottomColor = B)}
+                  />
+                  {(f.unit === '%' || f.unit === 'people') && (
+                    <span style={{ fontSize:12, color:'rgba(255,255,255,0.25)' }}>{f.unit}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Normalization strip */}
+          {(() => {
+            const industryLabel = company?.industry_id
+              ? (INDUSTRIES.find(i => i.id === company.industry_id)?.label ?? company.industry_id) : '—';
+            const country = company?.country ?? '—';
+            const stage = company?.stage ?? '—';
+            const model = company?.business_model ?? '—';
+            const items = [
+              { dim: 'Industry',  value: industryLabel },
+              { dim: 'Geography', value: country       },
+              { dim: 'Stage',     value: stage         },
+              { dim: 'Model',     value: model         },
+            ];
+            return (
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', borderTop:`1px solid ${B}`, marginTop:0, borderBottom:`1px solid ${B}` }}>
+                {items.map((n, i) => (
+                  <div key={n.dim} style={{ padding:'16px 20px', borderLeft: i > 0 ? `1px solid ${B}` : 'none' }}>
+                    <div style={{ fontSize:10, color:'rgba(255,255,255,0.22)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:6 }}>{n.dim}</div>
+                    <div style={{ fontSize:14, fontWeight:600, color:'#0ea5e9' }}>{n.value}</div>
                   </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="glass-card p-6 mb-6">
-            <h3 className="text-sm font-medium text-gray-300 mb-4">Normalization Preview</h3>
-            <div className="grid grid-cols-4 gap-4">
-              {(() => {
-                const industryLabel = company?.industry_id
-                  ? (INDUSTRIES.find(i => i.id === company.industry_id)?.label ?? company.industry_id)
-                  : '—';
-                const country = company?.country ?? '—';
-                const stage = company?.stage ?? '—';
-                const model = company?.business_model ?? '—';
-                return [
-                  { dim: 'Industry',   value: industryLabel, desc: `Adjusted for ${industryLabel} benchmarks` },
-                  { dim: 'Geography',  value: country,       desc: `Regional salary & CAC norms for ${country}` },
-                  { dim: 'Stage',      value: stage,         desc: `Compared to ${stage}-stage cohort` },
-                  { dim: 'Model',      value: model,         desc: model !== '—' ? `${model} unit economics applied` : 'Set in company settings' },
-                ];
-              })().map((n) => (
-                <div key={n.dim} className="py-3 px-4 rounded-lg bg-gray-900/50 border border-gray-800/50">
-                  <span className="text-[10px] text-gray-500 uppercase tracking-wider">{n.dim}</span>
-                  <p className="text-sm font-medium text-sky-300 mt-1">{n.value}</p>
-                  <p className="text-[10px] text-gray-600 mt-0.5">{n.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {saveError && (
-            <div className="flex items-center gap-2 text-sm text-red-400 mb-3">
-              <AlertCircle className="w-3.5 h-3.5" />
-              {saveError}
-            </div>
-          )}
-          <button
-            type="submit"
-            className="flex items-center gap-2 px-6 py-3 bg-sky-600 hover:bg-sky-500 text-white text-sm font-medium rounded-lg transition-all"
-          >
-            {submitted ? <Check className="w-4 h-4" /> : <Upload className="w-4 h-4" />}
-            {submitted ? 'Data Synced to Twin!' : 'Sync to Digital Twin'}
-          </button>
+                ))}
+              </div>
+            );
+          })()}
         </form>
       )}
 
       {/* ===== CSV ===== */}
       {activeTab === 'csv' && (
-        <div className="glass-card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-sm font-medium text-gray-300">Excel Upload</h3>
-            <a
-              href="/templates/FounderOS_Metrics_Template.xlsx"
-              className="text-xs text-sky-400 hover:text-sky-300 underline"
-            >
+        <div style={{ paddingTop:24 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
+            <div>
+              <div style={{ fontSize:14, fontWeight:600, color:'#fff' }}>Excel Upload</div>
+              <div style={{ fontSize:12, color:DIM, marginTop:3 }}>Upload a filled FounderOS metrics template</div>
+            </div>
+            <a href="/templates/FounderOS_Metrics_Template.xlsx"
+              style={{ fontSize:12, color:'#0ea5e9', textDecoration:'none', padding:'7px 14px', borderRadius:7, border:'1px solid rgba(14,165,233,0.2)', background:'rgba(14,165,233,0.06)' }}>
               Download template
             </a>
           </div>
 
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xlsx"
-            className="hidden"
-            onChange={(e) => {
+          <input ref={fileInputRef} type="file" accept=".xlsx" className="hidden"
+            onChange={e => {
               const file = e.target.files?.[0];
               if (file) void handleExcelFile(file);
               e.currentTarget.value = '';
@@ -415,35 +436,37 @@ export default function DataIngestion() {
 
           <button
             type="button"
-            className={`w-full border-2 border-dashed rounded-xl p-12 text-center transition-colors ${
-              canManageExcel
-                ? 'border-gray-700 hover:border-sky-500/50 cursor-pointer'
-                : 'border-gray-800 cursor-not-allowed opacity-60'
-            }`}
             onClick={() => canManageExcel && fileInputRef.current?.click()}
             disabled={!canManageExcel || uploading}
+            style={{
+              width:'100%', border:`2px dashed ${canManageExcel ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.05)'}`,
+              borderRadius:16, padding:'52px 0', textAlign:'center', background:'transparent',
+              cursor: canManageExcel ? 'pointer' : 'not-allowed',
+              opacity: canManageExcel ? 1 : 0.5,
+              transition:'border-color 0.2s',
+            }}
+            onMouseEnter={e => canManageExcel && (e.currentTarget.style.borderColor = 'rgba(14,165,233,0.35)')}
+            onMouseLeave={e => (e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)')}
           >
             {uploading ? (
               <div>
-                <Upload className="w-8 h-8 text-sky-400 mx-auto mb-3 animate-pulse" />
-                <p className="text-sm text-sky-300">Uploading file...</p>
-                <p className="text-xs text-gray-500 mt-1">We will process and sync automatically</p>
+                <Upload size={28} style={{ color:'#0ea5e9', margin:'0 auto 12px', display:'block' }} className="animate-pulse" />
+                <div style={{ fontSize:14, color:'#7dd3fc' }}>Uploading…</div>
+                <div style={{ fontSize:12, color:DIM, marginTop:4 }}>Processing and syncing automatically</div>
               </div>
             ) : csvFile ? (
               <div>
-                <Check className="w-8 h-8 text-emerald-400 mx-auto mb-3" />
-                <p className="text-sm text-emerald-300 font-medium">{csvFile}</p>
-                <p className="text-xs text-gray-500 mt-1">Upload submitted. Tracking ingestion job.</p>
+                <Check size={28} style={{ color:'#34d399', margin:'0 auto 12px', display:'block' }} />
+                <div style={{ fontSize:14, color:'#6ee7b7', fontWeight:600 }}>{csvFile}</div>
+                <div style={{ fontSize:12, color:DIM, marginTop:4 }}>Upload submitted — tracking ingestion job</div>
               </div>
             ) : (
               <div>
-                <FileSpreadsheet className="w-8 h-8 text-gray-600 mx-auto mb-3" />
-                <p className="text-sm text-gray-400">
-                  {canManageExcel
-                    ? 'Click to upload filled .xlsx template'
-                    : 'You do not have permission to upload data'}
-                </p>
-                <p className="text-xs text-gray-600 mt-1">Supported: FounderOS canonical template</p>
+                <FileSpreadsheet size={28} style={{ color:'rgba(255,255,255,0.2)', margin:'0 auto 12px', display:'block' }} />
+                <div style={{ fontSize:14, color:'rgba(255,255,255,0.45)' }}>
+                  {canManageExcel ? 'Click to upload filled .xlsx template' : 'No upload permission for your role'}
+                </div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.2)', marginTop:4 }}>FounderOS canonical template only</div>
               </div>
             )}
           </button>
@@ -618,82 +641,75 @@ export default function DataIngestion() {
 
       {/* ===== INTEGRATIONS ===== */}
       {activeTab === 'integrations' && (
-        <div className="space-y-6">
-          <div className="glass-card p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="text-sm font-medium text-gray-300">Connected Integrations</h3>
-                <p className="text-xs text-gray-500 mt-0.5">
-                  {Object.keys(connections).length} live · click any card to connect or view metrics
-                </p>
-              </div>
-              <button
-                onClick={() => void loadConnections()}
-                disabled={loadingConns}
-                className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
-                title="Refresh"
-              >
-                <RefreshCw className={`w-4 h-4 ${loadingConns ? 'animate-spin' : ''}`} />
-              </button>
+        <div style={{ paddingTop:24 }}>
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:24 }}>
+            <div>
+              <div style={{ fontSize:14, fontWeight:600, color:'#fff' }}>{Object.keys(connections).length} Connected</div>
+              <div style={{ fontSize:12, color:DIM, marginTop:3 }}>Click any integration to connect or view metrics</div>
             </div>
+            <button onClick={() => void loadConnections()} disabled={loadingConns}
+              style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:8, background:'transparent', border:`1px solid ${B}`, color:'rgba(255,255,255,0.4)', cursor:'pointer', fontSize:12, fontFamily:'inherit' }}>
+              <RefreshCw size={13} className={loadingConns ? 'animate-spin' : ''} /> Refresh
+            </button>
           </div>
 
-          {intCats.map((cat) => {
-            const items = integrations.filter((i) => i.category === cat);
-            if (items.length === 0) return null;
-            return (
-              <div key={cat}>
-                <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-3 px-1">
-                  {catLabels[cat]}
-                </h4>
-                <div className="grid grid-cols-3 gap-3">
-                  {items.map((int) => {
-                    const liveConn = connections[int.id];
-                    const isConnected = !!liveConn;
-                    const isComingSoon = int.status === 'coming-soon';
-
-                    return (
-                      <button
-                        key={int.id}
-                        onClick={() => !isComingSoon && setSelectedInt(int)}
-                        disabled={isComingSoon}
-                        className={`glass-card p-4 flex items-start justify-between text-left transition-all ${
-                          isComingSoon
-                            ? 'opacity-50 cursor-not-allowed'
-                            : 'hover:border-sky-500/30 hover:bg-sky-500/5 cursor-pointer'
-                        }`}
-                      >
-                        <div>
-                          <h5 className="text-sm font-medium text-white">{int.name}</h5>
-                          <p className="text-[10px] text-gray-500 mt-0.5">{int.description}</p>
-                          {isConnected && (
-                            <p className="text-[10px] text-gray-600 mt-1 truncate max-w-[120px]">
-                              {liveConn.accountName}
-                            </p>
+          <div style={{ display:'flex', flexDirection:'column', gap:28 }}>
+            {intCats.map((cat) => {
+              const items = integrations.filter((i) => i.category === cat);
+              if (items.length === 0) return null;
+              return (
+                <div key={cat}>
+                  <div style={{ fontSize:10, color:'rgba(255,255,255,0.22)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:12 }}>{catLabels[cat]}</div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
+                    {items.map((int) => {
+                      const liveConn = connections[int.id];
+                      const isConnected = !!liveConn;
+                      const isComingSoon = int.status === 'coming-soon';
+                      return (
+                        <button key={int.id}
+                          onClick={() => !isComingSoon && setSelectedInt(int)}
+                          disabled={isComingSoon}
+                          style={{
+                            display:'flex', alignItems:'flex-start', justifyContent:'space-between',
+                            padding:'16px', borderRadius:12, textAlign:'left',
+                            background:'rgba(255,255,255,0.02)',
+                            border:`1px solid ${isConnected ? 'rgba(16,185,129,0.2)' : B}`,
+                            cursor: isComingSoon ? 'not-allowed' : 'pointer',
+                            opacity: isComingSoon ? 0.5 : 1,
+                            transition:'all 0.15s', fontFamily:'inherit',
+                          }}
+                          onMouseEnter={e => !isComingSoon && (e.currentTarget.style.background = 'rgba(255,255,255,0.04)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+                        >
+                          <div style={{ minWidth:0 }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:'#fff' }}>{int.name}</div>
+                            <div style={{ fontSize:11, color:'rgba(255,255,255,0.3)', marginTop:3, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{int.description}</div>
+                            {isConnected && liveConn.accountName && (
+                              <div style={{ fontSize:10, color:'rgba(255,255,255,0.2)', marginTop:4 }}>{liveConn.accountName}</div>
+                            )}
+                          </div>
+                          {isConnected ? (
+                            <span style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, padding:'3px 8px', borderRadius:100, background:'rgba(16,185,129,0.1)', border:'1px solid rgba(16,185,129,0.2)', color:'#34d399', flexShrink:0, marginLeft:8 }}>
+                              <Wifi size={10} /> Live
+                            </span>
+                          ) : isComingSoon ? (
+                            <span style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, padding:'3px 8px', borderRadius:100, background:'rgba(245,158,11,0.1)', border:'1px solid rgba(245,158,11,0.2)', color:'#fbbf24', flexShrink:0, marginLeft:8 }}>
+                              <Clock size={10} /> Soon
+                            </span>
+                          ) : (
+                            <span style={{ display:'flex', alignItems:'center', gap:4, fontSize:10, padding:'3px 8px', borderRadius:100, background:'rgba(255,255,255,0.05)', border:`1px solid ${B}`, color:'rgba(255,255,255,0.35)', flexShrink:0, marginLeft:8 }}>
+                              <WifiOff size={10} /> Connect
+                            </span>
                           )}
-                        </div>
-                        {isConnected ? (
-                          <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border bg-emerald-500/10 border-emerald-500/20 text-emerald-400 flex-shrink-0">
-                            <Wifi className="w-3 h-3" /> Live
-                          </span>
-                        ) : isComingSoon ? (
-                          <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border bg-amber-500/10 border-amber-500/20 text-amber-400 flex-shrink-0">
-                            <Clock className="w-3 h-3" /> Soon
-                          </span>
-                        ) : (
-                          <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border bg-gray-800 border-gray-700 text-gray-400 flex-shrink-0">
-                            <WifiOff className="w-3 h-3" /> Connect
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
 
-          {/* Modal */}
           {selectedInt && (
             <IntegrationModal
               integration={selectedInt}
@@ -707,62 +723,50 @@ export default function DataIngestion() {
 
       {/* ===== PUBLIC SOURCES ===== */}
       {activeTab === 'public' && (
-        <div className="space-y-6">
-          <div className="glass-card p-6">
-            <h3 className="text-sm font-medium text-gray-300 mb-1">External Data Feeds</h3>
-            <p className="text-xs text-gray-500">
-              Public and online sources powering the Environment Twin — market signals, competitor intel, sentiment, and regulatory updates.
-            </p>
+        <div style={{ paddingTop:24 }}>
+          <div style={{ marginBottom:24 }}>
+            <div style={{ fontSize:14, fontWeight:600, color:'#fff' }}>External Data Feeds</div>
+            <div style={{ fontSize:12, color:DIM, marginTop:4 }}>Public sources powering the Environment Twin — market signals, competitor intel, sentiment, and regulatory updates.</div>
           </div>
 
-          {pubCats.map((cat) => {
-            const items = integrations.filter((i) => i.category === cat);
-            if (items.length === 0) return null;
-            return (
-              <div key={cat}>
-                <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-3 px-1">
-                  {catLabels[cat]}
-                </h4>
-                <div className="grid grid-cols-3 gap-3">
-                  {items.map((int) => {
-                    const badge = statusBadge[int.status];
-                    const Icon = badge.icon;
-                    return (
-                      <div
-                        key={int.id}
-                        className="glass-card p-4 flex items-start justify-between"
-                      >
-                        <div>
-                          <h5 className="text-sm font-medium text-white">{int.name}</h5>
-                          <p className="text-[10px] text-gray-500 mt-0.5">{int.description}</p>
+          <div style={{ display:'flex', flexDirection:'column', gap:28 }}>
+            {pubCats.map((cat) => {
+              const items = integrations.filter((i) => i.category === cat);
+              if (items.length === 0) return null;
+              return (
+                <div key={cat}>
+                  <div style={{ fontSize:10, color:'rgba(255,255,255,0.22)', letterSpacing:'0.1em', textTransform:'uppercase', marginBottom:12 }}>{catLabels[cat]}</div>
+                  <div style={{ display:'grid', gridTemplateColumns:'repeat(3,1fr)', gap:10 }}>
+                    {items.map((int) => {
+                      const badge = statusBadge[int.status];
+                      const Icon = badge.icon;
+                      return (
+                        <div key={int.id} style={{ display:'flex', alignItems:'flex-start', justifyContent:'space-between', padding:'16px', borderRadius:12, background:'rgba(255,255,255,0.02)', border:`1px solid ${B}` }}>
+                          <div style={{ minWidth:0 }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:'#fff' }}>{int.name}</div>
+                            <div style={{ fontSize:11, color:'rgba(255,255,255,0.3)', marginTop:3 }}>{int.description}</div>
+                          </div>
+                          <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border ml-2 shrink-0 ${badge.bg} ${badge.color}`}>
+                            <Icon size={10} />
+                            {int.status === 'connected' ? 'Live' : int.status === 'available' ? 'Connect' : 'Soon'}
+                          </span>
                         </div>
-                        <span className={`flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full border ${badge.bg} ${badge.color}`}>
-                          <Icon className="w-3 h-3" />
-                          {int.status === 'connected' ? 'Live' : int.status === 'available' ? 'Connect' : 'Soon'}
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })}
-
-          <div className="glass-card p-6">
-            <h4 className="text-xs text-gray-500 uppercase tracking-wider mb-3">Signal Pipeline</h4>
-            <div className="flex items-center gap-4">
-              {['Ingest', 'Normalize', 'Score', 'Route to Twin'].map((step, i) => (
-                <div key={step} className="flex items-center gap-3">
-                  <div className="text-center">
-                    <div className="w-10 h-10 rounded-full bg-sky-500/10 border border-sky-500/20 flex items-center justify-center mb-1">
-                      <span className="text-xs font-medium text-sky-300">{i + 1}</span>
-                    </div>
-                    <span className="text-[10px] text-gray-400">{step}</span>
+                      );
+                    })}
                   </div>
-                  {i < 3 && <div className="w-8 h-px bg-gray-800 mt-[-12px]" />}
                 </div>
-              ))}
-            </div>
+              );
+            })}
+          </div>
+
+          {/* Pipeline strip */}
+          <div style={{ display:'flex', borderTop:`1px solid ${B}`, marginTop:28 }}>
+            {['Ingest', 'Normalize', 'Score', 'Route to Twin'].map((step, i) => (
+              <div key={step} style={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', gap:8, padding:'14px 0', borderLeft: i > 0 ? `1px solid ${B}` : 'none' }}>
+                <span style={{ width:22, height:22, borderRadius:'50%', background:'rgba(14,165,233,0.1)', border:'1px solid rgba(14,165,233,0.2)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:11, fontWeight:600, color:'#7dd3fc', flexShrink:0 }}>{i+1}</span>
+                <span style={{ fontSize:12, color:'rgba(255,255,255,0.4)' }}>{step}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}
