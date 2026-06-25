@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useState } from 'react';
-import { LayoutDashboard, Activity, Zap, Shield, Bot, User, Clock, CheckCircle2, Loader2, CircleDot } from 'lucide-react';
+import { LayoutDashboard, Activity, Zap, Shield, Bot, User, Clock, CheckCircle2, Loader2, CircleDot, TrendingUp, Target, ShieldAlert, Tag, Building2, SlidersHorizontal } from 'lucide-react';
+import { WORKSPACE_CANVAS_CARDS, WORKSPACE_CANVAS_CONNECTIONS } from '../lib/workspaceLayoutData';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   RadarChart, PolarGrid, PolarAngleAxis, Radar,
@@ -105,9 +106,54 @@ export default function Overview() {
     return keyMetrics.slice(0, 6);
   }, [simSnapshot, liveKeyMetrics, companyFallbackMetrics, currencySymbol]);
 
+  const [tab, setTab] = useState<'overview' | 'nodes'>('overview');
+
   /* ─────────────────── design tokens ─────────────────── */
   const B  = 'rgba(255,255,255,0.06)';
   const AC = '#C1AEFF';
+
+  /* ─────────────────── nodes canvas helpers ──────────── */
+  type Pt = { x: number; y: number };
+  const cardMap = useMemo(
+    () => Object.fromEntries(WORKSPACE_CANVAS_CARDS.map(c => [c.id, c])),
+    [],
+  );
+  const connections = useMemo(() =>
+    WORKSPACE_CANVAS_CONNECTIONS.map(([from, to]) => {
+      const a = cardMap[from];
+      const b = cardMap[to];
+      if (!a || !b) return null;
+      const fc = { x: a.x + a.w / 2, y: a.y + a.h / 2 };
+      const tc = { x: b.x + b.w / 2, y: b.y + b.h / 2 };
+      const dx = tc.x - fc.x;
+      const dy = tc.y - fc.y;
+      const anchor = (card: typeof a, towardX: number, towardY: number): Pt =>
+        Math.abs(towardX) >= Math.abs(towardY)
+          ? { x: towardX >= 0 ? card.x + card.w : card.x, y: card.y + card.h / 2 }
+          : { x: card.x + card.w / 2, y: towardY >= 0 ? card.y + card.h : card.y };
+      const s = anchor(a, dx, dy);
+      const e = anchor(b, -dx, -dy);
+      const path = Math.abs(e.x - s.x) >= Math.abs(e.y - s.y)
+        ? `M ${s.x} ${s.y} C ${s.x + (e.x - s.x) * 0.5} ${s.y}, ${s.x + (e.x - s.x) * 0.5} ${e.y}, ${e.x} ${e.y}`
+        : `M ${s.x} ${s.y} C ${s.x} ${s.y + (e.y - s.y) * 0.5}, ${e.x} ${s.y + (e.y - s.y) * 0.5}, ${e.x} ${e.y}`;
+      return { id: `${from}-${to}`, path, s, e };
+    }).filter(Boolean) as { id: string; path: string; s: Pt; e: Pt }[],
+    [cardMap],
+  );
+
+  function NodeCardIcon({ id, kind, color }: { id: string; kind?: string; color: string }) {
+    const cls = 'w-3.5 h-3.5 shrink-0';
+    const style = { color };
+    if (id === 'company_hub') return <Building2 className={cls} style={style} strokeWidth={2} />;
+    if (id === 'departments') return <SlidersHorizontal className={cls} style={style} strokeWidth={2} />;
+    switch (kind) {
+      case 'trend':  return <TrendingUp className={cls} style={style} strokeWidth={2} />;
+      case 'target': return <Target className={cls} style={style} strokeWidth={2} />;
+      case 'shield': return <ShieldAlert className={cls} style={style} strokeWidth={2} />;
+      case 'price':  return <Tag className={cls} style={style} strokeWidth={2} />;
+      default: return null;
+    }
+  }
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
@@ -138,6 +184,23 @@ export default function Overview() {
         </div>
       </div>
 
+      {/* ── Tab bar ───────────────────────────────────────────── */}
+      <div style={{ display:'flex', gap:2, padding:'14px 0', borderBottom:`1px solid ${B}` }}>
+        {(['overview', 'nodes'] as const).map(t => (
+          <button key={t} onClick={() => setTab(t)} style={{
+            padding:'7px 16px', borderRadius:8, fontSize:13,
+            fontWeight: tab === t ? 600 : 400,
+            background: tab === t ? 'rgba(193,174,255,0.1)' : 'transparent',
+            border: `1px solid ${tab === t ? 'rgba(193,174,255,0.22)' : 'transparent'}`,
+            color: tab === t ? AC : 'rgba(255,255,255,0.35)',
+            cursor:'pointer', transition:'all 0.15s', fontFamily:'inherit', textTransform:'capitalize',
+          }}>
+            {t === 'nodes' ? 'Nodes' : 'Overview'}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'overview' && <>
       {/* ── Metric Strip ──────────────────────────────────────── */}
       {displayMetrics.length > 0 && (
         <div style={{ display:'grid', gridTemplateColumns:`repeat(${Math.min(displayMetrics.length,6)},1fr)`, borderBottom:`1px solid ${B}` }}>
@@ -264,6 +327,129 @@ export default function Overview() {
           </div>
         ))}
       </div>
+      </>}
+
+      {/* ── Nodes tab ─────────────────────────────────────────── */}
+      {tab === 'nodes' && (
+        <div style={{ paddingTop:28, paddingBottom:20 }}>
+          <div style={{ marginBottom:20 }}>
+            <div style={{ fontSize:11, color:'rgba(255,255,255,0.22)', letterSpacing:'0.1em', textTransform:'uppercase' }}>Workspace Nodes</div>
+            <div style={{ fontSize:13, color:'rgba(255,255,255,0.3)', marginTop:4 }}>
+              {WORKSPACE_CANVAS_CARDS.length} nodes · {WORKSPACE_CANVAS_CONNECTIONS.length} connections
+            </div>
+          </div>
+
+          {/* Canvas stage */}
+          <div style={{ position:'relative', width:'100%', paddingTop:'68%', borderRadius:16, overflow:'hidden', background:'rgba(8,12,24,0.55)', border:`1px solid ${B}` }}>
+            <div style={{ position:'absolute', inset:0 }}>
+
+              {/* SVG connection lines */}
+              <svg
+                style={{ position:'absolute', inset:0, width:'100%', height:'100%', overflow:'visible', pointerEvents:'none' }}
+                viewBox="0 0 100 100"
+                preserveAspectRatio="none"
+              >
+                {/* glow layer */}
+                {connections.map(c => (
+                  <path key={`${c.id}-glow`} d={c.path} fill="none"
+                    stroke="rgba(125,211,252,0.12)" strokeWidth={4}
+                    vectorEffect="non-scaling-stroke" strokeLinecap="round" />
+                ))}
+                {/* line layer */}
+                {connections.map(c => (
+                  <path key={c.id} d={c.path} fill="none"
+                    stroke="rgba(147,197,253,0.85)" strokeWidth={1.25}
+                    vectorEffect="non-scaling-stroke" strokeLinecap="round" />
+                ))}
+              </svg>
+
+              {/* connection endpoint dots */}
+              {connections.map(c => (
+                <div key={`${c.id}-dots`} style={{ position:'absolute', inset:0, pointerEvents:'none' }}>
+                  {[c.s, c.e].map((pt, i) => (
+                    <span key={i} className="ws-conn-node" style={{ left:`${pt.x}%`, top:`${pt.y}%` }} />
+                  ))}
+                </div>
+              ))}
+
+              {/* Cards */}
+              {WORKSPACE_CANVAS_CARDS.map(card => (
+                <div
+                  key={card.id}
+                  className={`ws-glass-block ${card.variant === 'hero' ? 'ws-glass-block--hero' : ''}`}
+                  style={{
+                    left:`${card.x}%`, top:`${card.y}%`,
+                    width:`${card.w}%`, height:`${card.h}%`,
+                    ['--card-accent' as string]: card.accent,
+                  }}
+                >
+                  <div className="ws-glass-block__extrude" />
+                  <div className="ws-glass-block__face" style={{ padding:'11px 12px' }}>
+                    {card.variant === 'hero' ? (
+                      /* Hero card — company hub */
+                      <div style={{ display:'flex', flexDirection:'column', height:'100%' }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
+                          <div style={{ width:28, height:28, borderRadius:8, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
+                            background:`linear-gradient(135deg,color-mix(in srgb,${card.accent} 40%,transparent),transparent)`,
+                            border:`1px solid color-mix(in srgb,${card.accent} 35%,transparent)` }}>
+                            <Building2 size={14} color="#fff" />
+                          </div>
+                          <div>
+                            <div style={{ fontSize:12, fontWeight:700, color:'#fff', lineHeight:1.2 }}>{card.title}</div>
+                            <div style={{ fontSize:10, color:'rgba(255,255,255,0.4)' }}>{card.subtitle}</div>
+                          </div>
+                        </div>
+                        <div style={{ display:'flex', flexWrap:'wrap', gap:4 }}>
+                          {(card.tags ?? []).map(tag => (
+                            <span key={tag} className="ws-hero-tag">{tag}</span>
+                          ))}
+                        </div>
+                        <div style={{ marginTop:'auto', display:'flex', alignItems:'center', gap:5, paddingTop:8 }}>
+                          <span style={{ width:5, height:5, borderRadius:'50%', background:'#10b981', animation:'tw-pulse 3s ease-in-out infinite', display:'inline-block' }} />
+                          <span style={{ fontSize:10, color:'rgba(255,255,255,0.35)' }}>Synced · {displayStage}</span>
+                        </div>
+                      </div>
+                    ) : (
+                      /* Standard card */
+                      <div style={{ display:'flex', flexDirection:'column', height:'100%' }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:5, marginBottom:6 }}>
+                          <NodeCardIcon id={card.id} kind={card.icon} color={card.accent} />
+                          <span style={{ fontSize:9.5, fontWeight:700, letterSpacing:'0.13em', textTransform:'uppercase', color:card.accent, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+                            {card.title}
+                          </span>
+                        </div>
+                        {card.items && (
+                          <ul style={{ display:'flex', flexDirection:'column', gap:3, flex:1 }}>
+                            {card.items.slice(0,3).map(item => (
+                              <li key={item} style={{ display:'flex', alignItems:'center', gap:4, fontSize:9, color:'rgba(255,255,255,0.65)' }}>
+                                <span style={{ width:4, height:4, borderRadius:'50%', background:card.accent, flexShrink:0, opacity:0.7 }} />
+                                <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {card.checks && (
+                          <ul style={{ display:'flex', flexDirection:'column', gap:3, flex:1 }}>
+                            {card.checks.slice(0,3).map(c => (
+                              <li key={c} style={{ display:'flex', alignItems:'center', gap:4, fontSize:9, color:'rgba(255,255,255,0.65)' }}>
+                                <span style={{ width:4, height:4, borderRadius:'50%', background:card.accent, flexShrink:0, opacity:0.7 }} />
+                                <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{c.split(':')[1]?.trim() ?? c}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {card.extra && (
+                          <div style={{ marginTop:'auto', fontSize:9, color:'rgba(255,255,255,0.3)', paddingTop:4 }}>{card.extra}</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

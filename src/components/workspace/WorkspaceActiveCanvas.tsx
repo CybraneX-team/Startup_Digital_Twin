@@ -35,6 +35,7 @@ import {
   Zap,
   CheckCircle,
   Bot,
+  Network,
 } from 'lucide-react';
 import {
   WORKSPACE_CANVAS_CARDS,
@@ -2510,7 +2511,7 @@ function curvePath(s: Pt, e: Pt): string {
 
 export function WorkspaceActiveCanvas() {
   const [renderedCard, setRenderedCard] = useState<string | null>(null);
-  const [canvasView, setCanvasView] = useState<'nodes' | 'overview'>('overview');
+  const [canvasView, setCanvasView] = useState<'nodes' | 'overview' | 'workspace-nodes'>('overview');
 
   const {
     goals,
@@ -2579,8 +2580,8 @@ export function WorkspaceActiveCanvas() {
   // Listen for mode-bar canvas view switch events
   useEffect(() => {
     const handler = (e: Event) => {
-      const view = (e as CustomEvent<{ view: 'nodes' | 'overview' }>).detail?.view;
-      if (view === 'nodes' || view === 'overview') setCanvasView(view);
+      const view = (e as CustomEvent<{ view: 'nodes' | 'overview' | 'workspace-nodes' }>).detail?.view;
+      if (view === 'nodes' || view === 'overview' || view === 'workspace-nodes') setCanvasView(view);
     };
     window.addEventListener('workspace-set-canvas-view', handler);
     return () => window.removeEventListener('workspace-set-canvas-view', handler);
@@ -2781,8 +2782,9 @@ export function WorkspaceActiveCanvas() {
               {!['tasks', 'goals', 'notes', 'files', 'projects', 'sphere', 'roadmap', 'fundraising', 'interviews', 'competitors'].includes(activeSidebarTab) && !activeDetailCard && (
                 <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5 border border-white/10 mr-1">
                   {([
-                    { id: 'overview', label: 'Overview', Icon: Building2 },
-                    { id: 'nodes', label: 'Saved', Icon: Layers },
+                    { id: 'overview',         label: 'Overview', Icon: Building2 },
+                    { id: 'workspace-nodes',  label: 'Nodes',    Icon: Network   },
+                    { id: 'nodes',            label: 'Saved',    Icon: Layers    },
                   ] as const).map(({ id, label, Icon }) => (
                     <button
                       key={id}
