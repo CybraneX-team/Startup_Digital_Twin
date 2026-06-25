@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 import UniverseCanvas from '../three-universe/UniverseCanvas';
 import { useUniverseGraph } from '../data/universeGraph';
 import { useAuth } from '../lib/auth';
@@ -15,6 +15,7 @@ import CreateDepartmentPanel from '../components/CreateDepartmentPanel';
 import CompanyPlanet3DView from '../components/CompanyPlanet3DView';
 import { EXPAND_SETTLE_MS } from '../lib/planetRootAnimation';
 import { CompanyPlanetSidePanel } from '../components/CompanyPlanetSidePanel';
+import { AddReferenceNodePanel } from '../components/AddReferenceNodePanel';
 import {
   getRoleLabel,
   getPlanetPathLabels,
@@ -25,12 +26,14 @@ import {
 } from '../data/companyPlanetRoots';
 import {
   createReferenceCompany,
+  createReferenceCompanyNode,
   deleteReferenceCompany,
   getReferenceCompany,
   refreshReferenceCompany,
   referenceCompanyDetailToPlanetContext,
   pendingReferenceCompanyToPlanetContext,
   type ReferenceCompany,
+  type CreateReferenceCompanyNodeInput,
 } from '../lib/db/referenceCompanies';
 import type { ReferenceCompanyJob } from '../data/companyPlanetRoots';
 import { OpenWorkspaceCue } from '../components/OpenWorkspaceCue';
@@ -278,6 +281,8 @@ export default function Universe3DPage() {
   const polytopeDraftDeptScreenPosRef = useRef<{ x: number; y: number } | null>(null);
   const [polytopeDraftInternalNode, setPolytopeDraftInternalNode] = useState<{ deptId: string; node: UInternalNode } | null>(null);
   const polytopeDraftInternalNodeScreenPosRef = useRef<{ x: number; y: number } | null>(null);
+  // IDT manual-node add inside the root-polytope drill view (mirrors BDT's contextual add).
+  const [showRootPolytopeAddNode, setShowRootPolytopeAddNode] = useState(false);
   const [polytopeDraftMember] = useState<{ deptId: string; nodeId: string; member: any } | null>(null);
   const polytopeDraftMemberScreenPosRef = useRef<{ x: number; y: number } | null>(null);
   // Incremented on draft create/cancel to fly camera back to overview
@@ -463,6 +468,12 @@ export default function Universe3DPage() {
     () => rootPolytopeDepts.find(d => d.id === rootPolytopeDeptId && d.domain !== 'inactive') ?? null,
     [rootPolytopeDepts, rootPolytopeDeptId],
   );
+
+  // Close the contextual add-node panel whenever the drill level or focused root
+  // changes, so it never lingers with a stale parent target.
+  useEffect(() => {
+    setShowRootPolytopeAddNode(false);
+  }, [rootPolytopeDeptId, rootPolytopeInternalPath.length]);
 
   const resolvePlanetRole = useCallback((): UserPlanetRole => {
     if (localStorage.getItem('active_role') === 'vc') return 'vc';
@@ -1059,6 +1070,19 @@ export default function Universe3DPage() {
     }
   }, [appendReferenceCompany, canManageReferenceCompanies, planetContext, refreshUniverse]);
 
+  const handleCreateReferenceNode = useCallback(async (input: CreateReferenceCompanyNodeInput) => {
+    const referenceCompanyId = planetContext?.referenceCompanyId;
+    if (!referenceCompanyId || !canManageReferenceCompanies) return;
+    await createReferenceCompanyNode(referenceCompanyId, input);
+    // Re-fetch the planet so the new node renders everywhere: side panel, 2D/3D,
+    // and the root-polytope drill view (which is derived from planetContext.roots).
+    const detail = await getReferenceCompany(referenceCompanyId);
+    const ctx = referenceCompanyDetailToPlanetContext(detail, planetContext.role);
+    setPlanetContext(ctx);
+    setRootPolytopeDepts(rootsToPolytopeDepartments(ctx.roots));
+    refreshUniverse();
+  }, [canManageReferenceCompanies, planetContext, refreshUniverse]);
+
   const handleDeleteReferenceCompany = useCallback(async () => {
     if (!planetContext?.referenceCompanyId || !canManageReferenceCompanies) return;
     const confirmed = window.confirm(`Delete the reference twin for ${planetContext.companyName}? This will remove its generated roots and citations.`);
@@ -1647,7 +1671,49 @@ export default function Universe3DPage() {
                     handleActionNodeClick(activeRootDept.id, path[0], path[1]);
                   }
                 }}
+                // Root polytope is a derived, read-only view of planet/BDT roots
+                // (no store or write path) — suppress edit affordances like "Add Node".
+                canEdit={false}
+                canCreateDepartment={false}
               />
+
+              {/* IDT contextual add-node: only on reference-company planets, for admins,
+                  and only while drilled into a root (branch level) or branch (action level). */}
+              {canManageReferenceCompanies && planetContext?.referenceCompanyId && rootPolytopeInternalPath.length < 2 && (() => {
+                const atBranchLevel = rootPolytopeInternalPath.length === 0;
+                const parentBranch = atBranchLevel
+                  ? null
+                  : activeRootDept.internalNodes.find(n => n.id === rootPolytopeInternalPath[0]) ?? null;
+                const target = atBranchLevel
+                  ? { nodeKind: 'branch' as const, parentNodeId: activeRootDept.id, parentLabel: activeRootDept.label }
+                  : parentBranch
+                    ? { nodeKind: 'action' as const, parentNodeId: parentBranch.id, parentLabel: parentBranch.label }
+                    : null;
+                if (!target) return null;
+                return showRootPolytopeAddNode ? (
+                  <AddReferenceNodePanel
+                    key={`${target.nodeKind}-${target.parentNodeId}`}
+                    nodeKind={target.nodeKind}
+                    parentNodeId={target.parentNodeId}
+                    parentLabel={target.parentLabel}
+                    accentColor={planetIndustryColor}
+                    onClose={() => setShowRootPolytopeAddNode(false)}
+                    onCreate={async (input) => {
+                      await handleCreateReferenceNode(input);
+                    }}
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowRootPolytopeAddNode(true)}
+                    className="flex items-center justify-center gap-1.5 px-2.5 py-2 rounded-lg text-[11px] font-semibold transition-all"
+                    style={{ width: '196px', background: `${planetIndustryColor}1f`, border: `1px solid ${planetIndustryColor}44`, color: planetIndustryColor }}
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    Add {target.nodeKind === 'branch' ? 'node' : 'action'}
+                  </button>
+                );
+              })()}
             </div>
           ) : insidePlanetRoots && planetContext ? (
             <div
@@ -1695,6 +1761,7 @@ export default function Universe3DPage() {
             >
               <PolytopeSidePanel
                 departments={polytopeStore.departments}
+                lockedDepartments={polytopeStore.lockedDepartments}
                 selectedDeptId={insideBH ? polytopeDeptId : (companyInteriorPath[0] ?? null)}
                 onDeptSelect={insideBH ? handlePolytopeSidebarDeptSelect : (id) => {
                   if (id === null) {
@@ -1780,7 +1847,7 @@ export default function Universe3DPage() {
       />
 
       {/* Draft Dept Creation Panel — BH/Company polytope */}
-      {insideBH && canCreateDepartments && polytopeDraftDept && (
+      {(insideBH || insideCompanyInterior) && canCreateDepartments && polytopeDraftDept && (
         <CreateDepartmentPanel
           mode="department"
           draftNodeScreenPosRef={polytopeDraftDeptScreenPosRef}
@@ -1803,7 +1870,7 @@ export default function Universe3DPage() {
       )}
 
       {/* Draft Internal Node Creation Panel — BH/Company polytope */}
-      {insideBH && polytopeDraftInternalNode && (() => {
+      {(insideBH || insideCompanyInterior) && polytopeDraftInternalNode && (() => {
         const dept = polytopeStore.departments.find(d => d.id === polytopeDraftInternalNode.deptId);
         if (!dept || !canWriteDept(dept)) return null;
         return (
@@ -1819,7 +1886,8 @@ export default function Universe3DPage() {
             }}
             onCreated={async (data) => {
               const deptId = polytopeDraftInternalNode.deptId;
-              const path = polytopeInternalPath;
+              // BH uses polytopeInternalPath; company interior tracks its own drill path.
+              const path = insideBH ? polytopeInternalPath : companyInteriorPath.slice(1);
               await polytopeStore.addNode(deptId, data as Omit<UInternalNode, 'id' | 'children'>, path);
               setPolytopeDraftInternalNode(null);
               setPolytopeDeptId(deptId);

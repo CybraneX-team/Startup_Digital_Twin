@@ -33,7 +33,7 @@ type View =
   | { type: 'deleteNode'; dept: UExternalNode; node: UInternalNode };
 
 const DOMAINS: UDomain[] = ['direction', 'build', 'delivery', 'market', 'control', 'people'];
-const NODE_TYPES: UInternalNode['type'][] = ['team', 'process', 'project', 'resource', 'decision', 'risk', 'metric'];
+const NODE_TYPES: UInternalNode['type'][] = ['team', 'process', 'project', 'resource', 'decision', 'risk', 'metric', 'action'];
 
 const DOMAIN_LABELS: Record<UDomain, string> = {
   direction: 'Direction',
@@ -364,7 +364,20 @@ function NodeForm({ initial, onSave, onCancel }: {
   const [projDeadline, setProjDeadline] = useState(initial?.projectDetails?.deadline ?? '');
   const [projBudget, setProjBudget] = useState(initial?.projectDetails?.budget ?? '');
 
-  const isValid = label.trim().length > 0;
+  const [actionVerb, setActionVerb] = useState(initial?.actionDetails?.verb ?? '');
+  const [actionDesc, setActionDesc] = useState(initial?.actionDetails?.description ?? '');
+  const [actionStateChange, setActionStateChange] = useState(initial?.actionDetails?.stateChange ?? initial?.stateChange ?? '');
+  const [actionOwner, setActionOwner] = useState(initial?.owner ?? '');
+  const [actionDueDate, setActionDueDate] = useState(initial?.dueDate ?? '');
+  const [actionMetricImpact, setActionMetricImpact] = useState(initial?.metricImpact ?? '');
+  const [actionOutput, setActionOutput] = useState(initial?.output ?? '');
+
+  const isActionValid = type !== 'action' || (
+    actionVerb.trim().length > 0 && actionStateChange.trim().length > 0 &&
+    actionOwner.trim().length > 0 && actionDueDate.trim().length > 0 &&
+    actionMetricImpact.trim().length > 0 && actionOutput.trim().length > 0
+  );
+  const isValid = label.trim().length > 0 && isActionValid;
 
   const handleSave = () => {
     if (!isValid) return;
@@ -372,7 +385,14 @@ function NodeForm({ initial, onSave, onCancel }: {
       label: label.trim(),
       type,
       score,
-      ...(type === 'project' ? { projectDetails: { description: projDescription, status: projStatus, deadline: projDeadline, budget: projBudget } } : {})
+      ...(type === 'project' ? { projectDetails: { description: projDescription, status: projStatus, deadline: projDeadline, budget: projBudget } } : {}),
+      ...(type === 'action' ? {
+        actionDetails: { verb: actionVerb.trim(), description: actionDesc.trim() || `${actionVerb.trim()} ${label.trim().toLowerCase()}`, stateChange: actionStateChange.trim(), checklist: [] },
+        owner: actionOwner.trim(),
+        dueDate: actionDueDate,
+        metricImpact: actionMetricImpact.trim(),
+        output: actionOutput.trim(),
+      } : {}),
     });
   };
 
@@ -415,6 +435,18 @@ function NodeForm({ initial, onSave, onCancel }: {
           <FieldGroup label="Description">
              <textarea style={{...INPUT_STYLE, height: 60}} placeholder="Project description..." value={projDescription} onChange={e => setProjDescription(e.target.value)} />
           </FieldGroup>
+        </>
+      )}
+
+      {type === 'action' && (
+        <>
+          <FieldGroup label="Verb *"><input style={INPUT_STYLE} placeholder="e.g. Launch, Implement" value={actionVerb} onChange={e => setActionVerb(e.target.value)} /></FieldGroup>
+          <FieldGroup label="Description"><textarea style={{...INPUT_STYLE, height: 48}} placeholder="One-sentence description" value={actionDesc} onChange={e => setActionDesc(e.target.value)} /></FieldGroup>
+          <FieldGroup label="State Change *"><input style={INPUT_STYLE} placeholder="e.g. Launch complete — pipeline active" value={actionStateChange} onChange={e => setActionStateChange(e.target.value)} /></FieldGroup>
+          <FieldGroup label="Owner *"><input style={INPUT_STYLE} placeholder="e.g. Head of Engineering" value={actionOwner} onChange={e => setActionOwner(e.target.value)} /></FieldGroup>
+          <FieldGroup label="Due Date *"><input type="date" style={INPUT_STYLE} value={actionDueDate} onChange={e => setActionDueDate(e.target.value)} /></FieldGroup>
+          <FieldGroup label="Metric Impact *"><input style={INPUT_STYLE} placeholder="e.g. Revenue +15%" value={actionMetricImpact} onChange={e => setActionMetricImpact(e.target.value)} /></FieldGroup>
+          <FieldGroup label="Output *"><input style={INPUT_STYLE} placeholder="e.g. Signed contract, Published report" value={actionOutput} onChange={e => setActionOutput(e.target.value)} /></FieldGroup>
         </>
       )}
 

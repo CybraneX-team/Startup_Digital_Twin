@@ -431,6 +431,12 @@ export function FounderWorkspaceProvider({ children, initialEntryContext }: { ch
     if (profile?.company_id) void polytopeStore.loadDepartments();
   }, [profile?.company_id, polytopeStore.loadDepartments]);
 
+  useEffect(() => {
+    if (polytopeStore.loaded) {
+      polytopeStore.setCompanySize(profile?.bdt_company_size ?? null);
+    }
+  }, [polytopeStore.loaded, profile?.bdt_company_size]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Multi-workspace state initialization
   const [workspaces, setWorkspaces] = useState<WorkspaceState[]>(() => [
     {

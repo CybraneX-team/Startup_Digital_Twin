@@ -8,7 +8,6 @@ import {
   type UExternalNode,
   type UInternalNode,
 } from './bdtPolytopeData';
-import { hydrateBdtDepartment } from './bdtDepartmentSeed';
 
 export type ApiDepartment = UExternalNode & { source_key?: string };
 
@@ -76,14 +75,14 @@ export function serializeDepartmentsForImport(departments: UExternalNode[]): Rec
   );
 }
 
-/** GET /api/departments — map API rows back to framework ids + hydrate trees. */
+/** GET /api/departments — map API rows back to framework ids; no seed hydration. */
 export function normalizeDepartmentFromApi(dept: ApiDepartment): UExternalNode {
   const id = resolveFrameworkId(dept);
-  return hydrateBdtDepartment({
+  return {
     ...dept,
     id,
     color: dept.color ?? BDT_DEPARTMENT_COLORS[id],
-  });
+  };
 }
 
 export function normalizeDepartmentsFromApi(departments: ApiDepartment[]): UExternalNode[] {

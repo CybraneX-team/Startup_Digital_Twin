@@ -75,6 +75,7 @@ export interface DbCompany {
   stock_symbol: string | null;
   offset_3d: { x: number; y: number; z: number } | null;
   currency: string | null;
+  bdt_company_size: 'micro' | 'msme' | 'standard' | 'enterprise' | null;
   created_at: string;
   updated_at: string;
 }
@@ -82,6 +83,7 @@ export interface DbCompany {
 export interface DbUserProfile {
   id: string;
   company_id: string | null;
+  bdt_company_size?: 'micro' | 'msme' | 'standard' | 'enterprise' | null;
   role: RoleId;
   roleName?: string;
   isSystemRole?: boolean;

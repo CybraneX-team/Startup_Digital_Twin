@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Settings, Palette, Bell, Layers, Plus, Trash2, ImagePlus, Save, Loader2 } from 'lucide-react';
+import { Settings, Palette, Bell, Layers, Plus, Trash2, ImagePlus, Save, Loader2, Lock } from 'lucide-react';
 import PageHeader from '../components/PageHeader';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/db/companies';
@@ -7,6 +7,8 @@ import { INDUSTRIES } from '../db/industries';
 import type { CompanyStage } from '../lib/supabase';
 import { api } from '../lib/api';
 import { usePolytopeStore } from '../lib/usePolytopeStore';
+import { DEPT_SIZE_CONFIGS } from '../lib/bdtPolytopeData';
+import type { UCompanySize } from '../lib/bdtPolytopeData';
 import { COUNTRIES, getCurrencyCodeForCountry } from '../lib/currency';
 
 const STAGES: CompanyStage[] = [
@@ -65,6 +67,8 @@ export default function SettingsPage() {
   const [newDept, setNewDept] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [bdtCompanySize, setBdtCompanySize] = useState<UCompanySize>('standard');
+  const [sizeSaving, setSizeSaving] = useState(false);
 
   useEffect(() => {
     if (profile?.company_id) void departmentStore.loadDepartments();
@@ -92,6 +96,7 @@ export default function SettingsPage() {
         website: company.website ?? '',
         description: company.description ?? '',
       }));
+      setBdtCompanySize((company.bdt_company_size ?? 'standard') as UCompanySize);
     }
   }, [company]);
 
@@ -130,6 +135,21 @@ export default function SettingsPage() {
   }
 
   // Save profile settings
+  async function handleSaveBdtSize() {
+    if (!company || !canEditSettings) return;
+    setSizeSaving(true);
+    try {
+      await api.patch(`/api/companies/${company.id}`, { bdtCompanySize });
+      departmentStore.setCompanySize(bdtCompanySize);
+      await refreshProfile();
+      setSaveMsg('Company size updated');
+    } catch (error) {
+      setSaveMsg('Failed to save: ' + (error instanceof Error ? error.message : 'Unknown error'));
+    }
+    setSizeSaving(false);
+    setTimeout(() => setSaveMsg(null), 3000);
+  }
+
   async function handleSaveProfile() {
     if (!user) return;
     setSaving(true);
@@ -341,6 +361,60 @@ export default function SettingsPage() {
               {!canEditSettings && (
                 <p className="text-[10px] text-amber-400/70">You need Admin or Founder role to edit company settings.</p>
               )}
+            </div>
+          </div>
+
+          {/* Company Growth Stage */}
+          <div className="glass-card p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-medium text-gray-300 flex items-center gap-2">
+                <Lock className="w-4 h-4" /> Company Growth Stage
+              </h3>
+              {canEditSettings && (
+                <button
+                  onClick={handleSaveBdtSize}
+                  disabled={sizeSaving}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-violet-500/10 border border-violet-500/20 text-violet-400 hover:bg-violet-500/15 transition-all disabled:opacity-50"
+                >
+                  {sizeSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  Save
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-gray-500 mb-3">
+              Controls how many departments are active in your Business Digital Twin. Upgrading reveals more departments without re-seeding.
+            </p>
+            <div className="space-y-2">
+              {(['micro', 'msme', 'standard', 'enterprise'] as UCompanySize[]).map(size => {
+                const cfg = DEPT_SIZE_CONFIGS[size];
+                const selected = bdtCompanySize === size;
+                const labels: Record<UCompanySize, string> = {
+                  micro: 'Micro — Founder / early-stage',
+                  msme: 'MSME — Growing team',
+                  standard: 'Standard — Full org',
+                  enterprise: 'Enterprise — Multi-team',
+                };
+                return (
+                  <button
+                    key={size}
+                    type="button"
+                    onClick={() => canEditSettings && setBdtCompanySize(size)}
+                    disabled={!canEditSettings}
+                    className="w-full text-left flex items-center justify-between px-3 py-2.5 rounded-lg transition-all disabled:opacity-50"
+                    style={{
+                      background: selected ? 'rgba(139,92,246,0.12)' : 'rgba(255,255,255,0.02)',
+                      border: selected ? '1px solid rgba(139,92,246,0.35)' : '1px solid rgba(255,255,255,0.06)',
+                    }}
+                  >
+                    <span className="text-xs font-medium" style={{ color: selected ? '#a78bfa' : '#9ca3af' }}>
+                      {labels[size]}
+                    </span>
+                    <span className="text-[10px]" style={{ color: selected ? '#a78bfa' : '#4b5563' }}>
+                      {cfg.visibleDeptIds.length} active
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           </div>
 

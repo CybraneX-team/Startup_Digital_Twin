@@ -1,9 +1,9 @@
 import { create } from 'zustand';
 import { U_NODES as TWIN_DEFAULT_NODES } from './universalPolytopeData';
-import type { UExternalNode, UInternalNode, UDomain } from './bdtPolytopeData';
-import { U_DOMAIN_COLOR, isActionLeafNode, isBdtWorkspaceLeafNode } from './bdtPolytopeData';
+import type { UExternalNode, UInternalNode, UDomain, UCompanySize } from './bdtPolytopeData';
+import { U_DOMAIN_COLOR, isActionLeafNode, isBdtWorkspaceLeafNode, DEPT_SIZE_CONFIGS } from './bdtPolytopeData';
 import { api } from './api';
-import { getBdtFrameworkSeedDepartments, stripSeededTeamMembers } from './bdtDepartmentSeed';
+import { stripSeededTeamMembers } from './bdtDepartmentSeed';
 import { normalizeDepartmentsFromApi } from './bdtDepartmentApiMapper';
 
 /** Twin (/3d company polytope) and BDT (/universal) use separate graphs and caches. */
@@ -17,7 +17,7 @@ export type { UExternalNode, UInternalNode, UDomain };
 export { U_DOMAIN_COLOR, isActionLeafNode, isBdtWorkspaceLeafNode };
 
 const TWIN_DEFAULT_DEPARTMENTS = TWIN_DEFAULT_NODES.filter(n => n.domain !== 'inactive');
-const BDT_DEFAULT_DEPARTMENTS: UExternalNode[] = getBdtFrameworkSeedDepartments();
+const BDT_DEFAULT_DEPARTMENTS: UExternalNode[] = [];
 
 function persistCache(storageKey: string, departments: UExternalNode[]) {
   try {
@@ -201,10 +201,12 @@ function enrichDepartmentsFromSeed(
 
 export interface PolytopeStoreState {
   departments: UExternalNode[];
+  lockedDepartments: UExternalNode[];
   loading: boolean;
   loaded: boolean;
   error: string | null;
   loadDepartments: () => Promise<void>;
+  setCompanySize: (size: UCompanySize | null | undefined) => void;
   addDepartment: (dept: Omit<UExternalNode, 'id' | 'internalNodes'>) => Promise<UExternalNode>;
   updateDepartment: (id: string, updates: Partial<Omit<UExternalNode, 'id' | 'internalNodes'>>) => Promise<void>;
   deleteDepartment: (id: string) => Promise<void>;
@@ -224,6 +226,8 @@ interface StoreConfig {
 
 function createLocalPolytopeStore({ storageKey, defaultDepartments, onboardingFallback }: StoreConfig) {
   return create<PolytopeStoreState>((set, get) => ({
+    lockedDepartments: [],
+    setCompanySize: () => {},
     departments: enrichDepartmentsFromSeed(
       loadCachedDepartments(storageKey, defaultDepartments, { onboardingFallback }) ?? defaultDepartments,
       defaultDepartments,
@@ -316,31 +320,43 @@ function createLocalPolytopeStore({ storageKey, defaultDepartments, onboardingFa
 }
 
 export function createApiPolytopeStore({ storageKey, defaultDepartments, onboardingFallback }: StoreConfig) {
+  let _allDepts: UExternalNode[] = [];
+
+  function splitBySize(all: UExternalNode[], size: UCompanySize | null | undefined) {
+    if (!size) return { visible: all, locked: [] as UExternalNode[] };
+    const visibleKeys = new Set(DEPT_SIZE_CONFIGS[size].visibleDeptIds);
+    const visible = all.filter(d => !d.sourceKey || visibleKeys.has(d.sourceKey));
+    const locked = all.filter(d => Boolean(d.sourceKey) && !visibleKeys.has(d.sourceKey));
+    return { visible, locked };
+  }
+
   return create<PolytopeStoreState>((set, get) => ({
-    departments: enrichDepartmentsFromSeed(
-      loadCachedDepartments(storageKey, defaultDepartments) ?? defaultDepartments,
-      defaultDepartments,
-    ),
+    departments: loadCachedDepartments(storageKey, defaultDepartments) ?? defaultDepartments,
+    lockedDepartments: [],
     loading: false,
     loaded: false,
     error: null,
+
+    setCompanySize: (size) => {
+      const all = _allDepts.length ? _allDepts : [...get().departments, ...get().lockedDepartments];
+      _allDepts = all;
+      const { visible, locked } = splitBySize(all, size);
+      set({ departments: visible, lockedDepartments: locked });
+    },
 
     loadDepartments: async () => {
       if (get().loading) return;
       set({ loading: true, error: null });
       try {
         const response = await api.get<{ departments: UExternalNode[] }>('/api/departments');
-        const raw = normalizeDepartmentsFromApi(response.departments ?? []);
-        const departments = enrichDepartmentsFromSeed(raw, defaultDepartments);
+        const departments = normalizeDepartmentsFromApi(response.departments ?? []);
+        _allDepts = departments;
         persistCache(storageKey, departments);
-        set({ departments, loading: false, loaded: true, error: null });
+        set({ departments, lockedDepartments: [], loading: false, loaded: true, error: null });
       } catch (err) {
         console.error('[departments] load failed', err);
         const cached = loadCachedDepartments(storageKey, defaultDepartments, { onboardingFallback });
-        const fallback = enrichDepartmentsFromSeed(
-          cached ?? (get().departments.length ? get().departments : defaultDepartments),
-          defaultDepartments,
-        );
+        const fallback = cached ?? (get().departments.length ? get().departments : defaultDepartments);
         set({
           departments: fallback,
           loading: false,
@@ -393,10 +409,7 @@ export function createApiPolytopeStore({ storageKey, defaultDepartments, onboard
       set(state => ({ departments: state.departments.filter(d => d.id !== id) }));
       try {
         const response = await api.delete<{ departments: UExternalNode[] }>(`/api/departments/${id}`);
-        const departments = enrichDepartmentsFromSeed(
-          normalizeDepartmentsFromApi(response.departments ?? []),
-          defaultDepartments,
-        );
+        const departments = normalizeDepartmentsFromApi(response.departments ?? []);
         persistCache(storageKey, departments);
         set({ departments });
       } catch (err) {
@@ -461,10 +474,7 @@ export function createApiPolytopeStore({ storageKey, defaultDepartments, onboard
       }));
       try {
         const response = await api.delete<{ departments: UExternalNode[] }>(`/api/departments/nodes/${nodeId}`);
-        const departments = enrichDepartmentsFromSeed(
-          normalizeDepartmentsFromApi(response.departments ?? []),
-          defaultDepartments,
-        );
+        const departments = normalizeDepartmentsFromApi(response.departments ?? []);
         persistCache(storageKey, departments);
         set({ departments });
       } catch (err) {

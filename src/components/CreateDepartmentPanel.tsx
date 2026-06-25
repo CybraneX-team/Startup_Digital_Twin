@@ -46,7 +46,7 @@ type Props = CreateDeptPanelProps | CreateNodePanelProps | CreateMemberPanelProp
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const DOMAINS: UDomain[] = ['direction', 'build', 'delivery', 'market', 'control', 'people'];
-const NODE_TYPES: UInternalNode['type'][] = ['team', 'process', 'project', 'resource', 'decision', 'risk', 'metric'];
+const NODE_TYPES: UInternalNode['type'][] = ['team', 'process', 'project', 'resource', 'decision', 'risk', 'metric', 'action'];
 
 const DOMAIN_LABELS: Record<string, string> = {
   direction: 'Direction',
@@ -316,6 +316,16 @@ function NodeFormContent({
   const [done, setDone] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
 
+  // Action node fields
+  const [verb, setVerb] = useState('');
+  const [actionDescription, setActionDescription] = useState('');
+  const [stateChange, setStateChange] = useState('');
+  const [owner, setOwner] = useState('');
+  const [dueDate, setDueDate] = useState('');
+  const [metricImpact, setMetricImpact] = useState('');
+  const [output, setOutput] = useState('');
+  const [checklist, setChecklist] = useState<string[]>(['']);
+
   const deptColor = U_DOMAIN_COLOR[dept.domain] ?? '#6366f1';
 
   useEffect(() => {
@@ -332,7 +342,15 @@ function NodeFormContent({
     onDraftUpdate?.({ type: t });
   }, [onDraftUpdate]);
 
-  const isValid = label.trim().length > 0;
+  const isActionValid = type !== 'action' || (
+    verb.trim().length > 0 &&
+    stateChange.trim().length > 0 &&
+    owner.trim().length > 0 &&
+    dueDate.trim().length > 0 &&
+    metricImpact.trim().length > 0 &&
+    output.trim().length > 0
+  );
+  const isValid = label.trim().length > 0 && isActionValid;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -342,14 +360,30 @@ function NodeFormContent({
       setLoading(false);
       setDone(true);
       setTimeout(() => {
-        onSave({ label: label.trim(), type, score });
+        onSave({
+          label: label.trim(),
+          type,
+          score,
+          ...(type === 'action' ? {
+            actionDetails: {
+              verb: verb.trim(),
+              description: actionDescription.trim() || `${verb.trim()} ${label.trim().toLowerCase()} to advance department goals`,
+              stateChange: stateChange.trim(),
+              checklist: checklist.map(c => c.trim()).filter(Boolean),
+            },
+            owner: owner.trim(),
+            dueDate,
+            metricImpact: metricImpact.trim(),
+            output: output.trim(),
+          } : {}),
+        });
       }, 900);
     }, 400);
   };
 
   const TYPE_COLORS: Record<string, string> = {
     team: '#60a5fa', process: '#a78bfa', project: '#34d399',
-    resource: '#fbbf24', decision: '#f472b6', risk: '#f87171', metric: '#22d3ee',
+    resource: '#fbbf24', decision: '#f472b6', risk: '#f87171', metric: '#22d3ee', action: '#fb7185',
   };
 
   if (done) {
@@ -417,6 +451,137 @@ function NodeFormContent({
         <Field label={`Score: ${score}`}>
           <ScoreSlider value={score} onChange={setScore} label="Score" />
         </Field>
+
+        {/* Action node fields */}
+        {type === 'action' && (
+          <>
+            <div className="h-px" style={{ background: 'rgba(251,113,133,0.15)' }} />
+            <p className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: '#fb7185' }}>Action Details</p>
+
+            <Field label="Verb *">
+              <input
+                type="text"
+                placeholder="e.g. Launch, Implement, Review"
+                value={verb}
+                onChange={e => setVerb(e.target.value)}
+                style={inputStyle}
+                onFocus={e => e.target.style.borderColor = 'rgba(251,113,133,0.4)'}
+                onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}
+              />
+            </Field>
+
+            <Field label="Description">
+              <textarea
+                placeholder="Describe this action in one sentence"
+                value={actionDescription}
+                onChange={e => setActionDescription(e.target.value)}
+                rows={2}
+                style={{ ...inputStyle, resize: 'none' }}
+                onFocus={e => (e.target as HTMLTextAreaElement).style.borderColor = 'rgba(251,113,133,0.4)'}
+                onBlur={e => (e.target as HTMLTextAreaElement).style.borderColor = 'rgba(255,255,255,0.08)'}
+              />
+            </Field>
+
+            <Field label="State Change *">
+              <input
+                type="text"
+                placeholder="e.g. Launch complete — pipeline now active"
+                value={stateChange}
+                onChange={e => setStateChange(e.target.value)}
+                style={inputStyle}
+                onFocus={e => e.target.style.borderColor = 'rgba(251,113,133,0.4)'}
+                onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}
+              />
+            </Field>
+
+            <Field label="Owner *">
+              <input
+                type="text"
+                placeholder="e.g. Head of Engineering"
+                value={owner}
+                onChange={e => setOwner(e.target.value)}
+                style={inputStyle}
+                onFocus={e => e.target.style.borderColor = 'rgba(251,113,133,0.4)'}
+                onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}
+              />
+            </Field>
+
+            <Field label="Due Date *">
+              <input
+                type="date"
+                value={dueDate}
+                onChange={e => setDueDate(e.target.value)}
+                style={{ ...inputStyle, colorScheme: 'dark' }}
+                onFocus={e => e.target.style.borderColor = 'rgba(251,113,133,0.4)'}
+                onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}
+              />
+            </Field>
+
+            <Field label="Metric Impact *">
+              <input
+                type="text"
+                placeholder="e.g. Revenue +15%, Churn -8%"
+                value={metricImpact}
+                onChange={e => setMetricImpact(e.target.value)}
+                style={inputStyle}
+                onFocus={e => e.target.style.borderColor = 'rgba(251,113,133,0.4)'}
+                onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}
+              />
+            </Field>
+
+            <Field label="Output *">
+              <input
+                type="text"
+                placeholder="e.g. Signed contract, Published report"
+                value={output}
+                onChange={e => setOutput(e.target.value)}
+                style={inputStyle}
+                onFocus={e => e.target.style.borderColor = 'rgba(251,113,133,0.4)'}
+                onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}
+              />
+            </Field>
+
+            <Field label="Checklist Items">
+              <div className="flex flex-col gap-1.5">
+                {checklist.map((item, i) => (
+                  <div key={i} className="flex gap-1.5">
+                    <input
+                      type="text"
+                      placeholder={`Step ${i + 1}`}
+                      value={item}
+                      onChange={e => {
+                        const next = [...checklist];
+                        next[i] = e.target.value;
+                        setChecklist(next);
+                      }}
+                      style={{ ...inputStyle, flex: 1 }}
+                      onFocus={e => e.target.style.borderColor = 'rgba(251,113,133,0.4)'}
+                      onBlur={e => e.target.style.borderColor = 'rgba(255,255,255,0.08)'}
+                    />
+                    {checklist.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setChecklist(checklist.filter((_, j) => j !== i))}
+                        className="px-2 rounded-lg text-[11px] transition-colors hover:bg-white/10"
+                        style={{ color: '#f87171', border: '1px solid rgba(255,255,255,0.06)', background: 'rgba(255,255,255,0.03)' }}
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setChecklist([...checklist, ''])}
+                  className="text-[10px] text-left transition-colors hover:opacity-80"
+                  style={{ color: '#fb7185' }}
+                >
+                  + Add step
+                </button>
+              </div>
+            </Field>
+          </>
+        )}
 
         {/* Context badge */}
         <div

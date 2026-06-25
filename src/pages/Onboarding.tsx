@@ -19,6 +19,8 @@ import {
   createCustomDepartmentEntry,
   type CustomDepartmentEntry,
 } from '../lib/bdtOnboarding';
+import { DEPT_SIZE_CONFIGS } from '../lib/bdtPolytopeData';
+import type { UCompanySize } from '../lib/bdtPolytopeData';
 import { api } from '../lib/api';
 import { COUNTRIES, getCurrencyCodeForCountry } from '../lib/currency';
 
@@ -30,8 +32,16 @@ const STEPS = [
   { id: 2, label: 'Story' },
   { id: 3, label: 'Metrics' },
   { id: 4, label: 'Departments' },
-  { id: 5, label: 'Profile' },
-  { id: 6, label: 'Launch' },
+  { id: 5, label: 'Size' },
+  { id: 6, label: 'Profile' },
+  { id: 7, label: 'Launch' },
+];
+
+const SIZE_OPTIONS: { key: UCompanySize; label: string; description: string; roots: string }[] = [
+  { key: 'micro',      label: 'Micro',      description: 'Founder-led, pre-team stage',      roots: '6 departments' },
+  { key: 'msme',       label: 'MSME',       description: 'Growing team, 10–50 people',        roots: '9 departments' },
+  { key: 'standard',   label: 'Standard',   description: 'Full org, 50–500 people',           roots: '13 departments' },
+  { key: 'enterprise', label: 'Enterprise', description: 'Multi-team, 500+ people',           roots: '16+ departments' },
 ];
 
 const STAGES: CompanyStage[] = [
@@ -144,6 +154,8 @@ export default function Onboarding() {
   const [form, setForm] = useState<FormData>(INITIAL);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [bdtCompanySize, setBdtCompanySize] = useState<UCompanySize>('standard');
 
   // BDT department selection (framework catalog + optional custom)
   const bdtCatalog = getBdtCatalog();
@@ -314,7 +326,7 @@ export default function Onboarding() {
     if (next === 4) {
       void fetchAiDepartmentSuggestions();
     }
-    setStep(s => Math.min(s + 1, 6));
+    setStep(s => Math.min(s + 1, 7));
   }
 
   function prevStep() { setStep(s => Math.max(s - 1, 1)); }
@@ -333,7 +345,7 @@ export default function Onboarding() {
         return false;
       }
     }
-    if (step === 5) {
+    if (step === 6) {
       if (!form.first_name.trim()) { setError('First name is required'); return false; }
     }
     return true;
@@ -376,6 +388,7 @@ export default function Onboarding() {
       departments: departmentLabels,
       bdt_department_source_keys: selectedCatalogIds,
       bdt_custom_departments: customDepartments.filter(d => d.selected).map(d => d.label),
+      bdtCompanySize,
       profile: {
         first_name: form.first_name.trim() || undefined,
         last_name: form.last_name.trim() || undefined,
@@ -1097,8 +1110,57 @@ export default function Onboarding() {
             </div>
           )}
 
-          {/* Step 5 — Founder Profile */}
+          {/* Step 5 — Company Size */}
           {step === 5 && (
+            <div className="flex flex-col gap-6">
+              <div>
+                <h2 className="text-white font-semibold text-base">Company growth stage</h2>
+                <p className="text-xs mt-1.5" style={{ color: '#5E5E5E' }}>
+                  This sets how many departments are active in your Business Digital Twin.
+                  You can upgrade this anytime in Settings.
+                </p>
+              </div>
+              <div className="flex flex-col gap-3">
+                {SIZE_OPTIONS.map(opt => {
+                  const selected = bdtCompanySize === opt.key;
+                  const visibleCount = DEPT_SIZE_CONFIGS[opt.key].visibleDeptIds.length;
+                  return (
+                    <button
+                      key={opt.key}
+                      type="button"
+                      onClick={() => setBdtCompanySize(opt.key)}
+                      className="w-full text-left rounded-xl px-5 py-4 transition-all"
+                      style={{
+                        background: selected ? 'rgba(193,174,255,0.12)' : '#161618',
+                        border: selected ? '1px solid rgba(193,174,255,0.4)' : '1px solid rgba(255,255,255,0.06)',
+                      }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold" style={{ color: selected ? '#C1AEFF' : '#fff' }}>
+                            {opt.label}
+                          </p>
+                          <p className="text-xs mt-0.5" style={{ color: '#5E5E5E' }}>{opt.description}</p>
+                        </div>
+                        <div className="flex items-center gap-3 shrink-0">
+                          <span className="text-xs font-medium" style={{ color: selected ? '#C1AEFF' : '#5E5E5E' }}>
+                            {visibleCount} active
+                          </span>
+                          {selected && <Check size={16} color="#C1AEFF" />}
+                        </div>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs" style={{ color: '#3E3E3E' }}>
+                All 13 standard departments are always created in your BDT — this setting controls which ones are visible and active.
+              </p>
+            </div>
+          )}
+
+          {/* Step 6 — Founder Profile */}
+          {step === 6 && (
             <div className="flex flex-col gap-5">
               <h2 className="text-white font-semibold text-base">Founder profile</h2>
               <div className="grid grid-cols-2 gap-4">
@@ -1127,8 +1189,8 @@ export default function Onboarding() {
             </div>
           )}
 
-          {/* Step 6 — Review & Launch */}
-          {step === 6 && (
+          {/* Step 7 — Review & Launch */}
+          {step === 7 && (
             <div className="flex flex-col gap-6">
               <h2 className="text-white font-semibold text-base">Ready to launch</h2>
 
@@ -1202,7 +1264,7 @@ export default function Onboarding() {
               Back
             </button>
 
-            {step < 6 ? (
+            {step < 7 ? (
               <button
                 type="button"
                 onClick={nextStep}
