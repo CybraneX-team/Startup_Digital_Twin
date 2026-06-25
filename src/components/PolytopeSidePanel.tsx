@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Search, Command, ArrowLeft, Plus, ChevronRight, Pencil, Trash2, Target, Database, Activity, Users, BarChart2, UserPlus, Plug } from 'lucide-react';
+import { Search, Command, ArrowLeft, Plus, ChevronRight, Pencil, Trash2, Target, Database, Activity, Users, BarChart2, UserPlus, Plug, Lock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
 import { getExternalNodeColor, isActionLeafNode, isBdtWorkspaceLeafNode } from '../lib/universalPolytopeData';
@@ -7,6 +7,8 @@ import { resolveDepartmentDelete, resolveDepartmentWrite } from '../lib/bdtPolyt
 
 export interface PolytopeSidePanelProps {
   departments: UExternalNode[];
+  /** Departments locked by company size — shown greyed-out with a lock icon */
+  lockedDepartments?: UExternalNode[];
   selectedDeptId: string | null;
   onDeptSelect: (id: string | null, internalPath?: string[]) => void;
   /** The currently-selected internal node path (array of node IDs from root → leaf) */
@@ -94,6 +96,7 @@ const TYPE_COLORS: Record<string, string> = {
 
 export function PolytopeSidePanel({
   departments,
+  lockedDepartments = [],
   selectedDeptId,
   onDeptSelect,
   selectedInternalPath,
@@ -799,6 +802,34 @@ export function PolytopeSidePanel({
             Add Department
           </button>
         </div>
+        )}
+
+        {/* ── Locked departments (size-gated) ── */}
+        {lockedDepartments.length > 0 && activeTab === 'departments' && !showingNodes && (
+          <div className="px-3 pb-2 flex flex-col gap-1">
+            {lockedDepartments.map(dept => {
+              const color = getExternalNodeColor(dept);
+              return (
+                <div
+                  key={dept.id}
+                  title={`Upgrade your company size in Settings to unlock ${dept.label}.`}
+                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl cursor-not-allowed"
+                  style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.04)',
+                    opacity: 0.45,
+                  }}
+                >
+                  <div
+                    className="w-1.5 h-1.5 rounded-full shrink-0"
+                    style={{ background: color }}
+                  />
+                  <span className="text-[12px] text-white/40 truncate flex-1">{dept.label}</span>
+                  <Lock className="w-3 h-3 shrink-0" style={{ color: '#5E5E5E' }} />
+                </div>
+              );
+            })}
+          </div>
         )}
 
         {activeTab === 'departments' && showingNodes && effectiveDept && canWriteEffectiveDept && !isShowingMembers && (

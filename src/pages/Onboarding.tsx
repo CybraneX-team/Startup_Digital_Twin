@@ -22,6 +22,8 @@ import {
   createCustomDepartmentEntry,
   type CustomDepartmentEntry,
 } from '../lib/bdtOnboarding';
+import { DEPT_SIZE_CONFIGS } from '../lib/bdtPolytopeData';
+import type { UCompanySize } from '../lib/bdtPolytopeData';
 import { api } from '../lib/api';
 import { COUNTRIES, getCurrencyCodeForCountry } from '../lib/currency';
 
@@ -54,8 +56,16 @@ const STEPS = [
   { id: 2, label: 'Story' },
   { id: 3, label: 'Metrics' },
   { id: 4, label: 'Departments' },
-  { id: 5, label: 'Profile' },
-  { id: 6, label: 'Launch' },
+  { id: 5, label: 'Size' },
+  { id: 6, label: 'Profile' },
+  { id: 7, label: 'Launch' },
+];
+
+const SIZE_OPTIONS: { key: UCompanySize; label: string; description: string }[] = [
+  { key: 'micro', label: 'Micro', description: 'Founder-led, pre-team stage' },
+  { key: 'msme', label: 'MSME', description: 'Growing team, 10-50 people' },
+  { key: 'standard', label: 'Standard', description: 'Full org, 50-500 people' },
+  { key: 'enterprise', label: 'Enterprise', description: 'Multi-team, 500+ people' },
 ];
 
 const STAGES: CompanyStage[] = [
@@ -202,6 +212,7 @@ export default function Onboarding() {
   const [form, setForm] = useState<FormData>(INITIAL);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [bdtCompanySize, setBdtCompanySize] = useState<UCompanySize>('standard');
 
   const bdtCatalog = getBdtCatalog();
   const [selectedCatalogIds, setSelectedCatalogIds] = useState<string[]>([]);
@@ -319,8 +330,9 @@ export default function Onboarding() {
 
   function nextStep() {
     if (!validateStep()) return;
-    if (step + 1 === 4) void fetchAiDepartmentSuggestions();
-    setStep(s => Math.min(s + 1, 6));
+    const next = step + 1;
+    if (next === 4) void fetchAiDepartmentSuggestions();
+    setStep(s => Math.min(s + 1, 7));
   }
 
   function prevStep() { setStep(s => Math.max(s - 1, 1)); }
@@ -332,9 +344,9 @@ export default function Onboarding() {
     }
     if (step === 2 && !form.description.trim()) { setError('A short description is required'); return false; }
     if (step === 4 && countSelectedDepartments() === 0) {
-      setError('Select at least one department'); return false;
+      setError('Select at least one department for your Business Digital Twin'); return false;
     }
-    if (step === 5 && !form.first_name.trim()) { setError('First name is required'); return false; }
+    if (step === 6 && !form.first_name.trim()) { setError('First name is required'); return false; }
     return true;
   }
 
@@ -365,6 +377,7 @@ export default function Onboarding() {
       departments: departmentLabels,
       bdt_department_source_keys: selectedCatalogIds,
       bdt_custom_departments: customDepartments.filter(d => d.selected).map(d => d.label),
+      bdtCompanySize,
       profile: {
         first_name: form.first_name.trim() || undefined,
         last_name: form.last_name.trim() || undefined,
@@ -680,8 +693,9 @@ export default function Onboarding() {
             {step === 2 && "What's your story?"}
             {step === 3 && 'Key metrics & numbers'}
             {step === 4 && 'Build your Digital Twin'}
-            {step === 5 && 'About the founder'}
-            {step === 6 && 'Ready to launch'}
+            {step === 5 && 'Choose your company size'}
+            {step === 6 && 'About the founder'}
+            {step === 7 && 'Ready to launch'}
           </h2>
           {step === 3 && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', margin: '8px 0 0' }}>All optional — add what you know. You can update these anytime.</p>}
         </div>
@@ -906,6 +920,64 @@ export default function Onboarding() {
         )}
 
         {step === 5 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <div style={{ padding: '14px 16px', background: 'rgba(193,174,255,0.05)', borderRadius: 12, border: '1px solid rgba(193,174,255,0.12)' }}>
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', margin: 0 }}>
+                This controls how many departments are active in your Business Digital Twin. You can change it later in Settings.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {SIZE_OPTIONS.map(option => {
+                const selected = bdtCompanySize === option.key;
+                const visibleCount = DEPT_SIZE_CONFIGS[option.key].visibleDeptIds.length;
+                return (
+                  <button
+                    key={option.key}
+                    type="button"
+                    onClick={() => setBdtCompanySize(option.key)}
+                    style={{
+                      width: '100%',
+                      padding: '16px 18px',
+                      borderRadius: 14,
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      background: selected ? 'rgba(193,174,255,0.1)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${selected ? 'rgba(193,174,255,0.35)' : 'rgba(255,255,255,0.08)'}`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 16,
+                      fontFamily: FF,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: selected ? ACCENT : '#fff', marginBottom: 4 }}>
+                        {option.label}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)', lineHeight: 1.5 }}>
+                        {option.description}
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 }}>
+                      <span style={{ fontSize: 12, color: selected ? ACCENT : 'rgba(255,255,255,0.28)', fontWeight: 600 }}>
+                        {visibleCount} active
+                      </span>
+                      {selected && <Check size={16} color={ACCENT} />}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.22)', margin: 0 }}>
+              All core departments are still created in your BDT. This setting controls which ones are visible and active at launch.
+            </p>
+          </div>
+        )}
+
+        {step === 6 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <OField label="First name *">
@@ -921,7 +993,7 @@ export default function Onboarding() {
           </div>
         )}
 
-        {step === 6 && (
+        {step === 7 && (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
             <div style={{ padding: '20px 22px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16 }}>
               <div style={{ display: 'flex', alignItems: 'flex-start', gap: 16 }}>
@@ -935,6 +1007,22 @@ export default function Onboarding() {
                   </p>
                   {form.description && <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.45)', margin: 0, lineHeight: 1.5 }}>{form.description}</p>}
                 </div>
+              </div>
+            </div>
+
+            <div style={{ padding: '18px 20px', background: 'rgba(193,174,255,0.05)', border: '1px solid rgba(193,174,255,0.12)', borderRadius: 14 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <div>
+                  <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.24)', textTransform: 'uppercase', letterSpacing: '0.12em', margin: '0 0 6px' }}>
+                    Company Size
+                  </p>
+                  <p style={{ fontSize: 15, fontWeight: 700, color: '#fff', margin: 0 }}>
+                    {SIZE_OPTIONS.find(option => option.key === bdtCompanySize)?.label ?? 'Standard'}
+                  </p>
+                </div>
+                <span style={{ fontSize: 12, color: ACCENT, fontWeight: 600 }}>
+                  {DEPT_SIZE_CONFIGS[bdtCompanySize].visibleDeptIds.length} active departments
+                </span>
               </div>
             </div>
 
@@ -978,7 +1066,7 @@ export default function Onboarding() {
             {step === 1 ? 'Choose' : 'Back'}
           </button>
 
-          {step < 6 ? (
+          {step < 7 ? (
             <button type="button" onClick={nextStep} style={{
               display: 'flex', alignItems: 'center', gap: 8, padding: '13px 28px', borderRadius: 12,
               border: 'none', background: `linear-gradient(135deg, #F9C6FF, ${ACCENT})`,

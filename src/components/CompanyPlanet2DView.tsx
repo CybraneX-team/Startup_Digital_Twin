@@ -154,7 +154,7 @@ export default function CompanyPlanet2DView({
       branchLabel: branchNode?.label,
       actionId,
       actionLabel: depth === 2 ? (branchNode?.actions.find(a => a.id === nodeId)?.label) : undefined,
-      actionHint: depth === 2 ? (branchNode?.actions.find(a => a.id === nodeId)?.hint) : undefined,
+      actionHint: depth === 2 ? (branchNode?.actions.find(a => a.id === nodeId)?.hint ?? undefined) : undefined,
     });
     setJustSavedId(nodeId);
     setTimeout(() => setJustSavedId(null), 2000);

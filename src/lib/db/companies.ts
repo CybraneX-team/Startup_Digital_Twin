@@ -57,6 +57,7 @@ export interface CreateCompanyInput {
   /** Custom department labels added during onboarding */
   bdt_custom_departments?: string[];
   departments?: string[];
+  bdtCompanySize?: 'micro' | 'msme' | 'standard' | 'enterprise';
   profile?: {
     first_name?: string;
     last_name?: string;

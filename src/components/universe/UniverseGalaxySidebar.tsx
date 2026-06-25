@@ -16,6 +16,7 @@ export interface UniverseGalaxySidebarProps {
   currentLevel: ZoomLevel;
   controllerRef: RefObject<UniverseController | null>;
   onAddCompany: (industry: UniverseIndustry, subdomain: UniverseSubdomain) => void;
+  canAddCompany?: boolean;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   searchInputRef: RefObject<HTMLInputElement | null>;

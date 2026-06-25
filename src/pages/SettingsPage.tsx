@@ -8,6 +8,8 @@ import { INDUSTRIES } from '../db/industries';
 import type { CompanyStage } from '../lib/supabase';
 import { api } from '../lib/api';
 import { usePolytopeStore } from '../lib/usePolytopeStore';
+import { DEPT_SIZE_CONFIGS } from '../lib/bdtPolytopeData';
+import type { UCompanySize } from '../lib/bdtPolytopeData';
 import { COUNTRIES, getCurrencyCodeForCountry } from '../lib/currency';
 
 const STAGES: CompanyStage[] = [
@@ -73,6 +75,8 @@ export default function SettingsPage() {
   const [newDept, setNewDept] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [bdtCompanySize, setBdtCompanySize] = useState<UCompanySize>('standard');
+  const [sizeSaving, setSizeSaving] = useState(false);
 
   useEffect(() => {
     if (profile?.company_id) void departmentStore.loadDepartments();
@@ -99,6 +103,7 @@ export default function SettingsPage() {
         website: company.website ?? '',
         description: company.description ?? '',
       }));
+      setBdtCompanySize((company.bdt_company_size ?? 'standard') as UCompanySize);
     }
   }, [company]);
 
@@ -151,6 +156,22 @@ export default function SettingsPage() {
     setTimeout(() => setSaveMsg(null), 3000);
   }
 
+  async function handleSaveBdtSize() {
+    if (!company || !canEditSettings) return;
+    setSizeSaving(true);
+    setSaveMsg(null);
+    try {
+      await api.patch(`/api/companies/${company.id}`, { bdtCompanySize });
+      departmentStore.setCompanySize(bdtCompanySize);
+      await refreshProfile();
+      setSaveMsg('Company size updated');
+    } catch (err) {
+      setSaveMsg('Failed: ' + (err instanceof Error ? err.message : 'Unknown error'));
+    }
+    setSizeSaving(false);
+    setTimeout(() => setSaveMsg(null), 3000);
+  }
+
   const addDept = () => {
     if (!canCreateDepartments || !newDept.trim()) return;
     void departmentStore.addDepartment({
@@ -166,10 +187,6 @@ export default function SettingsPage() {
   const removeDept = (idx: number) => {
     const dept = departmentStore.departments.filter(d => d.domain !== 'inactive' && !d.isDraft)[idx];
     if (dept?.access?.delete) void departmentStore.deleteDepartment(dept.id);
-  };
-
-  const updateDept = (idx: number, field: keyof DeptConfig, value: string | number) => {
-    setDepts(prev => prev.map((d, i) => (i === idx ? { ...d, [field]: value } : d)));
   };
 
   const applyTemplate = (template: string) => {
@@ -306,12 +323,98 @@ export default function SettingsPage() {
                     onBlur={e => (e.target.style.borderColor = B)}
                   />
                 )},
-              ].map((row, i) => (
+              ].map((row) => (
                 <div key={row.label} style={{ display:'flex', alignItems:'flex-start', padding:'18px 0', borderBottom:`1px solid ${B}`, gap:24 }}>
                   <div style={{ width:140, flexShrink:0, fontSize:13, color:'rgba(255,255,255,0.38)', paddingTop:10 }}>{row.label}</div>
                   <div style={{ flex:1 }}>{row.content}</div>
                 </div>
               ))}
+
+              <div style={{ display:'flex', alignItems:'flex-start', padding:'18px 0', borderBottom:`1px solid ${B}`, gap:24 }}>
+                <div style={{ width:140, flexShrink:0, fontSize:13, color:'rgba(255,255,255,0.38)', paddingTop:10 }}>BDT Size</div>
+                <div style={{ flex:1 }}>
+                  <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                    {(['micro', 'msme', 'standard', 'enterprise'] as UCompanySize[]).map(size => {
+                      const selected = bdtCompanySize === size;
+                      const visibleCount = DEPT_SIZE_CONFIGS[size].visibleDeptIds.length;
+                      const labels: Record<UCompanySize, string> = {
+                        micro: 'Micro',
+                        msme: 'MSME',
+                        standard: 'Standard',
+                        enterprise: 'Enterprise',
+                      };
+                      const descriptions: Record<UCompanySize, string> = {
+                        micro: 'Founder-led, early-stage team',
+                        msme: 'Growing company with a focused operating core',
+                        standard: 'Full operating model with the standard department set',
+                        enterprise: 'Expanded multi-team operating model',
+                      };
+                      return (
+                        <button
+                          key={size}
+                          type="button"
+                          onClick={() => canEditSettings && setBdtCompanySize(size)}
+                          disabled={!canEditSettings}
+                          style={{
+                            width:'100%',
+                            padding:'14px 16px',
+                            borderRadius:12,
+                            border: `1px solid ${selected ? 'rgba(193,174,255,0.35)' : B}`,
+                            background: selected ? 'rgba(193,174,255,0.08)' : 'rgba(255,255,255,0.02)',
+                            cursor: canEditSettings ? 'pointer' : 'not-allowed',
+                            textAlign:'left',
+                            opacity: canEditSettings ? 1 : 0.6,
+                            transition:'all 0.15s',
+                          }}
+                        >
+                          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:16 }}>
+                            <div>
+                              <div style={{ fontSize:13, fontWeight:700, color: selected ? AC : '#fff', marginBottom:4 }}>
+                                {labels[size]}
+                              </div>
+                              <div style={{ fontSize:12, color:'rgba(255,255,255,0.28)', lineHeight:1.5 }}>
+                                {descriptions[size]}
+                              </div>
+                            </div>
+                            <div style={{ fontSize:12, color: selected ? AC : 'rgba(255,255,255,0.24)', fontWeight:600, flexShrink:0 }}>
+                              {visibleCount} active
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+
+                    {canEditSettings && (
+                      <div>
+                        <button
+                          type="button"
+                          onClick={handleSaveBdtSize}
+                          disabled={sizeSaving}
+                          style={{
+                            display:'inline-flex',
+                            alignItems:'center',
+                            gap:6,
+                            padding:'8px 16px',
+                            borderRadius:8,
+                            fontSize:13,
+                            fontWeight:600,
+                            background:'rgba(193,174,255,0.1)',
+                            border:`1px solid rgba(193,174,255,0.2)`,
+                            color:AC,
+                            cursor:sizeSaving ? 'not-allowed' : 'pointer',
+                            opacity:sizeSaving ? 0.6 : 1,
+                            transition:'all 0.15s',
+                            fontFamily:'inherit',
+                          }}
+                        >
+                          {sizeSaving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                          Save Size
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
 
               {!canEditSettings && (
                 <p style={{ fontSize:11, color:'rgba(255,187,0,0.5)', marginTop:16 }}>Admin or Founder role required to edit company settings.</p>

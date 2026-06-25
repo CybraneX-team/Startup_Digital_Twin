@@ -28,6 +28,10 @@ export interface CompanyPlanetSidePanelProps {
   setSearchQuery: (q: string) => void;
   industryColor?: string;
   onRoleChange?: (role: UserPlanetRole) => void;
+  onRefresh?: () => void | Promise<void>;
+  canRefresh?: boolean;
+  onDelete?: () => void | Promise<void>;
+  canDelete?: boolean;
   onResearchCompany?: (url: string, subdomainId: string, classification: CompanyTag) => Promise<void>;
   onClassificationChange?: (tag: CompanyTag | null) => void;
 }

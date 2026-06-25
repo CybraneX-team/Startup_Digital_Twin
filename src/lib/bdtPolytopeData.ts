@@ -4,6 +4,94 @@
 
 export type UDomain = 'direction' | 'build' | 'delivery' | 'market' | 'control' | 'people' | 'inactive';
 
+// ── BDT structural types (Company Department spec) ────────────────────────────
+
+/** The 8 universal branch types every department must have. */
+export type UBranchKind =
+  | 'purpose_scope'
+  | 'objectives_okrs'
+  | 'core_workstreams'
+  | 'metrics_health'
+  | 'resources_capacity'
+  | 'dependencies'
+  | 'risks_controls'
+  | 'decision_queue';
+
+export const U_BRANCH_KIND_LABELS: Record<UBranchKind, string> = {
+  purpose_scope:      'Purpose & Scope',
+  objectives_okrs:    'Objectives / OKRs',
+  core_workstreams:   'Core Workstreams',
+  metrics_health:     'Metrics & Health',
+  resources_capacity: 'Resources & Capacity',
+  dependencies:       'Dependencies',
+  risks_controls:     'Risks & Controls',
+  decision_queue:     'Decision Queue',
+};
+
+export const U_BRANCH_KINDS: UBranchKind[] = [
+  'purpose_scope', 'objectives_okrs', 'core_workstreams', 'metrics_health',
+  'resources_capacity', 'dependencies', 'risks_controls', 'decision_queue',
+];
+
+/** Position in the 5-level BDT hierarchy. */
+export type UNodeLevel = 'department' | 'branch' | 'internal' | 'action';
+
+/** Sub-kind for internal nodes (the 4th level, between branch and action). */
+export type UInternalKind = 'team' | 'process' | 'tool' | 'system' | 'resource' | 'person';
+
+/** Company size variant — controls how many department roots are visible. */
+export type UCompanySize = 'micro' | 'msme' | 'standard' | 'enterprise';
+
+export const DEPT_SIZE_CONFIGS: Record<UCompanySize, {
+  label: string;
+  rootCount: number;
+  visibleDeptIds: string[];
+  mergedGroups?: Record<string, string[]>;
+}> = {
+  micro: {
+    label: '6-root (Founder / Micro)',
+    rootCount: 6,
+    visibleDeptIds: ['dept_strategy', 'dept_product', 'dept_sales', 'dept_customer_success', 'dept_finance', 'dept_hr'],
+    mergedGroups: {
+      'Build':     ['dept_engineering', 'dept_design', 'dept_data'],
+      'GTM':       ['dept_marketing', 'dept_sales'],
+      'Ops & Risk':['dept_operations', 'dept_security', 'dept_legal'],
+    },
+  },
+  msme: {
+    label: '9-root (MSME)',
+    rootCount: 9,
+    visibleDeptIds: [
+      'dept_strategy', 'dept_product', 'dept_engineering',
+      'dept_sales', 'dept_marketing', 'dept_customer_success',
+      'dept_finance', 'dept_operations', 'dept_hr',
+    ],
+    mergedGroups: {
+      'Risk & Legal': ['dept_security', 'dept_legal'],
+      'Build':        ['dept_design', 'dept_data'],
+    },
+  },
+  standard: {
+    label: '13-root (Universal)',
+    rootCount: 13,
+    visibleDeptIds: [
+      'dept_strategy', 'dept_product', 'dept_engineering', 'dept_design', 'dept_data',
+      'dept_sales', 'dept_marketing', 'dept_customer_success',
+      'dept_hr', 'dept_finance', 'dept_operations', 'dept_security', 'dept_legal',
+    ],
+  },
+  enterprise: {
+    label: '16+ (Enterprise)',
+    rootCount: 16,
+    visibleDeptIds: [
+      'dept_strategy', 'dept_product', 'dept_engineering', 'dept_design', 'dept_data',
+      'dept_sales', 'dept_marketing', 'dept_customer_success',
+      'dept_hr', 'dept_finance', 'dept_operations', 'dept_security', 'dept_legal',
+      'dept_procurement', 'dept_it', 'dept_rd',
+    ],
+  },
+};
+
 export const U_DOMAIN_COLOR: Record<UDomain, string> = {
   direction: '#fde047',
   build:     '#8b5cf6',
@@ -75,6 +163,8 @@ export interface ActionDetails {
   verb: string;
   description: string;
   checklist?: string[];
+  /** How the company graph changes after this action completes (spec requirement). */
+  stateChange?: string;
 }
 
 export interface UInternalNode {
@@ -91,6 +181,7 @@ export interface UInternalNode {
   status?: 'Open' | 'In Progress' | 'Blocked' | 'Completed';
   output?: string;
   metricImpact?: string;
+  stateChange?: string;
   dependencies?: string[];
   workflowSteps?: string[];
   interrelatedDepartments?: string[];
@@ -98,6 +189,12 @@ export interface UInternalNode {
   decisionDetails?: DecisionDetails;
   metricDetails?: MetricDetails;
   actionDetails?: ActionDetails;
+  /** Which of the 8 universal branch types this node belongs to (set on branch-level nodes). */
+  branchKind?: UBranchKind;
+  /** Position in the 5-level BDT hierarchy. */
+  nodeLevel?: UNodeLevel;
+  /** Sub-kind for internal nodes (4th level between branch and leaf). */
+  internalKind?: UInternalKind;
 }
 
 /** Leaf types that open the BDT action workspace — not team/project/process containers. */
@@ -120,6 +217,8 @@ export function isBdtWorkspaceLeafNode(node: Pick<UInternalNode, 'type' | 'proje
 
 export interface UExternalNode {
   id: string;
+  /** Catalog key from DB source_key column (e.g. "dept_engineering") — used for size-based visibility filtering */
+  sourceKey?: string;
   label: string;
   domain: UDomain;
   cluster: string;
@@ -142,6 +241,8 @@ export interface UExternalNode {
   };
   /** Transient flag — draft nodes are rendered in-scene but not persisted */
   isDraft?: boolean;
+  /** Active company size variant — controls visible root count. */
+  companySize?: UCompanySize;
 }
 
 /** When access is missing (seed/cache), allow CRUD if the user has global manage rights. */

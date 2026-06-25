@@ -11,6 +11,8 @@ import {
   type UserPlanetRole,
 } from '../../data/companyPlanetRoots';
 
+export type { ReferenceCompanyJob } from '../../data/companyPlanetRoots';
+
 export type ReferenceCompanyStatus = 'pending' | 'running' | 'ready' | 'failed';
 export type ReferenceCompanyClassification = 'competitor' | 'customer' | 'collaborator';
 
@@ -102,6 +104,34 @@ export async function setReferenceCompanyClassification(
 
 export async function deleteReferenceCompany(id: string): Promise<void> {
   await api.delete<{ ok: true }>(`/api/reference-companies/${id}`);
+}
+
+export interface CreateReferenceCompanyNodeInput {
+  parentNodeId?: string;
+  nodeKind: 'root' | 'branch' | 'action';
+  label: string;
+  summary?: string;
+  nodeType?: PlanetBranchNodeType;
+  relevance?: number;
+  confidence?: number;
+  color?: string;
+}
+
+export async function createReferenceCompanyNode(
+  referenceCompanyId: string,
+  input: CreateReferenceCompanyNodeInput,
+): Promise<{ node: ReferenceCompanyNode }> {
+  return api.post<{ node: ReferenceCompanyNode }>(
+    `/api/reference-companies/${referenceCompanyId}/nodes`,
+    input,
+  );
+}
+
+export async function deleteReferenceCompanyNode(
+  referenceCompanyId: string,
+  nodeId: string,
+): Promise<void> {
+  await api.delete<{ ok: true }>(`/api/reference-companies/${referenceCompanyId}/nodes/${nodeId}`);
 }
 
 function childNodes(nodes: ReferenceCompanyNode[], parentId: string): ReferenceCompanyNode[] {

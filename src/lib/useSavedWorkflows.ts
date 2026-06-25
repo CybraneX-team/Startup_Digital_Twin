@@ -74,6 +74,8 @@ export interface SavedWorkflowItem {
   companyName: string;
   role: UserPlanetRole;
   roleLabel: string;
+  referenceCompanyId?: string;
+  planetTag?: CompanyTag | null;
 
   // Root
   rootId?: string;

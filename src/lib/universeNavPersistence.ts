@@ -15,6 +15,7 @@ export type PersistedPlanetState = {
   companyId: string;
   companyName: string;
   role: string;
+  referenceCompanyId?: string;
   insideRootPolytope: boolean;
   rootPolytopeDeptId: string | null;
   rootPolytopeInternalPath: string[];

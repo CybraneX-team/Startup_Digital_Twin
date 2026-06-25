@@ -3,7 +3,7 @@
  * Teams, Projects (7–8), and 4 department-specific branch nodes from
  * Company_Department_Root_Branch_Action_Node_Framework.md
  */
-import type { UInternalNode, UExternalNode } from './bdtPolytopeData';
+import type { UInternalNode, UExternalNode, UBranchKind } from './bdtPolytopeData';
 import { BDT_DEPARTMENT_COLORS, BDT_FRAMEWORK_DEPARTMENTS, getExternalNodeColor } from './bdtPolytopeData';
 import { BDT_DEPARTMENT_DEPENDENCIES, BDT_NODE_DEPENDENCY_OVERRIDES } from './bdtDepartmentDependencies';
 
@@ -11,6 +11,8 @@ type InternalDef = {
   label: string;
   type: UInternalNode['type'];
   score: number;
+  branchKind?: UBranchKind;
+  nodeLevel?: UInternalNode['nodeLevel'];
   memberCount?: number;
   members?: UInternalNode['members'];
   projectDetails?: UInternalNode['projectDetails'];
@@ -29,7 +31,7 @@ type InternalDef = {
   children?: InternalDef[];
 };
 
-type BranchDef = { label: string; score: number; leaves: [InternalDef, InternalDef] };
+type BranchDef = { kind: UBranchKind; label: string; score: number; leaves: [InternalDef, InternalDef] };
 
 type DeptSeed = {
   teams: { label: string; score: number; roles: string[] }[];
@@ -52,6 +54,8 @@ function buildTree(parentId: string, defs: InternalDef[], deptId: string, depth 
       label: d.label,
       type: d.type,
       score: d.score,
+      branchKind: d.branchKind,
+      nodeLevel: d.nodeLevel,
       memberCount: d.memberCount,
       members: d.members,
       projectDetails: d.projectDetails,
@@ -128,16 +132,36 @@ function decisionLeaf(
   };
 }
 
-function actionLeaf(label: string, verb: string, checklist: string[]): InternalDef {
+function actionLeaf(
+  label: string,
+  verb: string,
+  checklist: string[],
+  opts?: { owner?: string; output?: string; metricImpact?: string; stateChange?: string; dueDate?: string },
+): InternalDef {
+  const quarter = (() => {
+    const now = new Date();
+    const m = now.getMonth();
+    const q = Math.floor(m / 3);
+    const year = q === 3 ? now.getFullYear() : now.getFullYear();
+    const endMonth = [2, 5, 8, 11][q];
+    const lastDay = new Date(year, endMonth + 1, 0);
+    return lastDay.toISOString().slice(0, 10);
+  })();
   return {
     label,
     type: 'action',
     score: 80 + Math.floor(Math.random() * 12),
-    owner: 'Action Owner',
+    owner: opts?.owner ?? 'Department Head',
+    dueDate: opts?.dueDate ?? quarter,
     status: 'In Progress',
-    output: 'Completed artifact',
-    metricImpact: 'Execution velocity',
-    actionDetails: { verb, description: `${verb} for ${label}`, checklist },
+    output: opts?.output ?? `Completed ${label.toLowerCase()} — documented and shared`,
+    metricImpact: opts?.metricImpact ?? 'Execution velocity +5%',
+    actionDetails: {
+      verb,
+      description: `${verb} ${label.toLowerCase()} to advance department goals`,
+      stateChange: opts?.stateChange ?? `${label} complete — department execution state updated`,
+      checklist,
+    },
     workflowSteps: checklist,
   };
 }
@@ -147,7 +171,21 @@ function branchNode(branch: BranchDef): InternalDef {
     label: branch.label,
     type: 'branch',
     score: branch.score,
+    branchKind: branch.kind,
+    nodeLevel: 'branch',
     children: branch.leaves.map(l => ({ ...l, interrelatedDepartments: l.interrelatedDepartments })),
+  };
+}
+
+function stubBranch(kind: UBranchKind, label: string, score: number): BranchDef {
+  return {
+    kind,
+    label,
+    score,
+    leaves: [
+      actionLeaf(`Define ${label}`, 'Document', ['Gather input', 'Draft content', 'Review with team', 'Finalize']),
+      metricLeaf(`${label} health`, `${label} coverage`, 0, 100, '%', 'warning'),
+    ],
   };
 }
 
@@ -173,7 +211,39 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
       { label: 'CI/CD Hardening', score: 83, status: 'In Progress', deadline: 'Q3', description: 'Pipeline security gates and deployment automation', budget: '$22k' },
     ],
     branches: [
+      stubBranch('purpose_scope', 'Engineering Purpose & Scope', 85),
+      stubBranch('objectives_okrs', 'Engineering Objectives / OKRs', 82),
       {
+        kind: 'core_workstreams',
+        label: 'Release Engineering',
+        score: 80,
+        leaves: [
+          actionLeaf('Schedule release', 'Deploy', ['Run release checklist', 'Validate staging', 'Deploy to production', 'Monitor error budget']),
+          metricLeaf('Deployment frequency', 'Deployments per week', 4, 5, 'releases', 'warning'),
+        ],
+      },
+      {
+        kind: 'metrics_health',
+        label: 'Quality & Testing',
+        score: 82,
+        leaves: [
+          actionLeaf('Triage escaped defect', 'Fix', ['Reproduce issue', 'Root-cause analysis', 'Patch and test', 'Update regression suite']),
+          signalLeaf('Regression risk alert', 'Test coverage dropped 8% on payments module after last merge', 'high', 'CI pipeline'),
+        ],
+      },
+      stubBranch('resources_capacity', 'Engineering Resources & Capacity', 78),
+      stubBranch('dependencies', 'Engineering Dependencies', 75),
+      {
+        kind: 'risks_controls',
+        label: 'Reliability & DevOps',
+        score: 78,
+        leaves: [
+          actionLeaf('Investigate incident', 'Resolve', ['Acknowledge alert', 'Form incident channel', 'Mitigate user impact', 'Postmortem']),
+          metricLeaf('MTTR', 'Mean time to recovery', 42, 30, 'minutes', 'critical'),
+        ],
+      },
+      {
+        kind: 'decision_queue',
         label: 'Architecture & System Design',
         score: 85,
         leaves: [
@@ -183,30 +253,6 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
             { id: 'c', label: 'Hybrid event bus', description: 'Async events with shared schema', impact: 'Balanced decoupling and velocity' },
           ], 'c'),
           metricLeaf('Architecture review rate', 'ADR review completion', 92, 95, '%', 'warning'),
-        ],
-      },
-      {
-        label: 'Release Engineering',
-        score: 80,
-        leaves: [
-          actionLeaf('Schedule release', 'Deploy', ['Run release checklist', 'Validate staging', 'Deploy to production', 'Monitor error budget']),
-          metricLeaf('Deployment frequency', 'Deployments per week', 4, 5, 'releases', 'warning'),
-        ],
-      },
-      {
-        label: 'Quality & Testing',
-        score: 82,
-        leaves: [
-          actionLeaf('Triage escaped defect', 'Fix', ['Reproduce issue', 'Root-cause analysis', 'Patch and test', 'Update regression suite']),
-          signalLeaf('Regression risk alert', 'Test coverage dropped 8% on payments module after last merge', 'high', 'CI pipeline'),
-        ],
-      },
-      {
-        label: 'Reliability & DevOps',
-        score: 78,
-        leaves: [
-          actionLeaf('Investigate incident', 'Resolve', ['Acknowledge alert', 'Form incident channel', 'Mitigate user impact', 'Postmortem']),
-          metricLeaf('MTTR', 'Mean time to recovery', 42, 30, 'minutes', 'critical'),
         ],
       },
     ],
@@ -227,18 +273,18 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
       { label: 'Beta Program', score: 83, status: 'Active', deadline: 'Ongoing', description: 'Early-access customer cohort program', budget: '$25k' },
     ],
     branches: [
+      stubBranch('purpose_scope', 'Product Purpose & Scope', 90),
       {
-        label: 'Roadmap & Prioritization',
-        score: 92,
+        kind: 'objectives_okrs',
+        label: 'Adoption & Retention',
+        score: 88,
         leaves: [
-          decisionLeaf('Prioritize feature', 'Which initiative wins Q3 slot: AI assistant or SSO?', [
-            { id: 'ai', label: 'AI assistant', description: 'High differentiation, longer build', impact: 'Revenue upside in enterprise' },
-            { id: 'sso', label: 'Enterprise SSO', description: 'Table stakes for deals', impact: 'Unblocks pipeline faster' },
-          ], 'sso'),
-          actionLeaf('Update roadmap', 'Publish', ['Review inputs', 'Score by impact', 'Publish roadmap update', 'Notify GTM']),
+          metricLeaf('30-day retention', 'Retention rate', 68, 75, '%', 'warning'),
+          actionLeaf('Investigate churn', 'Analyze', ['Pull cohort data', 'Interview churned users', 'Identify drivers', 'Propose fixes']),
         ],
       },
       {
+        kind: 'core_workstreams',
         label: 'Requirements / PRDs',
         score: 89,
         leaves: [
@@ -247,6 +293,7 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
         ],
       },
       {
+        kind: 'metrics_health',
         label: 'Experimentation & Validation',
         score: 85,
         leaves: [
@@ -254,12 +301,19 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
           signalLeaf('Experiment result signal', 'Variant B shows +12% activation but -3% retention in week 1', 'medium', 'Product analytics'),
         ],
       },
+      stubBranch('resources_capacity', 'Product Resources & Capacity', 84),
+      stubBranch('dependencies', 'Product Dependencies', 82),
+      stubBranch('risks_controls', 'Product Risks & Controls', 80),
       {
-        label: 'Adoption & Retention',
-        score: 88,
+        kind: 'decision_queue',
+        label: 'Roadmap & Prioritization',
+        score: 92,
         leaves: [
-          metricLeaf('30-day retention', 'Retention rate', 68, 75, '%', 'warning'),
-          actionLeaf('Investigate churn', 'Analyze', ['Pull cohort data', 'Interview churned users', 'Identify drivers', 'Propose fixes']),
+          decisionLeaf('Prioritize feature', 'Which initiative wins Q3 slot: AI assistant or SSO?', [
+            { id: 'ai', label: 'AI assistant', description: 'High differentiation, longer build', impact: 'Revenue upside in enterprise' },
+            { id: 'sso', label: 'Enterprise SSO', description: 'Table stakes for deals', impact: 'Unblocks pipeline faster' },
+          ], 'sso'),
+          actionLeaf('Update roadmap', 'Publish', ['Review inputs', 'Score by impact', 'Publish roadmap update', 'Notify GTM']),
         ],
       },
     ],
@@ -280,15 +334,9 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
       { label: 'Pricing Pilot', score: 71, status: 'Active', deadline: 'Q3', description: 'Test tiered packaging with 10 accounts', budget: '$8k' },
     ],
     branches: [
+      stubBranch('purpose_scope', 'Sales Purpose & Scope', 76),
       {
-        label: 'Lead & Account Pipeline',
-        score: 75,
-        leaves: [
-          actionLeaf('Qualify opportunity', 'Update', ['Review discovery notes', 'Update CRM stage', 'Set next step', 'Flag risks']),
-          metricLeaf('Pipeline coverage', 'Pipeline vs quota', 2.8, 3.5, 'x', 'warning'),
-        ],
-      },
-      {
+        kind: 'objectives_okrs',
         label: 'Discovery & Demo',
         score: 78,
         leaves: [
@@ -297,6 +345,28 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
         ],
       },
       {
+        kind: 'core_workstreams',
+        label: 'Lead & Account Pipeline',
+        score: 75,
+        leaves: [
+          actionLeaf('Qualify opportunity', 'Update', ['Review discovery notes', 'Update CRM stage', 'Set next step', 'Flag risks']),
+          metricLeaf('Pipeline coverage', 'Pipeline vs quota', 2.8, 3.5, 'x', 'warning'),
+        ],
+      },
+      {
+        kind: 'metrics_health',
+        label: 'Forecasting',
+        score: 82,
+        leaves: [
+          metricLeaf('Forecast accuracy', 'Forecast vs actual', 82, 90, '%', 'warning'),
+          actionLeaf('Update forecast', 'Commit', ['Review open deals', 'Adjust commit', 'Document slippage', 'Share with leadership']),
+        ],
+      },
+      stubBranch('resources_capacity', 'Sales Resources & Capacity', 74),
+      stubBranch('dependencies', 'Sales Dependencies', 72),
+      stubBranch('risks_controls', 'Sales Risks & Controls', 70),
+      {
+        kind: 'decision_queue',
         label: 'Proposal & Negotiation',
         score: 76,
         leaves: [
@@ -306,14 +376,6 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
             { id: 'split', label: 'Approve with services bundle', description: 'Trade discount for services', impact: 'Balanced margin and close rate' },
           ]),
           actionLeaf('Send proposal', 'Deliver', ['Finalize scope', 'Legal review', 'Send proposal', 'Schedule follow-up']),
-        ],
-      },
-      {
-        label: 'Forecasting',
-        score: 82,
-        leaves: [
-          metricLeaf('Forecast accuracy', 'Forecast vs actual', 82, 90, '%', 'warning'),
-          actionLeaf('Update forecast', 'Commit', ['Review open deals', 'Adjust commit', 'Document slippage', 'Share with leadership']),
         ],
       },
     ],
@@ -331,10 +393,14 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
       { label: 'Event Sponsorship', score: 69, status: 'Planning', deadline: 'Q4', description: 'Industry conference presence plan', budget: '$75k' },
     ],
     branches: [
-      { label: 'Positioning & Messaging', score: 80, leaves: [actionLeaf('Revise positioning', 'Update', ['Research ICP', 'Draft narrative', 'Test with sales', 'Publish messaging doc']), metricLeaf('Message clarity', 'Sales message fit score', 72, 80, 'score', 'warning')] },
-      { label: 'Demand Generation', score: 70, leaves: [actionLeaf('Launch campaign', 'Execute', ['Brief creative', 'Set audiences', 'Launch ads', 'Review performance']), signalLeaf('CAC spike signal', 'Paid search CAC up 22% WoW on branded terms', 'medium', 'Ad platform')] },
-      { label: 'Content & Thought Leadership', score: 78, leaves: [actionLeaf('Publish case study', 'Publish', ['Select customer', 'Draft story', 'Legal approval', 'Distribute']), metricLeaf('Content-attributed MQLs', 'MQLs from content', 145, 180, 'leads', 'warning')] },
-      { label: 'Marketing Analytics', score: 75, leaves: [metricLeaf('MQL-to-SQL rate', 'Conversion rate', 18, 22, '%', 'warning'), actionLeaf('Analyze funnel drop', 'Investigate', ['Pull funnel data', 'Identify step', 'Hypothesize cause', 'Recommend fix'])] },
+      { kind: 'purpose_scope', label: 'Positioning & Messaging', score: 80, leaves: [actionLeaf('Revise positioning', 'Update', ['Research ICP', 'Draft narrative', 'Test with sales', 'Publish messaging doc']), metricLeaf('Message clarity', 'Sales message fit score', 72, 80, 'score', 'warning')] },
+      { kind: 'objectives_okrs', label: 'Content & Thought Leadership', score: 78, leaves: [actionLeaf('Publish case study', 'Publish', ['Select customer', 'Draft story', 'Legal approval', 'Distribute']), metricLeaf('Content-attributed MQLs', 'MQLs from content', 145, 180, 'leads', 'warning')] },
+      { kind: 'core_workstreams', label: 'Demand Generation', score: 70, leaves: [actionLeaf('Launch campaign', 'Execute', ['Brief creative', 'Set audiences', 'Launch ads', 'Review performance']), signalLeaf('CAC spike signal', 'Paid search CAC up 22% WoW on branded terms', 'medium', 'Ad platform')] },
+      { kind: 'metrics_health', label: 'Marketing Analytics', score: 75, leaves: [metricLeaf('MQL-to-SQL rate', 'Conversion rate', 18, 22, '%', 'warning'), actionLeaf('Analyze funnel drop', 'Investigate', ['Pull funnel data', 'Identify step', 'Hypothesize cause', 'Recommend fix'])] },
+      stubBranch('resources_capacity', 'Marketing Resources & Capacity', 68),
+      stubBranch('dependencies', 'Marketing Dependencies', 66),
+      stubBranch('risks_controls', 'Marketing Risks & Controls', 64),
+      stubBranch('decision_queue', 'Marketing Decision Queue', 72),
     ],
   },
   dept_hr: {
@@ -350,10 +416,14 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
       { label: 'Remote Policy v2', score: 77, status: 'Draft', deadline: 'Q3', description: 'Update hybrid work policy and guidelines', budget: '$5k' },
     ],
     branches: [
-      { label: 'Workforce Planning', score: 88, leaves: [decisionLeaf('Open new role', 'Approve Senior PM hire for Q3?', [{ id: 'y', label: 'Approve', description: 'Backlog justifies headcount', impact: 'Capacity for roadmap' }, { id: 'n', label: 'Defer', description: 'Wait for revenue signal', impact: 'Preserve runway' }], 'y'), metricLeaf('Headcount vs plan', 'Plan accuracy', 94, 98, '%')] },
-      { label: 'Recruiting Pipeline', score: 85, leaves: [actionLeaf('Schedule interview', 'Coordinate', ['Review resume', 'Schedule panel', 'Send prep materials', 'Collect feedback']), metricLeaf('Time to hire', 'Average days to offer', 38, 30, 'days', 'warning')] },
-      { label: 'Onboarding', score: 88, leaves: [actionLeaf('Create onboarding plan', 'Prepare', ['Assign buddy', 'Provision access', 'Schedule week-1', 'Check ramp milestones']), metricLeaf('Time to productivity', 'Ramp days', 45, 35, 'days', 'warning')] },
-      { label: 'Engagement & Culture', score: 82, leaves: [signalLeaf('Engagement dip signal', 'Engineering eNPS dropped 12 points in latest pulse', 'medium', 'Pulse survey'), actionLeaf('Run pulse follow-up', 'Facilitate', ['Analyze themes', 'Manager sessions', 'Action plan', 'Communicate back'])] },
+      stubBranch('purpose_scope', 'People & HR Purpose & Scope', 86),
+      { kind: 'objectives_okrs', label: 'Onboarding', score: 88, leaves: [actionLeaf('Create onboarding plan', 'Prepare', ['Assign buddy', 'Provision access', 'Schedule week-1', 'Check ramp milestones']), metricLeaf('Time to productivity', 'Ramp days', 45, 35, 'days', 'warning')] },
+      { kind: 'core_workstreams', label: 'Recruiting Pipeline', score: 85, leaves: [actionLeaf('Schedule interview', 'Coordinate', ['Review resume', 'Schedule panel', 'Send prep materials', 'Collect feedback']), metricLeaf('Time to hire', 'Average days to offer', 38, 30, 'days', 'warning')] },
+      { kind: 'metrics_health', label: 'Engagement & Culture', score: 82, leaves: [signalLeaf('Engagement dip signal', 'Engineering eNPS dropped 12 points in latest pulse', 'medium', 'Pulse survey'), actionLeaf('Run pulse follow-up', 'Facilitate', ['Analyze themes', 'Manager sessions', 'Action plan', 'Communicate back'])] },
+      stubBranch('resources_capacity', 'HR Resources & Capacity', 80),
+      stubBranch('dependencies', 'HR Dependencies', 78),
+      stubBranch('risks_controls', 'HR Risks & Controls', 76),
+      { kind: 'decision_queue', label: 'Workforce Planning', score: 88, leaves: [decisionLeaf('Open new role', 'Approve Senior PM hire for Q3?', [{ id: 'y', label: 'Approve', description: 'Backlog justifies headcount', impact: 'Capacity for roadmap' }, { id: 'n', label: 'Defer', description: 'Wait for revenue signal', impact: 'Preserve runway' }], 'y'), metricLeaf('Headcount vs plan', 'Plan accuracy', 94, 98, '%')] },
     ],
   },
   dept_finance: {
@@ -369,10 +439,14 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
       { label: 'SOC2 Cost Model', score: 80, status: 'Planning', deadline: 'Q4', description: 'Compliance investment planning', budget: '$20k' },
     ],
     branches: [
-      { label: 'Budgeting & Allocation', score: 92, leaves: [decisionLeaf('Reallocate budget', 'Shift $200k from marketing to product for Q3?', [{ id: 'y', label: 'Reallocate', description: 'Product bottleneck', impact: 'Faster shipping' }, { id: 'n', label: 'Hold', description: 'Pipeline needs leads', impact: 'Protect top-of-funnel' }]), actionLeaf('Review variance', 'Analyze', ['Pull dept actuals', 'Explain variance', 'Recommend actions', 'Update forecast'])] },
-      { label: 'Cash & Runway', score: 95, leaves: [metricLeaf('Runway months', 'Cash runway', 14, 18, 'months', 'warning'), signalLeaf('Burn spike signal', 'Monthly burn increased 9% due to cloud and contractor costs', 'high', 'Finance ledger')] },
-      { label: 'Accounting & Close', score: 90, leaves: [actionLeaf('Close month', 'Execute', ['Reconcile accounts', 'Review accruals', 'Publish statements', 'Sign off']), metricLeaf('Close cycle time', 'Days to close', 6, 5, 'days', 'warning')] },
-      { label: 'Forecasting & Planning', score: 96, leaves: [actionLeaf('Update forecast', 'Model', ['Refresh assumptions', 'Scenario stress test', 'Leadership review', 'Publish']), metricLeaf('Forecast accuracy', 'Revenue forecast error', 6, 5, '%', 'healthy')] },
+      stubBranch('purpose_scope', 'Finance Purpose & Scope', 90),
+      stubBranch('objectives_okrs', 'Finance Objectives / OKRs', 92),
+      { kind: 'core_workstreams', label: 'Accounting & Close', score: 90, leaves: [actionLeaf('Close month', 'Execute', ['Reconcile accounts', 'Review accruals', 'Publish statements', 'Sign off']), metricLeaf('Close cycle time', 'Days to close', 6, 5, 'days', 'warning')] },
+      { kind: 'metrics_health', label: 'Forecasting & Planning', score: 96, leaves: [actionLeaf('Update forecast', 'Model', ['Refresh assumptions', 'Scenario stress test', 'Leadership review', 'Publish']), metricLeaf('Forecast accuracy', 'Revenue forecast error', 6, 5, '%', 'healthy')] },
+      stubBranch('resources_capacity', 'Finance Resources & Capacity', 88),
+      stubBranch('dependencies', 'Finance Dependencies', 86),
+      { kind: 'risks_controls', label: 'Cash & Runway', score: 95, leaves: [metricLeaf('Runway months', 'Cash runway', 14, 18, 'months', 'warning'), signalLeaf('Burn spike signal', 'Monthly burn increased 9% due to cloud and contractor costs', 'high', 'Finance ledger')] },
+      { kind: 'decision_queue', label: 'Budgeting & Allocation', score: 92, leaves: [decisionLeaf('Reallocate budget', 'Shift $200k from marketing to product for Q3?', [{ id: 'y', label: 'Reallocate', description: 'Product bottleneck', impact: 'Faster shipping' }, { id: 'n', label: 'Hold', description: 'Pipeline needs leads', impact: 'Protect top-of-funnel' }]), actionLeaf('Review variance', 'Analyze', ['Pull dept actuals', 'Explain variance', 'Recommend actions', 'Update forecast'])] },
     ],
   },
   dept_operations: {
@@ -388,10 +462,14 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
       { label: 'Capacity Model', score: 56, status: 'In Progress', deadline: 'Q2', description: 'Demand-capacity planning model', budget: '$15k' },
     ],
     branches: [
-      { label: 'Process Architecture', score: 58, leaves: [actionLeaf('Create SOP', 'Document', ['Map current state', 'Identify bottlenecks', 'Draft SOP', 'Train team']), metricLeaf('SOP coverage', 'Processes documented', 62, 80, '%', 'critical')] },
-      { label: 'Procurement & Vendors', score: 62, leaves: [decisionLeaf('Select vendor', 'Choose logistics partner for APAC?', [{ id: 'a', label: 'Vendor A', description: 'Lower cost', impact: 'Slower SLA' }, { id: 'b', label: 'Vendor B', description: 'Premium SLA', impact: 'Higher cost' }], 'b'), actionLeaf('Issue PO', 'Procure', ['Validate need', 'Approve budget', 'Issue PO', 'Track delivery'])] },
-      { label: 'Delivery / Fulfillment', score: 59, leaves: [metricLeaf('On-time delivery', 'OTD rate', 91, 95, '%', 'warning'), signalLeaf('Fulfillment delay signal', '3 high-value orders delayed >48h at west hub', 'high', 'WMS')] },
-      { label: 'Quality Control', score: 60, leaves: [actionLeaf('Run QC check', 'Inspect', ['Sample batch', 'Record defects', 'Corrective action', 'Update standard']), metricLeaf('Defect rate', 'Defects per 1k units', 4.2, 3, 'defects', 'warning')] },
+      stubBranch('purpose_scope', 'Operations Purpose & Scope', 60),
+      stubBranch('objectives_okrs', 'Operations Objectives / OKRs', 58),
+      { kind: 'core_workstreams', label: 'Process Architecture', score: 58, leaves: [actionLeaf('Create SOP', 'Document', ['Map current state', 'Identify bottlenecks', 'Draft SOP', 'Train team']), metricLeaf('SOP coverage', 'Processes documented', 62, 80, '%', 'critical')] },
+      { kind: 'metrics_health', label: 'Delivery / Fulfillment', score: 59, leaves: [metricLeaf('On-time delivery', 'OTD rate', 91, 95, '%', 'warning'), signalLeaf('Fulfillment delay signal', '3 high-value orders delayed >48h at west hub', 'high', 'WMS')] },
+      stubBranch('resources_capacity', 'Operations Resources & Capacity', 56),
+      stubBranch('dependencies', 'Operations Dependencies', 54),
+      { kind: 'risks_controls', label: 'Quality Control', score: 60, leaves: [actionLeaf('Run QC check', 'Inspect', ['Sample batch', 'Record defects', 'Corrective action', 'Update standard']), metricLeaf('Defect rate', 'Defects per 1k units', 4.2, 3, 'defects', 'warning')] },
+      { kind: 'decision_queue', label: 'Procurement & Vendors', score: 62, leaves: [decisionLeaf('Select vendor', 'Choose logistics partner for APAC?', [{ id: 'a', label: 'Vendor A', description: 'Lower cost', impact: 'Slower SLA' }, { id: 'b', label: 'Vendor B', description: 'Premium SLA', impact: 'Higher cost' }], 'b'), actionLeaf('Issue PO', 'Procure', ['Validate need', 'Approve budget', 'Issue PO', 'Track delivery'])] },
     ],
   },
   dept_data: {
@@ -410,10 +488,14 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
       { label: 'Privacy Analytics', score: 73, status: 'Planning', deadline: 'Q4', description: 'PII-safe analytics pipelines', budget: '$35k' },
     ],
     branches: [
-      { label: 'Data Pipelines & Warehouse', score: 80, leaves: [actionLeaf('Fix pipeline', 'Repair', ['Identify failure', 'Patch transform', 'Backfill data', 'Add monitor']), metricLeaf('Pipeline freshness', 'Max lag', 2.5, 1, 'hours', 'warning')] },
-      { label: 'Metric Definitions', score: 75, leaves: [decisionLeaf('Resolve metric dispute', 'Which definition for active user?', [{ id: 'dau', label: 'Daily active', description: 'Any session', impact: 'Higher number' }, { id: 'wau', label: 'Weekly core action', description: 'Key action only', impact: 'Better product signal' }], 'wau'), actionLeaf('Define metric', 'Document', ['Draft logic', 'Stakeholder review', 'Publish dictionary', 'Assign owner'])] },
-      { label: 'Dashboards & Reporting', score: 78, leaves: [actionLeaf('Build dashboard', 'Create', ['Gather requirements', 'Model data', 'Build viz', 'Launch']), metricLeaf('Dashboard adoption', 'Weekly active viewers', 42, 60, 'users', 'warning')] },
-      { label: 'Insights & Decision Support', score: 80, leaves: [signalLeaf('Anomaly signal', 'Checkout conversion dropped 15% after deploy', 'high', 'Product analytics'), actionLeaf('Publish insight', 'Analyze', ['Deep dive', 'Quantify impact', 'Recommend action', 'Present to stakeholders'])] },
+      stubBranch('purpose_scope', 'Data Purpose & Scope', 76),
+      { kind: 'objectives_okrs', label: 'Dashboards & Reporting', score: 78, leaves: [actionLeaf('Build dashboard', 'Create', ['Gather requirements', 'Model data', 'Build viz', 'Launch']), metricLeaf('Dashboard adoption', 'Weekly active viewers', 42, 60, 'users', 'warning')] },
+      { kind: 'core_workstreams', label: 'Data Pipelines & Warehouse', score: 80, leaves: [actionLeaf('Fix pipeline', 'Repair', ['Identify failure', 'Patch transform', 'Backfill data', 'Add monitor']), metricLeaf('Pipeline freshness', 'Max lag', 2.5, 1, 'hours', 'warning')] },
+      { kind: 'metrics_health', label: 'Insights & Decision Support', score: 80, leaves: [signalLeaf('Anomaly signal', 'Checkout conversion dropped 15% after deploy', 'high', 'Product analytics'), actionLeaf('Publish insight', 'Analyze', ['Deep dive', 'Quantify impact', 'Recommend action', 'Present to stakeholders'])] },
+      stubBranch('resources_capacity', 'Data Resources & Capacity', 74),
+      stubBranch('dependencies', 'Data Dependencies', 72),
+      stubBranch('risks_controls', 'Data Risks & Controls', 70),
+      { kind: 'decision_queue', label: 'Metric Definitions', score: 75, leaves: [decisionLeaf('Resolve metric dispute', 'Which definition for active user?', [{ id: 'dau', label: 'Daily active', description: 'Any session', impact: 'Higher number' }, { id: 'wau', label: 'Weekly core action', description: 'Key action only', impact: 'Better product signal' }], 'wau'), actionLeaf('Define metric', 'Document', ['Draft logic', 'Stakeholder review', 'Publish dictionary', 'Assign owner'])] },
     ],
   },
   dept_design: {
@@ -432,10 +514,14 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
       { label: 'Handoff Toolkit', score: 79, status: 'Planning', deadline: 'Q3', description: 'Figma-to-code specs and QA checklist', budget: '$6k' },
     ],
     branches: [
-      { label: 'User Research', score: 90, leaves: [actionLeaf('Run usability test', 'Conduct', ['Recruit participants', 'Run sessions', 'Synthesize findings', 'Share insights']), metricLeaf('Research cadence', 'Studies per quarter', 3, 4, 'studies', 'warning')] },
-      { label: 'Experience Architecture', score: 88, leaves: [decisionLeaf('Simplify flow', 'Remove step from onboarding?', [{ id: 'y', label: 'Remove step', description: 'Faster activation', impact: 'Less data captured' }, { id: 'n', label: 'Keep step', description: 'Better qualification', impact: 'Higher drop-off' }], 'y'), actionLeaf('Design user flow', 'Map', ['Identify jobs', 'Draft flow', 'Review with PM', 'Prototype'])] },
-      { label: 'Design System', score: 92, leaves: [actionLeaf('Create component', 'Build', ['Define spec', 'Design states', 'Document usage', 'Publish']), metricLeaf('Component reuse', 'Reuse rate', 68, 75, '%', 'warning')] },
-      { label: 'Design Handoff', score: 86, leaves: [actionLeaf('Prepare handoff', 'Deliver', ['Annotate specs', 'Export assets', 'Walkthrough with eng', 'QA review']), signalLeaf('Implementation mismatch', 'Button spacing inconsistent in checkout on iOS build', 'medium', 'Design QA')] },
+      { kind: 'purpose_scope', label: 'User Research', score: 90, leaves: [actionLeaf('Run usability test', 'Conduct', ['Recruit participants', 'Run sessions', 'Synthesize findings', 'Share insights']), metricLeaf('Research cadence', 'Studies per quarter', 3, 4, 'studies', 'warning')] },
+      stubBranch('objectives_okrs', 'Design Objectives / OKRs', 86),
+      { kind: 'core_workstreams', label: 'Design System', score: 92, leaves: [actionLeaf('Create component', 'Build', ['Define spec', 'Design states', 'Document usage', 'Publish']), metricLeaf('Component reuse', 'Reuse rate', 68, 75, '%', 'warning')] },
+      { kind: 'metrics_health', label: 'Design Handoff', score: 86, leaves: [actionLeaf('Prepare handoff', 'Deliver', ['Annotate specs', 'Export assets', 'Walkthrough with eng', 'QA review']), signalLeaf('Implementation mismatch', 'Button spacing inconsistent in checkout on iOS build', 'medium', 'Design QA')] },
+      stubBranch('resources_capacity', 'Design Resources & Capacity', 84),
+      stubBranch('dependencies', 'Design Dependencies', 82),
+      stubBranch('risks_controls', 'Design Risks & Controls', 80),
+      { kind: 'decision_queue', label: 'Experience Architecture', score: 88, leaves: [decisionLeaf('Simplify flow', 'Remove step from onboarding?', [{ id: 'y', label: 'Remove step', description: 'Faster activation', impact: 'Less data captured' }, { id: 'n', label: 'Keep step', description: 'Better qualification', impact: 'Higher drop-off' }], 'y'), actionLeaf('Design user flow', 'Map', ['Identify jobs', 'Draft flow', 'Review with PM', 'Prototype'])] },
     ],
   },
   dept_security: {
@@ -451,10 +537,14 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
       { label: 'Incident Playbooks', score: 67, status: 'In Progress', deadline: 'Q2', description: 'Update IR playbooks and run tabletop', budget: '$10k' },
     ],
     branches: [
-      { label: 'Identity & Access', score: 72, leaves: [actionLeaf('Review access', 'Audit', ['Pull access report', 'Identify stale permissions', 'Revoke', 'Document']), metricLeaf('MFA adoption', 'MFA coverage', 94, 100, '%', 'warning')] },
-      { label: 'Application Security', score: 70, leaves: [signalLeaf('Critical vulnerability', 'CVE flagged in auth service dependency — patch available', 'critical', 'SAST scanner'), actionLeaf('Patch vulnerability', 'Remediate', ['Assess exposure', 'Apply patch', 'Verify fix', 'Update ticket'])] },
-      { label: 'Monitoring & Incident Response', score: 65, leaves: [actionLeaf('Investigate alert', 'Respond', ['Triage severity', 'Contain', 'Eradicate', 'Postmortem']), metricLeaf('MTTD', 'Mean time to detect', 18, 10, 'minutes', 'warning')] },
-      { label: 'Compliance Readiness', score: 60, leaves: [decisionLeaf('Release gate', 'Block release until pen test findings resolved?', [{ id: 'block', label: 'Block release', description: 'High severity open', impact: 'Delay launch' }, { id: 'waive', label: 'Waive with exception', description: 'Compensating controls', impact: 'Accept residual risk' }], 'block'), actionLeaf('Collect evidence', 'Document', ['Map control', 'Gather artifacts', 'Review gaps', 'Submit to auditor'])] },
+      stubBranch('purpose_scope', 'Security Purpose & Scope', 70),
+      stubBranch('objectives_okrs', 'Security Objectives / OKRs', 68),
+      { kind: 'core_workstreams', label: 'Application Security', score: 70, leaves: [signalLeaf('Critical vulnerability', 'CVE flagged in auth service dependency — patch available', 'critical', 'SAST scanner'), actionLeaf('Patch vulnerability', 'Remediate', ['Assess exposure', 'Apply patch', 'Verify fix', 'Update ticket'])] },
+      { kind: 'metrics_health', label: 'Monitoring & Incident Response', score: 65, leaves: [actionLeaf('Investigate alert', 'Respond', ['Triage severity', 'Contain', 'Eradicate', 'Postmortem']), metricLeaf('MTTD', 'Mean time to detect', 18, 10, 'minutes', 'warning')] },
+      stubBranch('resources_capacity', 'Security Resources & Capacity', 64),
+      stubBranch('dependencies', 'Security Dependencies', 62),
+      { kind: 'risks_controls', label: 'Identity & Access', score: 72, leaves: [actionLeaf('Review access', 'Audit', ['Pull access report', 'Identify stale permissions', 'Revoke', 'Document']), metricLeaf('MFA adoption', 'MFA coverage', 94, 100, '%', 'warning')] },
+      { kind: 'decision_queue', label: 'Compliance Readiness', score: 60, leaves: [decisionLeaf('Release gate', 'Block release until pen test findings resolved?', [{ id: 'block', label: 'Block release', description: 'High severity open', impact: 'Delay launch' }, { id: 'waive', label: 'Waive with exception', description: 'Compensating controls', impact: 'Accept residual risk' }], 'block'), actionLeaf('Collect evidence', 'Document', ['Map control', 'Gather artifacts', 'Review gaps', 'Submit to auditor'])] },
     ],
   },
   dept_customer_success: {
@@ -470,10 +560,14 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
       { label: 'Support AI Assist', score: 81, status: 'Planning', deadline: 'Q4', description: 'AI-assisted ticket triage pilot', budget: '$35k' },
     ],
     branches: [
-      { label: 'Customer Onboarding', score: 86, leaves: [actionLeaf('Create success plan', 'Draft', ['Kickoff call', 'Define milestones', 'Assign CSM', 'Confirm activation']), metricLeaf('Time to value', 'Days to first value', 21, 14, 'days', 'warning')] },
-      { label: 'Support & Ticketing', score: 80, leaves: [actionLeaf('Resolve ticket', 'Close', ['Triage', 'Reproduce', 'Fix or escalate', 'Confirm with customer']), metricLeaf('First response time', 'Median FRT', 3.2, 2, 'hours', 'warning')] },
-      { label: 'Customer Health', score: 84, leaves: [signalLeaf('Churn risk signal', 'Usage down 40% WoW on 3 enterprise accounts', 'high', 'Health score model'), actionLeaf('Trigger intervention', 'Engage', ['Review account', 'Outreach plan', 'Exec sponsor', 'Track save'])] },
-      { label: 'Renewals & Expansion', score: 82, leaves: [decisionLeaf('Expansion proposal', 'Offer 20% upsell bundle to at-risk renewals?', [{ id: 'y', label: 'Offer bundle', description: 'Retention lever', impact: 'Lower ARPU short term' }, { id: 'n', label: 'Standard renewal', description: 'Protect price', impact: 'Higher churn risk' }]), actionLeaf('Schedule QBR', 'Book', ['Prep deck', 'Review usage', 'Identify expansion', 'Send follow-up'])] },
+      stubBranch('purpose_scope', 'Customer Success Purpose & Scope', 84),
+      { kind: 'objectives_okrs', label: 'Renewals & Expansion', score: 82, leaves: [decisionLeaf('Expansion proposal', 'Offer 20% upsell bundle to at-risk renewals?', [{ id: 'y', label: 'Offer bundle', description: 'Retention lever', impact: 'Lower ARPU short term' }, { id: 'n', label: 'Standard renewal', description: 'Protect price', impact: 'Higher churn risk' }]), actionLeaf('Schedule QBR', 'Book', ['Prep deck', 'Review usage', 'Identify expansion', 'Send follow-up'])] },
+      { kind: 'core_workstreams', label: 'Customer Onboarding', score: 86, leaves: [actionLeaf('Create success plan', 'Draft', ['Kickoff call', 'Define milestones', 'Assign CSM', 'Confirm activation']), metricLeaf('Time to value', 'Days to first value', 21, 14, 'days', 'warning')] },
+      { kind: 'metrics_health', label: 'Support & Ticketing', score: 80, leaves: [actionLeaf('Resolve ticket', 'Close', ['Triage', 'Reproduce', 'Fix or escalate', 'Confirm with customer']), metricLeaf('First response time', 'Median FRT', 3.2, 2, 'hours', 'warning')] },
+      stubBranch('resources_capacity', 'CS Resources & Capacity', 78),
+      stubBranch('dependencies', 'CS Dependencies', 76),
+      { kind: 'risks_controls', label: 'Customer Health', score: 84, leaves: [signalLeaf('Churn risk signal', 'Usage down 40% WoW on 3 enterprise accounts', 'high', 'Health score model'), actionLeaf('Trigger intervention', 'Engage', ['Review account', 'Outreach plan', 'Exec sponsor', 'Track save'])] },
+      stubBranch('decision_queue', 'CS Decision Queue', 80),
     ],
   },
   dept_legal: {
@@ -489,10 +583,14 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
       { label: 'Regulatory Watch', score: 82, status: 'Ongoing', deadline: 'Ongoing', description: 'Track regulatory changes affecting product', budget: '$7k' },
     ],
     branches: [
-      { label: 'Contracts & Agreements', score: 90, leaves: [actionLeaf('Review contract', 'Redline', ['Initial review', 'Mark risky clauses', 'Negotiate', 'Final approval']), metricLeaf('Contract turnaround', 'Median days', 8, 5, 'days', 'warning')] },
-      { label: 'Privacy & Data Protection', score: 88, leaves: [decisionLeaf('Approve DPA', 'Accept customer DPA with custom subprocessors list?', [{ id: 'y', label: 'Accept with addendum', description: 'Close deal', impact: 'Operational overhead' }, { id: 'n', label: 'Reject custom list', description: 'Standard DPA only', impact: 'Deal delay' }]), actionLeaf('Respond to DSAR', 'Process', ['Verify identity', 'Locate data', 'Redact third parties', 'Deliver response'])] },
-      { label: 'Corporate Governance', score: 92, leaves: [actionLeaf('Prepare board consent', 'Draft', ['Draft resolution', 'Circulate', 'Collect signatures', 'File']), metricLeaf('Governance completeness', 'Required docs on file', 96, 100, '%')] },
-      { label: 'Risk Review & Approvals', score: 89, leaves: [signalLeaf('High-risk deal flag', 'Non-standard liability cap requested on $500k deal', 'high', 'Sales legal queue'), decisionLeaf('Approve exception', 'Allow uncapped liability for strategic logo?', [{ id: 'no', label: 'Deny', description: 'Policy violation', impact: 'Protect company' }, { id: 'yes', label: 'Approve with cap', description: 'Negotiate middle ground', impact: 'Enable close' }], 'yes')] },
+      { kind: 'purpose_scope', label: 'Corporate Governance', score: 92, leaves: [actionLeaf('Prepare board consent', 'Draft', ['Draft resolution', 'Circulate', 'Collect signatures', 'File']), metricLeaf('Governance completeness', 'Required docs on file', 96, 100, '%')] },
+      stubBranch('objectives_okrs', 'Legal Objectives / OKRs', 88),
+      { kind: 'core_workstreams', label: 'Contracts & Agreements', score: 90, leaves: [actionLeaf('Review contract', 'Redline', ['Initial review', 'Mark risky clauses', 'Negotiate', 'Final approval']), metricLeaf('Contract turnaround', 'Median days', 8, 5, 'days', 'warning')] },
+      stubBranch('metrics_health', 'Legal Metrics & Health', 86),
+      stubBranch('resources_capacity', 'Legal Resources & Capacity', 84),
+      stubBranch('dependencies', 'Legal Dependencies', 82),
+      { kind: 'risks_controls', label: 'Privacy & Data Protection', score: 88, leaves: [decisionLeaf('Approve DPA', 'Accept customer DPA with custom subprocessors list?', [{ id: 'y', label: 'Accept with addendum', description: 'Close deal', impact: 'Operational overhead' }, { id: 'n', label: 'Reject custom list', description: 'Standard DPA only', impact: 'Deal delay' }]), actionLeaf('Respond to DSAR', 'Process', ['Verify identity', 'Locate data', 'Redact third parties', 'Deliver response'])] },
+      { kind: 'decision_queue', label: 'Risk Review & Approvals', score: 89, leaves: [signalLeaf('High-risk deal flag', 'Non-standard liability cap requested on $500k deal', 'high', 'Sales legal queue'), decisionLeaf('Approve exception', 'Allow uncapped liability for strategic logo?', [{ id: 'no', label: 'Deny', description: 'Policy violation', impact: 'Protect company' }, { id: 'yes', label: 'Approve with cap', description: 'Negotiate middle ground', impact: 'Enable close' }], 'yes')] },
     ],
   },
   dept_strategy: {
@@ -508,10 +606,14 @@ const DEPT_SEEDS: Record<string, DeptSeed> = {
       { label: 'Board Strategy Offsite', score: 93, status: 'Planning', deadline: 'Q3', description: 'Annual leadership strategy offsite', budget: '$35k' },
     ],
     branches: [
-      { label: 'OKRs & Priorities', score: 95, leaves: [actionLeaf('Define OKR', 'Set', ['Draft objective', 'Align KRs', 'Dept review', 'Publish']), metricLeaf('OKR achievement', 'Company OKR progress', 72, 80, '%', 'warning')] },
-      { label: 'Market Intelligence', score: 93, leaves: [actionLeaf('Publish market memo', 'Write', ['Gather signals', 'Size opportunity', 'Draft memo', 'Review with execs']), signalLeaf('Market shift signal', 'Category leader announced AI-native pivot — win rates may compress', 'medium', 'Market intel')] },
-      { label: 'Competitive Strategy', score: 90, leaves: [decisionLeaf('Competitive response', 'Match competitor pricing or differentiate on platform?', [{ id: 'price', label: 'Match pricing', description: 'Defend share', impact: 'Margin pressure' }, { id: 'diff', label: 'Differentiate', description: 'Double down on integrations', impact: 'Slower short-term wins' }], 'diff'), actionLeaf('Update competitor map', 'Refresh', ['Research updates', 'Update battlecards', 'Brief GTM', 'Track wins/losses'])] },
-      { label: 'Scenario Planning', score: 92, leaves: [actionLeaf('Create scenario', 'Model', ['Define assumptions', 'Model outcomes', 'Stress test', 'Present to board']), metricLeaf('Scenario coverage', 'Scenarios with plans', 3, 4, 'scenarios', 'warning')] },
+      stubBranch('purpose_scope', 'Strategy Purpose & Scope', 94),
+      { kind: 'objectives_okrs', label: 'OKRs & Priorities', score: 95, leaves: [actionLeaf('Define OKR', 'Set', ['Draft objective', 'Align KRs', 'Dept review', 'Publish']), metricLeaf('OKR achievement', 'Company OKR progress', 72, 80, '%', 'warning')] },
+      stubBranch('core_workstreams', 'Strategy Core Workstreams', 90),
+      stubBranch('metrics_health', 'Strategy Metrics & Health', 90),
+      stubBranch('resources_capacity', 'Strategy Resources & Capacity', 88),
+      { kind: 'dependencies', label: 'Market Intelligence', score: 93, leaves: [actionLeaf('Publish market memo', 'Write', ['Gather signals', 'Size opportunity', 'Draft memo', 'Review with execs']), signalLeaf('Market shift signal', 'Category leader announced AI-native pivot — win rates may compress', 'medium', 'Market intel')] },
+      { kind: 'risks_controls', label: 'Scenario Planning', score: 92, leaves: [actionLeaf('Create scenario', 'Model', ['Define assumptions', 'Model outcomes', 'Stress test', 'Present to board']), metricLeaf('Scenario coverage', 'Scenarios with plans', 3, 4, 'scenarios', 'warning')] },
+      { kind: 'decision_queue', label: 'Competitive Strategy', score: 90, leaves: [decisionLeaf('Competitive response', 'Match competitor pricing or differentiate on platform?', [{ id: 'price', label: 'Match pricing', description: 'Defend share', impact: 'Margin pressure' }, { id: 'diff', label: 'Differentiate', description: 'Double down on integrations', impact: 'Slower short-term wins' }], 'diff'), actionLeaf('Update competitor map', 'Refresh', ['Research updates', 'Update battlecards', 'Brief GTM', 'Track wins/losses'])] },
     ],
   },
 };
