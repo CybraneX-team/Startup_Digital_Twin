@@ -47,7 +47,7 @@ export default function PendingApproval() {
           >
             <Hexagon size={24} color="#161618" fill="#161618" strokeWidth={1.5} />
           </div>
-          <span className="text-white text-2xl font-semibold tracking-tight">FounderOS</span>
+          <span className="text-white text-2xl font-semibold tracking-tight">WorkOS</span>
         </div>
 
         {/* Card */}

@@ -104,7 +104,7 @@ export default function LandingPage() {
     : '';
 
   const stats = company ? [
-    { label: 'Company', value: company.name },
+    // { label: 'Company', value: company.name }, // commented out for now
     { label: 'Stage',   value: company.stage },
     { label: 'Industry', value: industryLabel },
     { label: 'Team',    value: company.employees ? `${company.employees} people` : '—' },
@@ -123,7 +123,7 @@ export default function LandingPage() {
           </div>
           <div>
             <h1 className="text-3xl font-bold text-white tracking-tight">
-              {company ? company.name : 'FounderOS'}
+              {company ? company.name : 'WorkOS'}
             </h1>
             <p className="text-sm" style={{ color: '#5E5E5E' }}>
               {company
@@ -295,7 +295,7 @@ export default function LandingPage() {
         <div className="glass-card p-8 text-center">
           <h3 className="text-lg font-bold text-white mb-2">From Idea to IPO</h3>
           <p className="text-sm text-slate-400 max-w-xl mx-auto leading-relaxed mb-5">
-            FounderOS gives startups continuous strategic alignment, faster decisions, institutional memory,
+            WorkOS gives startups continuous strategic alignment, faster decisions, institutional memory,
             and credible investor workflows — all built on a single digital twin.
           </p>
           <button

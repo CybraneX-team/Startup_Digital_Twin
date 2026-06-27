@@ -190,7 +190,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
           <div style={{ width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg, rgba(249,198,255,0.9), rgba(193,174,255,0.9))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Hexagon size={16} color="#161618" fill="#161618" strokeWidth={1.5} />
           </div>
-          <span style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.85)', letterSpacing: '-0.01em' }}>FounderOS</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.85)', letterSpacing: '-0.01em' }}>WorkOS</span>
         </div>
 
         {/* Content */}
@@ -496,7 +496,7 @@ export default function Onboarding() {
                 Join a Workspace
               </h3>
               <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.32)', margin: '0 0 20px', lineHeight: 1.55 }}>
-                Your team already uses FounderOS. Find your company and request access.
+                Your team already uses WorkOS. Find your company and request access.
               </p>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#38bdf8', fontSize: 13, fontWeight: 600 }}>
                 Find workspace <ArrowRight size={14} />

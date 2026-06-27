@@ -1862,7 +1862,7 @@ function WorkspaceChatCopilot() {
       }
 
       if (fileToUpload) {
-        replyText = `### File Attached & Parsed Successfully\n\nI have received your file **${fileToUpload.name}** (${sizeStr}) and integrated its data points into the **FounderOS Twin Model**.\n\n${text.trim() ? `In response to your query *"${text.trim()}"*:\n\n` : ''}- **Target Entity**: Startup financials and pipeline\n- **Extracted Fields**: Operations log, channel weights\n\nWhat analysis or simulation would you like to run on this data?`;
+        replyText = `### File Attached & Parsed Successfully\n\nI have received your file **${fileToUpload.name}** (${sizeStr}) and integrated its data points into the **WorkOS Twin Model**.\n\n${text.trim() ? `In response to your query *"${text.trim()}"*:\n\n` : ''}- **Target Entity**: Startup financials and pipeline\n- **Extracted Fields**: Operations log, channel weights\n\nWhat analysis or simulation would you like to run on this data?`;
       } else if (query.includes('runway') || query.includes('cash') || query.includes('burn') || query.includes('rev')) {
         replyText = `### Financial Projections Analysis\n\n- **Projected Cash Runway**: **${projectedRunway} Months**\n- **Monthly Revenue (MRR)**: **$${monthlyRev.toLocaleString()}** (Base: $${baseMRR.toLocaleString()} with **${mrrGrowthRate}%** growth)\n- **Operating Burn (Est)**: **$${operatingBurn.toLocaleString()}/mo**\n- **Total Cash Balance**: **$${cashBalance.toLocaleString()}**\n\n*Simulator suggestion:* Adjust the MRR Growth Rate slider on your **Financial Metrics** card to project runway extensions under higher growth profiles.`;
       } else if (query.includes('goals') || query.includes('okr') || query.includes('milestone')) {
@@ -1908,7 +1908,7 @@ function WorkspaceChatCopilot() {
       if (selectedModel === 'gemini-3.5-pro') {
         replyText += `\n\n*Calculations optimized by Gemini 3.5 Pro.*`;
       } else if (selectedModel === 'founder-copilot') {
-        replyText += `\n\n*Optimized by FounderOS Twin Agent Engine.*`;
+        replyText += `\n\n*Optimized by WorkOS Twin Agent Engine.*`;
       }
 
       const assistantMsg: ChatMessage = {
@@ -1941,7 +1941,7 @@ function WorkspaceChatCopilot() {
       <div className="px-5 py-3 border-b border-white/5 bg-white/[0.01] flex items-center justify-between shrink-0 z-20 relative">
         <div className="flex items-center gap-2">
           <div className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
-          <span className="text-[11px] font-bold text-white/80 tracking-wider uppercase">FounderOS Copilot</span>
+          <span className="text-[11px] font-bold text-white/80 tracking-wider uppercase">WorkOS Copilot</span>
         </div>
         <div className="flex items-center gap-2">
           {/* Floating Pill selector for Saved Nodes when conversation is active */}

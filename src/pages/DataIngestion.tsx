@@ -418,9 +418,9 @@ export default function DataIngestion() {
           <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:20 }}>
             <div>
               <div style={{ fontSize:14, fontWeight:600, color:'#fff' }}>Excel Upload</div>
-              <div style={{ fontSize:12, color:DIM, marginTop:3 }}>Upload a filled FounderOS metrics template</div>
+              <div style={{ fontSize:12, color:DIM, marginTop:3 }}>Upload a filled WorkOS metrics template</div>
             </div>
-            <a href="/templates/FounderOS_Metrics_Template.xlsx"
+            <a href="/templates/WorkOS_Metrics_Template.xlsx"
               style={{ fontSize:12, color:'#0ea5e9', textDecoration:'none', padding:'7px 14px', borderRadius:7, border:'1px solid rgba(14,165,233,0.2)', background:'rgba(14,165,233,0.06)' }}>
               Download template
             </a>
@@ -466,7 +466,7 @@ export default function DataIngestion() {
                 <div style={{ fontSize:14, color:'rgba(255,255,255,0.45)' }}>
                   {canManageExcel ? 'Click to upload filled .xlsx template' : 'No upload permission for your role'}
                 </div>
-                <div style={{ fontSize:12, color:'rgba(255,255,255,0.2)', marginTop:4 }}>FounderOS canonical template only</div>
+                <div style={{ fontSize:12, color:'rgba(255,255,255,0.2)', marginTop:4 }}>WorkOS canonical template only</div>
               </div>
             )}
           </button>

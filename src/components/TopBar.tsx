@@ -117,7 +117,7 @@ export default function TopBar() {
         >
           <Hexagon className="w-4 h-4" style={{ color: '#0d0b1e' }} strokeWidth={2.5} />
         </div>
-        <span className="text-sm font-semibold text-white tracking-wide">FounderOS</span>
+        <span className="text-sm font-semibold text-white tracking-wide">WorkOS</span>
         <span
           className="text-[9px] font-medium px-1.5 py-0.5 rounded-full"
           style={{

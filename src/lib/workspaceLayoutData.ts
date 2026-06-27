@@ -35,7 +35,7 @@ export interface WorkspaceFocusTask {
 export const WORKSPACE_CANVAS_CARDS: WorkspaceCanvasCard[] = [
   {
     id: 'company_hub',
-    title: 'FounderOS',
+    title: 'WorkOS',
     subtitle: 'Executive Hub',
     accent: '#6366f1',
     x: 35,

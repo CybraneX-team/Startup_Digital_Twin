@@ -58,7 +58,7 @@ function VCLeft() {
         <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(34,211,238,0.12)', border: '1px solid rgba(34,211,238,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <TrendingUp size={18} color={ACCENT} />
         </div>
-        <span style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.9)', letterSpacing: '-0.01em' }}>FounderOS</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.9)', letterSpacing: '-0.01em' }}>WorkOS</span>
       </div>
 
       {/* ── Tagline — bottom left ── */}

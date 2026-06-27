@@ -303,7 +303,7 @@ export default function LandingNew() {
         transition: isOrbBusy ? 'opacity 0.3s ease' : 'none',
         pointerEvents: showCards ? 'none' : 'auto',
       }}>
-        <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.45)', letterSpacing: '0.04em' }}>Company</span>
+        {/* <span style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.45)', letterSpacing: '0.04em' }}>Company</span> */}
         <span style={{ fontSize: '1rem', fontWeight: 600, color: '#ffffff', letterSpacing: '0.18em' }}>WORK OS</span>
         <button onClick={() => navigate('/auth')} style={{
           padding: '10px 24px', borderRadius: '999px', border: 'none',
