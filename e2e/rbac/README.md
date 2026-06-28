@@ -40,4 +40,4 @@ RBAC_E2E_ALLOW_SHARED_DEV=true npm run e2e:rbac -- --debug
 
 ## Expected Current State
 
-The suite is expected to pass after RBAC hardening is applied, Supabase migrations `016` and `017` have been pushed, and the backend has restarted. Legacy invite/join RPCs should be unavailable, membership roles should be enforced from `company_members`, custom roles should be DB-backed, and `vc` should remain a separate persona rather than a persisted company role.
+The suite is expected to pass after the squashed Supabase baseline migrations in `supabase/migrations/` have been applied and the backend has restarted. Legacy invite/join RPCs should be unavailable, membership roles should be enforced from `company_members`, custom roles should be DB-backed, and `vc` should remain a separate persona rather than a persisted company role.

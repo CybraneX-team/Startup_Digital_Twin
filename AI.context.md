@@ -82,19 +82,19 @@ src/data/universeGraph.ts
 useUniverseGraph() hook — fetches industries/subdomains/companies from Supabase
 src/lib/db/subdomains.ts
 getAllSubdomains(), useSubdomains()
-supabase/migrations/007_subdomains.sql
-Creates subdomains table + companies.subdomain_id FK
-supabase/migrations/008_seed_subdomains.sql
-Seeds 96 subdomains across 15 industries
+supabase/migrations/20260628210000_baseline_schema.sql
+Squashed baseline schema for the linked Supabase project
+supabase/migrations/20260628210100_baseline_reference_seed.sql
+Seeds system/global reference data after the baseline schema
 Supabase Config
 URL:  https://wcovyctzfgpqifelefum.supabase.co
 ANON: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indjb3Z5Y3R6ZmdwcWlmZWxlZnVtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUyMzYzMjksImV4cCI6MjA5MDgxMjMyOX0.yA7CeXuj4y-E_kKc13myc43DQpLKiNYFJ2dPa0hpX30
 Database schema (relevant tables)
-industries — 15 rows, id like ind-saas, ind-fintech, ind-healthtech, etc.
-subdomains — ⚠️ NOT YET CREATED — migrations 007+008 need to be run in Supabase SQL Editor
-companies — existing table, will get subdomain_id FK column after migration
+industries — baseline-seeded reference table
+subdomains — baseline-seeded reference table
+companies — live tenant table in the baseline schema
 Pending / Known Issues
-Supabase migrations not run — 007_subdomains.sql and 008_seed_subdomains.sql must be executed in the Supabase Dashboard SQL Editor. Until then, subdomains return empty and the 3D universe only shows galaxies.
+Supabase migration history was squashed on 2026-06-28. Use the two active files in `supabase/migrations/` for fresh environments; the prior numbered chain is archived under `supabase/migrations_archive/pre_2026-06-28/`.
 Industry icon coverage — 12 PNG icons exist for 15 industries; 3 industries fall back to a default.
 The /twin page must not be modified — it's the old React Three Fiber twin, kept for backward compatibility.
 How the 3D mount works
@@ -112,5 +112,4 @@ cd /Users/saiyam0211/Documents/Work_Codes/Startup_Digital_Twin
 npm run dev          # Vite dev server at localhost:5173
 npm run build        # Production build (tsc + vite)
 The /3d route is auth-guarded — you'll be redirected to /auth if not logged in.
-
 

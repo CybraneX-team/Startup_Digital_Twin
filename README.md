@@ -379,7 +379,8 @@ digital-idea-twin/src/
   types/index.ts        all shared TypeScript interfaces
 
 supabase/migrations/
-  001_schema.sql        full schema — run once in Supabase SQL Editor
+  20260628210000_baseline_schema.sql         squashed schema baseline
+  20260628210100_baseline_reference_seed.sql global reference/system seed data
 
 dynamic-tasks-metrics/src/
   services/outcome/
