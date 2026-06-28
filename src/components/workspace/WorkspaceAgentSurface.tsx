@@ -8,7 +8,6 @@ import {
 } from 'lucide-react';
 import { useFounderWorkspace } from '../../context/FounderWorkspaceContext';
 import { useProjectsStore } from '../../lib/useProjectsStore';
-import { useGoalsStore } from '../../lib/useGoalsStore';
 import {
   useAgentStore,
   AGENT_TYPE_META,
@@ -258,7 +257,6 @@ export function WorkspaceAgentSurface() {
     risks, goals, goalProgress, gtmChannels, tasks: founderTasks, totalFTE,
   } = useFounderWorkspace();
   const { projects } = useProjectsStore();
-  useGoalsStore(); // subscribed for future metric wiring
 
   const {
     executions, pending, active,

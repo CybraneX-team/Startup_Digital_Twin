@@ -8,6 +8,7 @@
  */
 
 import { useState, useCallback, useEffect } from 'react';
+import { api } from './api';
 
 const STORAGE_KEY = 'bdt_goals_v2';
 const METRIC_HISTORY_KEY = 'bdt_metric_history_v1';
@@ -295,4 +296,39 @@ export function metricTargetDisplay(m: Metric): string {
   if (m.unit === '%') return `${m.target}%`;
   if (m.unit === 'mo') return `${m.target} mo`;
   return String(m.target);
+}
+
+/* ── localStorage → DB seed ──────────────────────────────────────────────────
+ * Called once per company on app init (guarded by bdt_seeded_v1 flag).
+ * Sends current localStorage goals/metrics/impacts to the backend seed endpoint.
+ * Returns the ID mapping so callers can update their references.
+ */
+const SEED_FLAG = 'bdt_seeded_v1';
+
+export async function seedGoalsToDb(companyId: string): Promise<{
+  metricMap: Record<string, string>;
+  goalMap: Record<string, string>;
+} | null> {
+  if (localStorage.getItem(SEED_FLAG) === companyId) return null; // already seeded
+
+  try {
+    const raw = localStorage.getItem('bdt_goals_v2');
+    const state: GoalsState = raw ? JSON.parse(raw) : { goals: [], metrics: [], metricImpacts: [] };
+
+    const result = await api.post<{
+      seeded: boolean;
+      metricMap: Record<string, string>;
+      goalMap: Record<string, string>;
+    }>(`/api/bdt-metrics/${companyId}/seed-from-local`, {
+      metrics: state.metrics,
+      goals: state.goals,
+      impacts: state.metricImpacts ?? [],
+    });
+
+    localStorage.setItem(SEED_FLAG, companyId);
+    return { metricMap: result.metricMap, goalMap: result.goalMap };
+  } catch (err) {
+    console.error('[goals] seed to DB failed (non-fatal)', err);
+    return null;
+  }
 }

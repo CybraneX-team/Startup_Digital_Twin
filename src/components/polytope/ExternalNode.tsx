@@ -53,18 +53,21 @@ export function ExternalNode({
   const fullLabel = node.label;
   const shortLabel = fullLabel.split(/[\s_\-]/)[0] || fullLabel;
 
+  const level1Nodes = node.internalNodes.filter(n => n.nodeLevel === 'level1');
+  const ringNodes = level1Nodes.length > 0 ? level1Nodes : node.internalNodes;
+
   const internalPositions = useMemo(() => {
     const isDraftAtRoot = selectedInternalPath.length === 0;
-    const count = node.internalNodes.length + (draftChildNode && isDraftAtRoot ? 1 : 0);
+    const count = ringNodes.length + (draftChildNode && isDraftAtRoot ? 1 : 0);
     const pts: THREE.Vector3[] = [];
-    for (let i = 0; i < node.internalNodes.length; i++) {
+    for (let i = 0; i < ringNodes.length; i++) {
       pts.push(computeInternalNodePosition(pos, i, count));
     }
     if (draftChildNode && isDraftAtRoot) {
-      pts.push(computeInternalNodePosition(pos, node.internalNodes.length, count));
+      pts.push(computeInternalNodePosition(pos, ringNodes.length, count));
     }
     return pts;
-  }, [node.internalNodes.length, draftChildNode, pos, selectedInternalPath]);
+  }, [ringNodes.length, draftChildNode, pos, selectedInternalPath]);
 
   const internalEdgesGeometry = useMemo(() => {
     if (internalPositions.length === 0) return null;
@@ -173,11 +176,11 @@ export function ExternalNode({
         </lineSegments>
       )}
 
-      {isSelected && node.internalNodes.map((intNode, i) => {
+      {isSelected && ringNodes.map((intNode, i) => {
         const pathRootId = selectedInternalPath[0];
         const pathMatchesDept =
           selectedInternalPath.length === 0 ||
-          node.internalNodes.some(n => n.id === pathRootId);
+          ringNodes.some(n => n.id === pathRootId);
         const isChildVisible =
           !pathMatchesDept ||
           selectedInternalPath.length === 0 ||

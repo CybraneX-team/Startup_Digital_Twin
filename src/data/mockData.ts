@@ -1,16 +1,4 @@
-import type { Department, Metric, BenchmarkData, EnvironmentSignal, SimulationScenario, Task, DecisionNode, CohortComparison, OrgRole, OrgMember, Integration, Decision, Goal, StageGoalRecommendation, TrackedMetric } from '../types';
-
-export const companyInfo = {
-  name: 'TechStartup Inc.',
-  stage: 'Seed',
-  industry: 'SaaS',
-  geography: 'India',
-  founded: '2024',
-  teamSize: 12,
-  monthlyBurn: 45000,
-  runway: '14 months',
-  mrr: 8500,
-};
+import type { Department, Metric, BenchmarkData, EnvironmentSignal, SimulationScenario, Task, DecisionNode, CohortComparison, Integration, Decision, Goal, StageGoalRecommendation, TrackedMetric } from '../types';
 
 export const departments: Department[] = [
   { name: 'Product', size: 4, hod: 'Founder', kpis: ['Feature Velocity', 'Bug Rate', 'NPS'], aiAugmented: false },
@@ -338,39 +326,6 @@ export const survivalCurve = [
   { month: 24, survival: 20, yourProjected: 55 },
 ];
 
-// --- RBAC: Roles ---
-
-export const orgRoles: OrgRole[] = [
-  { id: 'founder', name: 'Founder / CEO', level: 'founder', permissions: { viewDashboard: true, editData: true, runSimulations: true, manageTeam: true, adminSettings: true }, aiAugmented: false },
-  { id: 'cto', name: 'CTO', level: 'hod', department: 'Engineering', permissions: { viewDashboard: true, editData: true, runSimulations: true, manageTeam: true, adminSettings: false }, aiAugmented: false },
-  { id: 'growth-lead', name: 'Growth Lead', level: 'hod', department: 'Growth', permissions: { viewDashboard: true, editData: true, runSimulations: true, manageTeam: true, adminSettings: false }, aiAugmented: true },
-  { id: 'support-lead', name: 'Support Lead', level: 'hod', department: 'Support', permissions: { viewDashboard: true, editData: true, runSimulations: false, manageTeam: true, adminSettings: false }, aiAugmented: true },
-  { id: 'engineer', name: 'Engineer', level: 'ic', department: 'Engineering', permissions: { viewDashboard: true, editData: false, runSimulations: false, manageTeam: false, adminSettings: false }, aiAugmented: false },
-  { id: 'marketer', name: 'Growth Marketer', level: 'ic', department: 'Growth', permissions: { viewDashboard: true, editData: false, runSimulations: false, manageTeam: false, adminSettings: false }, aiAugmented: false },
-  { id: 'support-agent', name: 'Support Agent', level: 'ic', department: 'Support', permissions: { viewDashboard: true, editData: false, runSimulations: false, manageTeam: false, adminSettings: false }, aiAugmented: false },
-];
-
-// --- RBAC: Team Members ---
-
-export const orgMembers: OrgMember[] = [
-  { id: 'm1', name: 'You (Founder)', roleId: 'founder', department: 'All', isAI: false },
-  { id: 'm2', name: 'Arjun K.', roleId: 'cto', department: 'Engineering', isAI: false },
-  { id: 'm3', name: 'Priya S.', roleId: 'growth-lead', department: 'Growth', isAI: false },
-  { id: 'm4', name: 'Rahul M.', roleId: 'support-lead', department: 'Support', isAI: false },
-  { id: 'm5', name: 'Dev 1', roleId: 'engineer', department: 'Engineering', isAI: false },
-  { id: 'm6', name: 'Dev 2', roleId: 'engineer', department: 'Engineering', isAI: false },
-  { id: 'm7', name: 'Dev 3', roleId: 'engineer', department: 'Engineering', isAI: false },
-  { id: 'm8', name: 'Dev 4', roleId: 'engineer', department: 'Engineering', isAI: false },
-  { id: 'm9', name: 'Neha R.', roleId: 'marketer', department: 'Growth', isAI: false },
-  { id: 'm10', name: 'Amit D.', roleId: 'marketer', department: 'Growth', isAI: false },
-  { id: 'm11', name: 'Sara T.', roleId: 'support-agent', department: 'Support', isAI: false },
-  // AI Agents
-  { id: 'ai1', name: 'Analytics AI', roleId: 'growth-lead', department: 'Growth', isAI: true },
-  { id: 'ai2', name: 'Support Bot', roleId: 'support-agent', department: 'Support', isAI: true },
-  { id: 'ai3', name: 'Code Review AI', roleId: 'engineer', department: 'Engineering', isAI: true },
-  { id: 'ai4', name: 'Report Generator', roleId: 'founder', department: 'All', isAI: true },
-];
-
 // --- Integrations ---
 
 export const integrations: Integration[] = [
@@ -618,7 +573,7 @@ export const trackedMetrics: TrackedMetric[] = [
 
 // ─── VC & Mentor Connect ─────────────────────────────────────────────────────
 
-import type { Investor, InvestorUpdate, Mentor, MentorSession, StartupPeer, PeerConnection, PeerBenchmark } from '../types';
+import type { Investor, Mentor, StartupPeer, PeerConnection, PeerBenchmark } from '../types';
 
 export const investors: Investor[] = [
   { id: 'inv-1', name: 'Priya Sharma', firm: 'Nexus Venture Partners', stages: ['seed', 'series-a'], sectors: ['SaaS', 'AI/ML'], avgTicket: '$500K–$2M', status: 'in-discussion', lastContact: '2026-03-25', nextFollowUp: '2026-04-05', notes: 'Interested after demo day. Wants to see 3-month MRR trend.', warmIntro: true, sharedDashboards: ['tm-mrr', 'tm-cac', 'tm-churn'] },
@@ -629,23 +584,11 @@ export const investors: Investor[] = [
   { id: 'inv-6', name: 'Meera Patel', firm: '100x.VC', stages: ['angel', 'seed'], sectors: ['SaaS', 'MarketPlace'], avgTicket: '$50K–$250K', status: 'passed', lastContact: '2026-02-20', notes: 'Passed — said too early for their current fund.', warmIntro: false, sharedDashboards: [] },
 ];
 
-export const investorUpdates: InvestorUpdate[] = [
-  { id: 'update-mar', month: 'March 2026', highlights: ['MRR crossed $8.5K (+18% MoM)', 'Launched AI copilot feature', 'Hired 2 senior engineers', 'NPS improved to 62'], metrics: { mrr: 8500, burn: 45000, runway: 14, nps: 62, teamSize: 12 }, asks: ['Intro to enterprise design partners', 'Hiring referrals for growth lead'], sentTo: ['inv-1', 'inv-4', 'inv-5'], status: 'sent' },
-  { id: 'update-apr', month: 'April 2026', highlights: [], metrics: { mrr: 0, burn: 0, runway: 0, nps: 0, teamSize: 0 }, asks: [], sentTo: [], status: 'draft' },
-];
-
 export const mentors: Mentor[] = [
   { id: 'mentor-1', name: 'Aarav Desai', expertise: ['Product Strategy', 'SaaS Metrics', 'Fundraising'], company: 'Ex-Freshworks', role: 'VP Product', availability: 'biweekly', lastSession: '2026-03-20', nextSession: '2026-04-03' },
   { id: 'mentor-2', name: 'Nandini Rao', expertise: ['Growth Marketing', 'PLG', 'Content Strategy'], company: 'Advisor @ 3 startups', role: 'Growth Expert', availability: 'monthly', lastSession: '2026-03-05', nextSession: '2026-04-05' },
   { id: 'mentor-3', name: 'David Kim', expertise: ['Engineering Management', 'System Design', 'Hiring'], company: 'Ex-Google', role: 'Engineering Director', availability: 'on-demand', lastSession: '2026-02-28' },
   { id: 'mentor-4', name: 'Kavya Iyer', expertise: ['Legal & Compliance', 'Cap Table', 'Term Sheets'], company: 'Khaitan & Co', role: 'Partner', availability: 'on-demand', lastSession: '2026-03-22' },
-];
-
-export const mentorSessions: MentorSession[] = [
-  { id: 'sess-1', mentorId: 'mentor-1', date: '2026-03-20', status: 'completed', agenda: ['Review Q1 product roadmap', 'Pricing strategy for enterprise tier', 'Series A narrative positioning'], actions: ['Finalize enterprise pricing by Apr 1', 'Prepare 3-slide fundraising narrative', 'Set up design partner pipeline'], followUps: ['Share pricing analysis doc', 'Intro to 2 enterprise prospects'] },
-  { id: 'sess-2', mentorId: 'mentor-2', date: '2026-03-05', status: 'completed', agenda: ['Content funnel performance review', 'PLG onboarding improvements'], actions: ['A/B test new onboarding flow', 'Publish 2 case studies this month'], followUps: ['Review A/B test results in next session'] },
-  { id: 'sess-3', mentorId: 'mentor-1', date: '2026-04-03', status: 'scheduled', agenda: ['Term sheet review', 'Board composition advice', 'Q2 product priorities'], actions: [], followUps: [] },
-  { id: 'sess-4', mentorId: 'mentor-2', date: '2026-04-05', status: 'scheduled', agenda: ['Review PLG metrics post A/B test', 'Plan Series A marketing push'], actions: [], followUps: [] },
 ];
 
 // ─── Startup Networking Layer ────────────────────────────────────────────────

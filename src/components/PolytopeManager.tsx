@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, X, Edit3, Trash2, ChevronRight, ChevronDown, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Plus, X, Edit3, Trash2, ChevronRight, ChevronDown, AlertTriangle } from 'lucide-react';
 import type { UExternalNode, UInternalNode, UDomain } from '../lib/usePolytopeStore';
 import { U_DOMAIN_COLOR } from '../lib/usePolytopeStore';
 
@@ -13,7 +13,6 @@ interface Props {
   onAddNode: (deptId: string, n: Omit<UInternalNode, 'id' | 'children'>) => void;
   onUpdateNode: (deptId: string, nodeId: string, n: Partial<Omit<UInternalNode, 'id' | 'children'>>) => void;
   onDeleteNode: (deptId: string, nodeId: string) => void;
-  onReset: () => void;
   /** External open trigger — when true, opens the modal. Set back to false via onForcedClose. */
   forceOpen?: boolean;
   /** When forceOpen is true, open on this view (e.g. { type: 'addDept' }) */
@@ -138,10 +137,9 @@ function ScoreSlider({ value, onChange }: { value: number; onChange: (v: number)
 
 // ── Home view ──────────────────────────────────────────────────────────────────
 
-function HomeView({ departments, setView, onReset }: {
+function HomeView({ departments, setView }: {
   departments: UExternalNode[];
   setView: (v: View) => void;
-  onReset: () => void;
 }) {
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -150,13 +148,6 @@ function HomeView({ departments, setView, onReset }: {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
         <span style={{ fontSize: 13, color: '#64748b' }}>{departments.length} department{departments.length !== 1 ? 's' : ''}</span>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button
-            onClick={onReset}
-            title="Reset to defaults"
-            style={{ ...BTN_GHOST, width: 'auto', padding: '6px 10px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
-          >
-            <RotateCcw size={12} /> Reset
-          </button>
           <button
             onClick={() => setView({ type: 'addDept' })}
             style={{ ...BTN_PRIMARY, width: 'auto', padding: '6px 14px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 12 }}
@@ -544,7 +535,7 @@ export function PolytopeManager(props: Props) {
 
     switch (view.type) {
       case 'home':
-        return <HomeView departments={props.departments} setView={setView} onReset={() => { props.onReset(); setView({ type: 'home' }); }} />;
+        return <HomeView departments={props.departments} setView={setView} />;
 
       case 'addDept':
         return <DeptForm onSave={d => { props.onAddDepartment(d); setView({ type: 'home' }); }} onCancel={goBack} />;

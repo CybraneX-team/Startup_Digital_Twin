@@ -15,14 +15,12 @@ import type { JoinableCompany } from '../lib/db/team';
 import {
   getBdtCatalog,
   mapSuggestedLabelsToCatalogIds,
-  buildBdtDepartmentsForOnboarding,
-  importBdtDepartmentsForCompany,
   matchCatalogDepartmentId,
   getDepartmentChipStyle,
   createCustomDepartmentEntry,
   type CustomDepartmentEntry,
 } from '../lib/bdtOnboarding';
-import { DEPT_SIZE_CONFIGS } from '../lib/bdtPolytopeData';
+import { useBdtCatalog } from '../lib/bdtCatalog';
 import type { UCompanySize } from '../lib/bdtPolytopeData';
 import { api } from '../lib/api';
 import { COUNTRIES, getCurrencyCodeForCountry } from '../lib/currency';
@@ -206,6 +204,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
 export default function Onboarding() {
   const navigate = useNavigate();
   const { user, profile, refreshProfile } = useAuth();
+  const bdtSizeCatalog = useBdtCatalog();
 
   const [mode, setMode] = useState<'choose' | 'create' | 'join'>('choose');
   const [step, setStep] = useState(1);
@@ -356,7 +355,6 @@ export default function Onboarding() {
     setLoading(true); setError(null);
 
     const departmentLabels = getSelectedDepartmentLabels();
-    const bdtDepartments = buildBdtDepartmentsForOnboarding(selectedCatalogIds, customDepartments);
 
     const payload: CreateCompanyInput = {
       name: form.name.trim(), industry_id: form.industry_id,
@@ -388,10 +386,8 @@ export default function Onboarding() {
     const company = await createCompany(payload, user.id);
     if (!company) { setError('Failed to create company. Please try again.'); setLoading(false); return; }
 
-    await importBdtDepartmentsForCompany(bdtDepartments, {
-      sourceKeys: selectedCatalogIds,
-      customLabels: customDepartments.filter(d => d.selected).map(d => d.label.trim()).filter(Boolean),
-    });
+    // Departments + BDT tree are seeded server-side during company creation
+    // (POST /api/companies → import_bdt_departments_from_json). Nothing to import here.
 
     const hasAnyMetric = form.mrr_usd || form.burn_rate_usd || form.employees || form.runway_months ||
       form.cltv_usd || form.cac_usd || form.monthly_churn_rate || form.nps_score;
@@ -930,7 +926,7 @@ export default function Onboarding() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               {SIZE_OPTIONS.map(option => {
                 const selected = bdtCompanySize === option.key;
-                const visibleCount = DEPT_SIZE_CONFIGS[option.key].visibleDeptIds.length;
+                const visibleCount = bdtSizeCatalog?.sizeConfigs[option.key]?.visibleDeptIds.length ?? 0;
                 return (
                   <button
                     key={option.key}
@@ -1021,7 +1017,7 @@ export default function Onboarding() {
                   </p>
                 </div>
                 <span style={{ fontSize: 12, color: ACCENT, fontWeight: 600 }}>
-                  {DEPT_SIZE_CONFIGS[bdtCompanySize].visibleDeptIds.length} active departments
+                  {bdtSizeCatalog?.sizeConfigs[bdtCompanySize]?.visibleDeptIds.length ?? 0} active departments
                 </span>
               </div>
             </div>

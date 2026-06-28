@@ -1840,7 +1840,6 @@ export default function Universe3DPage() {
         onAddNode={polytopeStore.addNode}
         onUpdateNode={polytopeStore.updateNode}
         onDeleteNode={polytopeStore.deleteNode}
-        onReset={polytopeStore.resetToDefaults}
         forceOpen={polytopeManagerOpen}
         forcedView={polytopeManagerView}
         onForcedClose={() => setPolytopeManagerOpen(false)}

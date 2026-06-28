@@ -84,7 +84,8 @@ export function InternalNode({
   const hasFocusedRef = useRef(false);
 
   const radii = [0.25, 0.20, 0.15, 0.12, 0.09];
-  const radius = radii[depth] || 0.05;
+  const isLevel1 = node.nodeLevel === 'level1';
+  const radius = isLevel1 ? radii[0] * 1.4 : (radii[depth] || 0.05);
 
   const isMeActiveCenter = selectedPath.length > 0 && selectedPath[selectedPath.length - 1] === node.id;
   const isMeAncestor = selectedPath.includes(node.id) && !isMeActiveCenter;
@@ -347,16 +348,17 @@ export function InternalNode({
         <PlasmaSphere
           color={color}
           radius={radius}
-         opacity={isDraft ? 0.85 : isHiddenParent ? 0.0 : 1.0}
+          opacity={isDraft ? 0.85 : isHiddenParent ? 0.0 : 1.0}
           glowIntensity={
             isDraft ? 2.8
             : isHiddenParent ? 0
             : isMeActiveCenter ? 3.5
+            : isLevel1 ? 1.2
             : 0.2
           }
           halo={false}
           depthWrite={!isHiddenParent}
-          speed={isMeActiveCenter ? 1.5 : 0.2}
+          speed={isMeActiveCenter ? 1.5 : isLevel1 ? 0.6 : 0.2}
         />
         {isVisible && !isHiddenParent && (
           <Billboard follow={true} lockX={false} lockY={false} lockZ={false} position={[0, -radius * 2.8, 0]}>

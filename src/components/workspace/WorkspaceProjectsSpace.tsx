@@ -26,14 +26,18 @@ import {
   type SuggestiveAlert,
 } from '../../lib/useProjectsStore';
 import {
-  useGoalsStore,
   HORIZON_ORDER,
   HORIZON_META,
-  metricProgress,
-  metricDisplay,
-  metricTargetDisplay,
   type Horizon,
 } from '../../lib/useGoalsStore';
+import {
+  useBdtGoals,
+  useBdtMetrics,
+  bdtMetricProgress,
+  bdtMetricDisplay,
+  bdtMetricTargetDisplay,
+} from '../../lib/db/metrics';
+import { useAuth } from '../../lib/auth';
 import { useFounderWorkspace } from '../../context/FounderWorkspaceContext';
 
 const ACCENT = '#C1AEFF';
@@ -330,7 +334,8 @@ function ProjectCard({ project, tasks, members, goalTitle, onOpen }: { project: 
 
 function Superspace({ onOpenProject, onSelectTask }: { onOpenProject: (id: string) => void; onSelectTask?: (id: string) => void }) {
   const { projects, tasks, members, decisions, risks, milestones, createProject, syncAllHealths } = useProjectsStore();
-  const { goals } = useGoalsStore();
+  const { profile } = useAuth();
+  const { goals } = useBdtGoals(profile?.company_id ?? null);
   const goalTitle = (p: Project) => goals.find(g => g.id === p.goalId)?.title ?? p.goalLink;
   const [showForm, setShowForm] = useState(false);
   const [showAlerts, setShowAlerts] = useState(true);
@@ -919,7 +924,8 @@ type ProjectTab = 'board' | 'milestones' | 'decisions' | 'risks' | 'files' | 'ch
 
 function ProjectSpace({ projectId, onBack, onSelectTask }: { projectId: string; onBack: () => void; onSelectTask?: (id: string) => void }) {
   const { projects, tasks, members, addTask, updateTask, deleteTask, deleteProject, setProjectMembers, updateProject } = useProjectsStore();
-  const { goals } = useGoalsStore();
+  const { profile } = useAuth();
+  const { goals } = useBdtGoals(profile?.company_id ?? null);
   const project = projects.find(p => p.id === projectId);
   const [newTask, setNewTask] = useState('');
   const [newAssignee, setNewAssignee] = useState<string>('');
@@ -1039,7 +1045,8 @@ function ProjectSpace({ projectId, onBack, onSelectTask }: { projectId: string; 
 
 function MemberSpace({ onSelectTask }: { onSelectTask?: (id: string) => void }) {
   const { projects, tasks, members, currentMemberId, updateTask } = useProjectsStore();
-  const { goals } = useGoalsStore();
+  const { profile } = useAuth();
+  const { goals } = useBdtGoals(profile?.company_id ?? null);
   const me = members.find(m => m.id === currentMemberId);
   const myTasks = tasks.filter(t => t.assigneeId === currentMemberId);
   const projName = (id: string) => projects.find(p => p.id === id)?.name ?? 'Project';
@@ -1244,8 +1251,14 @@ function NewGoalForm({ metricOptions, onCreate, onClose }: {
 
 function GoalsMetrics() {
   const { projects, tasks, members } = useProjectsStore();
-  const { goals, metrics, createGoal, deleteGoal } = useGoalsStore();
+  const { profile } = useAuth();
+  const companyId = profile?.company_id ?? null;
+  const { goals, createGoal, deleteGoal } = useBdtGoals(companyId);
+  const { metrics } = useBdtMetrics(companyId);
   const [showForm, setShowForm] = useState(false);
+  const handleCreateGoal = ({ title, horizon }: { title: string; horizon: string; metricId?: string }) => {
+    createGoal({ title, horizon });
+  };
 
   const projsForGoal = (goalId: string, title: string) => projects.filter(p =>
     p.goalId ? p.goalId === goalId : (p.goalLink?.trim().toLowerCase() === title.trim().toLowerCase()),
@@ -1278,21 +1291,21 @@ function GoalsMetrics() {
           <div className="text-[10px] font-bold tracking-[0.16em] uppercase text-white/45 mb-2 px-1">Metric impact</div>
           <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
             {metrics.map(m => {
-              const pct = metricProgress(m);
-              const good = m.trend === 'flat' ? null : ((m.trend === 'up') === m.higherIsBetter);
+              const pct = bdtMetricProgress(m);
+              const good = m.trend === 'flat' ? null : ((m.trend === 'up') === m.higher_is_better);
               const tcolor = good === null ? '#94a3b8' : good ? '#34d399' : '#fb7185';
               const TrendIcon = m.trend === 'up' ? TrendingUp : m.trend === 'down' ? TrendingDown : Minus;
-              const linked = goals.filter(g => g.metricId === m.id).length;
+              const linked = goals.filter(g => g.links.some(l => l.metric_id === m.id)).length;
               return (
                 <div key={m.id} className="rounded-xl p-3 bg-white/[0.03] border border-white/8">
                   <div className="flex items-center justify-between">
-                    <span className="text-[9px] uppercase tracking-wider text-white/40">{m.scope === 'company' ? 'Company' : m.department}</span>
+                    <span className="text-[9px] uppercase tracking-wider text-white/40">{m.scope === 'company' ? 'Company' : 'Dept'}</span>
                     <TrendIcon className="w-3.5 h-3.5" style={{ color: tcolor }} />
                   </div>
                   <div className="text-[13px] font-bold text-white mt-1">{m.name}</div>
                   <div className="flex items-baseline gap-1 mt-0.5">
-                    <span className="text-lg font-bold" style={{ color: tcolor }}>{metricDisplay(m)}</span>
-                    <span className="text-[10px] text-white/35">/ {metricTargetDisplay(m)}</span>
+                    <span className="text-lg font-bold" style={{ color: tcolor }}>{bdtMetricDisplay(m)}</span>
+                    <span className="text-[10px] text-white/35">/ {bdtMetricTargetDisplay(m)}</span>
                   </div>
                   <div className="h-1 rounded-full bg-white/10 mt-2 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: tcolor }} /></div>
                   <div className="text-[9px] text-white/30 mt-1.5">{linked} goal{linked !== 1 ? 's' : ''} linked</div>
@@ -1314,9 +1327,9 @@ function GoalsMetrics() {
                 </div>
                 <div className="space-y-2">
                   {goals.filter(g => g.horizon === h).map(g => {
-                    const owner = members.find(m => m.id === g.ownerId);
+                    const owner = members.find(m => m.id === g.owner_id);
                     const prog = goalProgress(g.id, g.title);
-                    const metric = metrics.find(m => m.id === g.metricId);
+                    const metric = metrics.find(m => g.links.some(l => l.metric_id === m.id));
                     const ps = projsForGoal(g.id, g.title);
                     return (
                       <div key={g.id} className="group flex items-center gap-4 p-3.5 rounded-xl bg-white/[0.03] border border-white/8 hover:border-white/15 transition-all">
@@ -1352,7 +1365,7 @@ function GoalsMetrics() {
         </div>
       </div>
 
-      {showForm && <NewGoalForm metricOptions={metrics.map(m => ({ id: m.id, name: m.name }))} onCreate={createGoal} onClose={() => setShowForm(false)} />}
+      {showForm && <NewGoalForm metricOptions={metrics.map(m => ({ id: m.id, name: m.name }))} onCreate={handleCreateGoal} onClose={() => setShowForm(false)} />}
     </div>
   );
 }

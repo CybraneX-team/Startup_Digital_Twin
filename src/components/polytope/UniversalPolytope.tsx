@@ -157,7 +157,6 @@ export default function UniversalPolytope({
           onAddNode={store.addNode}
           onUpdateNode={store.updateNode}
           onDeleteNode={store.deleteNode}
-          onReset={store.resetToDefaults}
         />
       )}
     </div>

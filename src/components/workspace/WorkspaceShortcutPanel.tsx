@@ -6,7 +6,8 @@ import {
   ChevronRight, ArrowRight,
 } from 'lucide-react';
 import { useProjectsStore } from '../../lib/useProjectsStore';
-import { useGoalsStore, metricDisplay, metricProgress } from '../../lib/useGoalsStore';
+import { useBdtGoals, useBdtMetrics, bdtMetricDisplay, bdtMetricProgress } from '../../lib/db/metrics';
+import { useAuth } from '../../lib/auth';
 import { useFounderWorkspace } from '../../context/FounderWorkspaceContext';
 
 const ACCENT = '#C1AEFF';
@@ -15,7 +16,8 @@ const ACCENT = '#C1AEFF';
 
 function RoadmapView() {
   const { projects, tasks } = useProjectsStore();
-  const { goals } = useGoalsStore();
+  const { profile } = useAuth();
+  const { goals } = useBdtGoals(profile?.company_id ?? null);
   const { setActiveSidebarTab } = useFounderWorkspace();
 
   const timeline = useMemo(() => {
@@ -151,7 +153,8 @@ const FUNDRAISING_MILESTONES = [
 ];
 
 function FundraisingView() {
-  const { metrics } = useGoalsStore();
+  const { profile } = useAuth();
+  const { metrics } = useBdtMetrics(profile?.company_id ?? null);
 
   const runway = useMemo(() => metrics.find(m => m.name.toLowerCase().includes('runway')), [metrics]);
   const mrr    = useMemo(() => metrics.find(m => m.name.toLowerCase().includes('mrr') || m.name.toLowerCase().includes('revenue')), [metrics]);
@@ -174,14 +177,14 @@ function FundraisingView() {
       <div className="shrink-0 grid grid-cols-2 gap-2.5 mb-4">
         {[runway, mrr].filter(Boolean).map(m => {
           if (!m) return null;
-          const pct = metricProgress(m);
+          const pct = bdtMetricProgress(m);
           return (
             <div key={m.id} className="rounded-xl p-3 bg-white/[0.03] border border-white/8">
               <div className="flex items-center justify-between mb-1">
                 <span className="text-[9px] uppercase tracking-wider text-white/35">{m.name}</span>
                 <TrendIcon trend={m.trend} />
               </div>
-              <div className="text-lg font-bold text-white leading-none">{metricDisplay(m)}</div>
+              <div className="text-lg font-bold text-white leading-none">{bdtMetricDisplay(m)}</div>
               <div className="h-1 rounded-full bg-white/10 mt-2 overflow-hidden">
                 <div className="h-full rounded-full" style={{ width: `${pct}%`, background: '#34d399' }} />
               </div>

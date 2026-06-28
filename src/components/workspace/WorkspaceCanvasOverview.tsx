@@ -10,11 +10,14 @@ import {
   type TaskSuggestion,
 } from '../../lib/useProjectsStore';
 import {
-  useGoalsStore,
-  metricDisplay,
-  metricTargetDisplay,
-  metricProgress,
-} from '../../lib/useGoalsStore';
+  useBdtMetrics,
+  useBdtGoals,
+  bdtMetricDisplay,
+  bdtMetricTargetDisplay,
+  bdtMetricProgress,
+  bdtMetricAlerts,
+} from '../../lib/db/metrics';
+import { useAuth } from '../../lib/auth';
 import { Bot } from 'lucide-react';
 import { useFounderWorkspace } from '../../context/FounderWorkspaceContext';
 
@@ -35,7 +38,10 @@ function priorityColor(p: TaskSuggestion['priority']) {
 
 export function WorkspaceCanvasOverview() {
   const { projects, tasks, decisions, risks, addTask, currentMemberId } = useProjectsStore();
-  const { goals, metrics, getMetricAlerts } = useGoalsStore();
+  const { profile } = useAuth();
+  const companyId = profile?.company_id ?? null;
+  const { goals } = useBdtGoals(companyId);
+  const { metrics } = useBdtMetrics(companyId);
   const { setActiveSidebarTab } = useFounderWorkspace();
 
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
@@ -43,10 +49,11 @@ export function WorkspaceCanvasOverview() {
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
-  const metricAlerts = useMemo(() => getMetricAlerts(), [getMetricAlerts]);
+  const metricAlerts = useMemo(() => bdtMetricAlerts(metrics), [metrics]);
 
   const suggestions = useMemo(() => {
-    const all = generateTaskSuggestions(projects, tasks, decisions, risks, goals, metrics);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const all = generateTaskSuggestions(projects, tasks, decisions, risks, goals as any, metrics as any);
     return all.filter(s => !dismissed.has(s.key));
   }, [projects, tasks, decisions, risks, goals, metrics, dismissed]);
 
@@ -120,22 +127,22 @@ export function WorkspaceCanvasOverview() {
         </div>
         <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(155px, 1fr))' }}>
           {metrics.map(m => {
-            const pct   = metricProgress(m);
-            const good  = m.trend === 'flat' ? null : (m.trend === 'up') === m.higherIsBetter;
+            const pct   = bdtMetricProgress(m);
+            const good  = m.trend === 'flat' ? null : (m.trend === 'up') === m.higher_is_better;
             const tc    = good === null ? '#94a3b8' : good ? '#34d399' : '#fb7185';
             const TIcon = m.trend === 'up' ? TrendingUp : m.trend === 'down' ? TrendingDown : Minus;
             return (
               <div key={m.id} className="rounded-xl p-3 bg-white/[0.03] border border-white/8 hover:border-white/15 transition-all">
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-[9px] uppercase tracking-wider text-white/35">
-                    {m.scope === 'company' ? 'Company' : m.department}
+                    {m.scope === 'company' ? 'Company' : 'Dept'}
                   </span>
                   <TIcon className="w-3 h-3" style={{ color: tc }} />
                 </div>
                 <div className="text-[12px] font-bold text-white leading-tight">{m.name}</div>
                 <div className="flex items-baseline gap-1 mt-0.5">
-                  <span className="text-[15px] font-bold leading-none" style={{ color: tc }}>{metricDisplay(m)}</span>
-                  <span className="text-[9px] text-white/30">/ {metricTargetDisplay(m)}</span>
+                  <span className="text-[15px] font-bold leading-none" style={{ color: tc }}>{bdtMetricDisplay(m)}</span>
+                  <span className="text-[9px] text-white/30">/ {bdtMetricTargetDisplay(m)}</span>
                 </div>
                 <div className="h-1 rounded-full bg-white/10 mt-2 overflow-hidden">
                   <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: tc }} />
@@ -173,7 +180,8 @@ export function WorkspaceCanvasOverview() {
             const pc       = priorityColor(s.priority);
             const isCreated = created.has(s.key);
             const alignTask = s.projectId ? tasks.find(t => t.projectId === s.projectId && t.status !== 'done') : null;
-            const alignScore = alignTask ? computeAlignmentScore(alignTask, projects, risks, goals) : null;
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const alignScore = alignTask ? computeAlignmentScore(alignTask, projects, risks, goals as any) : null;
             return (
               <div
                 key={s.key}

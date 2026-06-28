@@ -752,7 +752,6 @@ export default function UniversalPage() {
         onAddNode={store.addNode}
         onUpdateNode={store.updateNode}
         onDeleteNode={store.deleteNode}
-        onReset={store.resetToDefaults}
         forceOpen={managerOpen}
         forcedView={managerView}
         onForcedClose={() => setManagerOpen(false)}

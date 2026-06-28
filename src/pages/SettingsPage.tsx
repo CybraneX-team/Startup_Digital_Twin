@@ -8,7 +8,7 @@ import { INDUSTRIES } from '../db/industries';
 import type { CompanyStage } from '../lib/supabase';
 import { api } from '../lib/api';
 import { usePolytopeStore } from '../lib/usePolytopeStore';
-import { DEPT_SIZE_CONFIGS } from '../lib/bdtPolytopeData';
+import { useBdtCatalog } from '../lib/bdtCatalog';
 import type { UCompanySize } from '../lib/bdtPolytopeData';
 import { COUNTRIES, getCurrencyCodeForCountry } from '../lib/currency';
 
@@ -55,6 +55,7 @@ export default function SettingsPage() {
   const canEditSettings = canWrite('settings');
   const canCreateDepartments = canWrite('twin') && canWrite('team');
   const departmentStore = usePolytopeStore('bdt');
+  const bdtCatalog = useBdtCatalog();
 
   const [section, setSection] = useState<Section>('organization');
 
@@ -336,7 +337,7 @@ export default function SettingsPage() {
                   <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
                     {(['micro', 'msme', 'standard', 'enterprise'] as UCompanySize[]).map(size => {
                       const selected = bdtCompanySize === size;
-                      const visibleCount = DEPT_SIZE_CONFIGS[size].visibleDeptIds.length;
+                      const visibleCount = bdtCatalog?.sizeConfigs[size]?.visibleDeptIds.length ?? 0;
                       const labels: Record<UCompanySize, string> = {
                         micro: 'Micro',
                         msme: 'MSME',

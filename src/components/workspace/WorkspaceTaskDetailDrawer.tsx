@@ -4,7 +4,8 @@ import {
   Folder, Target, Bookmark, Trash2, Edit2, Play,
 } from 'lucide-react';
 import { useProjectsStore, type ProjectTask, type TaskStatus } from '../../lib/useProjectsStore';
-import { useGoalsStore } from '../../lib/useGoalsStore';
+import { useBdtGoals } from '../../lib/db/metrics';
+import { useAuth } from '../../lib/auth';
 import { useSavedWorkflows } from '../../lib/useSavedWorkflows';
 
 interface WorkspaceTaskDetailDrawerProps {
@@ -22,7 +23,8 @@ export function WorkspaceTaskDetailDrawer({ taskId, onClose }: WorkspaceTaskDeta
     updateTask,
     deleteTask,
   } = useProjectsStore();
-  const { goals } = useGoalsStore();
+  const { profile } = useAuth();
+  const { goals } = useBdtGoals(profile?.company_id ?? null);
   const { items: savedCards } = useSavedWorkflows();
 
   const task = tasks.find(t => t.id === taskId);

@@ -1,13 +1,23 @@
 import { create } from 'zustand';
 import { U_NODES as TWIN_DEFAULT_NODES } from './universalPolytopeData';
 import type { UExternalNode, UInternalNode, UDomain, UCompanySize } from './bdtPolytopeData';
-import { U_DOMAIN_COLOR, isActionLeafNode, isBdtWorkspaceLeafNode, DEPT_SIZE_CONFIGS } from './bdtPolytopeData';
+import { U_DOMAIN_COLOR, isActionLeafNode, isBdtWorkspaceLeafNode } from './bdtPolytopeData';
 import { api } from './api';
-import { stripSeededTeamMembers } from './bdtDepartmentSeed';
 import { normalizeDepartmentsFromApi } from './bdtDepartmentApiMapper';
+import { getSizeConfigs, loadBdtCatalog } from './bdtCatalog';
 
 /** Twin (/3d company polytope) and BDT (/universal) use separate graphs and caches. */
 export type PolytopeStoreScope = 'twin' | 'bdt';
+
+/** Drop seeded/mock team members (those without a real companyMemberId) from a node tree. */
+function stripSeededTeamMembers(nodes: UInternalNode[]): UInternalNode[] {
+  return nodes.map(node => {
+    const children = node.children?.length ? stripSeededTeamMembers(node.children) : node.children;
+    if (node.type !== 'team') return { ...node, children };
+    const members = (node.members ?? []).filter(m => Boolean(m.companyMemberId));
+    return { ...node, members, memberCount: members.length, children };
+  });
+}
 
 const TWIN_CACHE_KEY = 'polytope_departments_twin_v2';
 const BDT_CACHE_KEY = 'polytope_departments_bdt_v5';
@@ -215,7 +225,6 @@ export interface PolytopeStoreState {
   deleteNode: (deptId: string, nodeId: string) => Promise<void>;
   addNodeMember: (nodeId: string, memberId: string) => Promise<void>;
   removeNodeMember: (nodeId: string, memberId: string) => Promise<void>;
-  resetToDefaults: () => Promise<void>;
 }
 
 interface StoreConfig {
@@ -311,11 +320,6 @@ function createLocalPolytopeStore({ storageKey, defaultDepartments, onboardingFa
     addNodeMember: async () => {},
 
     removeNodeMember: async () => {},
-
-    resetToDefaults: async () => {
-      persistCache(storageKey, defaultDepartments);
-      set({ departments: defaultDepartments });
-    },
   }));
 }
 
@@ -324,7 +328,10 @@ export function createApiPolytopeStore({ storageKey, defaultDepartments, onboard
 
   function splitBySize(all: UExternalNode[], size: UCompanySize | null | undefined) {
     if (!size) return { visible: all, locked: [] as UExternalNode[] };
-    const visibleKeys = new Set(DEPT_SIZE_CONFIGS[size].visibleDeptIds);
+    const config = getSizeConfigs()[size];
+    // Catalog not loaded yet → show everything rather than crash; re-split once loaded.
+    if (!config) return { visible: all, locked: [] as UExternalNode[] };
+    const visibleKeys = new Set(config.visibleDeptIds);
     const visible = all.filter(d => !d.sourceKey || visibleKeys.has(d.sourceKey));
     const locked = all.filter(d => {
       const sourceKey = d.sourceKey;
@@ -351,6 +358,7 @@ export function createApiPolytopeStore({ storageKey, defaultDepartments, onboard
       if (get().loading) return;
       set({ loading: true, error: null });
       try {
+        await loadBdtCatalog().catch(() => { /* size-config split degrades gracefully */ });
         const response = await api.get<{ departments: UExternalNode[] }>('/api/departments');
         const departments = normalizeDepartmentsFromApi(response.departments ?? []);
         _allDepts = departments;
@@ -422,6 +430,11 @@ export function createApiPolytopeStore({ storageKey, defaultDepartments, onboard
     },
 
     addNode: async (deptId, node, path = []) => {
+      if (node.nodeLevel === 'level1') {
+        const existing = get().departments.find(d => d.id === deptId)
+          ?.internalNodes?.filter(n => n.nodeLevel === 'level1') ?? [];
+        if (existing.length >= 6) throw new Error('Department cannot have more than 6 Level-1 nodes');
+      }
       const dept = get().departments.find(d => d.id === deptId);
       const optimistic: UInternalNode = { ...node, id: `pending_node_${Date.now()}`, children: [] };
       set(state => ({
@@ -495,16 +508,6 @@ export function createApiPolytopeStore({ storageKey, defaultDepartments, onboard
 
     removeNodeMember: async (nodeId, memberId) => {
       const response = await api.delete<{ departments: UExternalNode[] }>(`/api/departments/nodes/${nodeId}/members/${memberId}`);
-      const departments = response.departments ?? [];
-      persistCache(storageKey, departments);
-      set({ departments });
-    },
-
-    resetToDefaults: async () => {
-      const localDrafts = loadCachedDepartments(storageKey, defaultDepartments);
-      const response = await api.post<{ departments: UExternalNode[] }>('/api/departments/import', {
-        departments: localDrafts ?? defaultDepartments,
-      });
       const departments = response.departments ?? [];
       persistCache(storageKey, departments);
       set({ departments });

@@ -14,14 +14,6 @@ export interface Metric {
   percentile?: number;
 }
 
-export interface CompanyConfig {
-  name: string;
-  stage: string;
-  industry: string;
-  geography: string;
-  departments: Department[];
-}
-
 export interface SimulationScenario {
   id: string;
   name: string;
@@ -109,31 +101,6 @@ export interface CohortComparison {
   you: number;
   cohortAvg: number;
   topQuartile: number;
-}
-
-// --- RBAC Types ---
-
-export interface OrgRole {
-  id: string;
-  name: string;
-  level: 'founder' | 'hod' | 'lead' | 'ic';
-  department?: string; // undefined = all departments
-  permissions: {
-    viewDashboard: boolean;
-    editData: boolean;
-    runSimulations: boolean;
-    manageTeam: boolean;
-    adminSettings: boolean;
-  };
-  aiAugmented: boolean;
-}
-
-export interface OrgMember {
-  id: string;
-  name: string;
-  roleId: string;
-  department: string;
-  isAI: boolean;
 }
 
 export interface Integration {

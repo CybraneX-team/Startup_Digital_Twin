@@ -6,7 +6,8 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useProjectsStore, generateAlerts } from '../../lib/useProjectsStore';
-import { useGoalsStore, metricDisplay, metricProgress } from '../../lib/useGoalsStore';
+import { useBdtMetrics, useBdtGoals, bdtMetricDisplay, bdtMetricProgress } from '../../lib/db/metrics';
+import { useAuth } from '../../lib/auth';
 import { useFounderWorkspace } from '../../context/FounderWorkspaceContext';
 
 const ACCENT = '#C1AEFF';
@@ -46,7 +47,10 @@ export function WorkspaceSpherePanel() {
   const {
     projects, tasks, decisions, risks, members, files,
   } = useProjectsStore();
-  const { goals, metrics } = useGoalsStore();
+  const { profile } = useAuth();
+  const companyId = profile?.company_id ?? null;
+  const { goals } = useBdtGoals(companyId);
+  const { metrics } = useBdtMetrics(companyId);
   const { setActiveSidebarTab, notes } = useFounderWorkspace();
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
@@ -172,8 +176,8 @@ export function WorkspaceSpherePanel() {
           </div>
           <div className="grid grid-cols-2 gap-2">
             {topMetrics.map(m => {
-              const pct = metricProgress(m);
-              const good = m.trend === 'flat' ? null : (m.trend === 'up') === m.higherIsBetter;
+              const pct = bdtMetricProgress(m);
+              const good = m.trend === 'flat' ? null : (m.trend === 'up') === m.higher_is_better;
               const tc = good === null ? '#94a3b8' : good ? '#34d399' : '#fb7185';
               const TIcon = m.trend === 'up' ? TrendingUp : m.trend === 'down' ? TrendingDown : Minus;
               return (
@@ -182,7 +186,7 @@ export function WorkspaceSpherePanel() {
                     <span className="text-[9px] text-white/35 truncate">{m.name}</span>
                     <TIcon className="w-3 h-3 shrink-0" style={{ color: tc }} />
                   </div>
-                  <div className="text-base font-bold leading-none mb-1.5" style={{ color: tc }}>{metricDisplay(m)}</div>
+                  <div className="text-base font-bold leading-none mb-1.5" style={{ color: tc }}>{bdtMetricDisplay(m)}</div>
                   <div className="h-1 rounded-full bg-white/10 overflow-hidden">
                     <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: tc }} />
                   </div>
