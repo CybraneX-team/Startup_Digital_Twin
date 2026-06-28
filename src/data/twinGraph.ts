@@ -1,5 +1,5 @@
 /* ================================================================
-   FounderOS — Twin Graph Builder
+   WorkOS — Twin Graph Builder
    Derives TwinNode[] and TwinEdge[] from the DB.
    mockData.ts imports from here instead of defining nodes inline.
 ================================================================ */
@@ -14,7 +14,7 @@ import { useCompanyMetrics } from '../lib/db/metrics';
 import { computeHealth } from '../lib/health';
 
 /* ──────────────────────────────────────────────────
-   Internal nodes for YOUR company (FounderOS)
+   Internal nodes for YOUR company (WorkOS)
 ────────────────────────────────────────────────── */
 
 const YOUR_DEPT_NODES: TwinNode[] = [

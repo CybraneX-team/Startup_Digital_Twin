@@ -222,7 +222,7 @@ export function WorkspaceSignalsPanel() {
     save({
       level: 'root',
       companyId: 'demo',
-      companyName: 'FounderOS',
+      companyName: 'WorkOS',
       role: 'founder',
       roleLabel: 'Founder',
       rootId: `signal_${s.id}`,

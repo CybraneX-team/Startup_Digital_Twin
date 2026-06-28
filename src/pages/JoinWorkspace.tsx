@@ -48,7 +48,7 @@ function PageShell({ children }: { children: React.ReactNode }) {
           <div style={{ width: 32, height: 32, borderRadius: 9, background: 'linear-gradient(135deg, rgba(249,198,255,0.9), rgba(193,174,255,0.9))', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Hexagon size={16} color="#161618" fill="#161618" strokeWidth={1.5} />
           </div>
-          <span style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.85)', letterSpacing: '-0.01em' }}>FounderOS</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: 'rgba(255,255,255,0.85)', letterSpacing: '-0.01em' }}>WorkOS</span>
         </div>
 
         {/* Content */}
@@ -241,7 +241,7 @@ export default function JoinWorkspace() {
               <ShieldCheck size={26} color={ACCENT} />
             </div>
             <h2 style={{ fontSize: 22, fontWeight: 700, color: '#fff', margin: '0 0 6px', letterSpacing: '-0.02em' }}>You're Invited</h2>
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', margin: 0 }}>You've been invited to join a workspace on FounderOS</p>
+            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.35)', margin: 0 }}>You've been invited to join a workspace on WorkOS</p>
           </div>
 
           <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.07)', borderRadius: 14, padding: '18px 20px', marginBottom: 20 }}>

@@ -58,7 +58,7 @@ function IncubatorLeft() {
         <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(167,139,250,0.1)', border: '1px solid rgba(167,139,250,0.28)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           <Building2 size={18} color={ACCENT} />
         </div>
-        <span style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.9)', letterSpacing: '-0.01em' }}>FounderOS</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.9)', letterSpacing: '-0.01em' }}>WorkOS</span>
       </div>
 
       {/* ── Tagline — bottom left ── */}

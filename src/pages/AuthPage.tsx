@@ -56,7 +56,7 @@ function FounderLeft() {
         <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, rgba(249,198,255,0.9), rgba(193,174,255,0.9))', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 16px rgba(193,174,255,0.3)' }}>
           <Hexagon size={18} color="#161618" fill="#161618" strokeWidth={1.5} />
         </div>
-        <span style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.9)', letterSpacing: '-0.01em' }}>FounderOS</span>
+        <span style={{ fontSize: 15, fontWeight: 700, color: 'rgba(255,255,255,0.9)', letterSpacing: '-0.01em' }}>WorkOS</span>
       </div>
 
       {/* ── Tagline — bottom left ── */}
@@ -184,7 +184,7 @@ export default function AuthPage() {
             textAlign: 'left',
           }}>
             {[
-              'Open the email from FounderOS',
+              'Open the email from WorkOS',
               'Click the "Verify your email" link',
               'Come back here and sign in',
             ].map((step, i) => (
@@ -306,7 +306,7 @@ export default function AuthPage() {
       {/* Bottom links */}
       <div style={{ marginTop: 28, display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'center' }}>
         <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.28)', margin: 0 }}>
-          {mode === 'signin' ? 'New to FounderOS? ' : 'Already have an account? '}
+          {mode === 'signin' ? 'New to WorkOS? ' : 'Already have an account? '}
           <span onClick={() => switchMode(mode === 'signin' ? 'signup' : 'signin')}
             style={{ color: ACCENT, cursor: 'pointer', fontWeight: 600 }}>
             {mode === 'signin' ? 'Create account' : 'Sign in'}

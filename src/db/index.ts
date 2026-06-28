@@ -1,5 +1,5 @@
 /* ================================================================
-   FounderOS — Database Query Layer
+   WorkOS — Database Query Layer
    All graph layout constants + query functions are derived here.
    Import from this file everywhere — never import raw arrays.
 ================================================================ */

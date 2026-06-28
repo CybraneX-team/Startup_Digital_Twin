@@ -112,7 +112,7 @@ export class GalaxyParticles {
       'mobility--transportation':   { h: 0.15, s: 0.4, l: 0.6 },
       'real-estate--infrastructure':{ h: 0.08, s: 0.3, l: 0.62 },
       'agriculture--food':          { h: 0.33, s: 0.4, l: 0.55 },
-      // FounderOS ind-prefixed IDs
+      // WorkOS ind-prefixed IDs
       'ind-saas':           { h: 0.73, s: 0.45, l: 0.65 },
       'ind-fintech':        { h: 0.44, s: 0.4, l: 0.6 },
       'ind-healthtech':     { h: 0.97, s: 0.4, l: 0.62 },

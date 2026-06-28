@@ -43,7 +43,7 @@ export default function Sidebar() {
             <Orbit className="w-5 h-5 text-sky-300" />
           </div>
           <div>
-            <h1 className="text-sm font-bold text-white tracking-tight">FounderOS</h1>
+            <h1 className="text-sm font-bold text-white tracking-tight">WorkOS</h1>
             <p className="text-xs text-sky-400/60">Digital Twin v2.0</p>
           </div>
         </div>

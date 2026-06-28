@@ -1,5 +1,5 @@
 /* ================================================================
-   FounderOS — Database Schema
+   WorkOS — Database Schema
    Single source of truth for all industry, company, and signal data.
    The graph layer derives positions + colors from this.
 ================================================================ */

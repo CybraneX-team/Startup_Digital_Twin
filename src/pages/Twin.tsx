@@ -8,7 +8,7 @@ export default function Twin() {
   const navigate = useNavigate();
   const { user, profile, canRead } = useAuth();
   // Pass null (not undefined) for logged-in users without a company yet —
-  // this hides the "FounderOS" placeholder regardless of load state
+  // this hides the "WorkOS" placeholder regardless of load state
   const graphCompanyId = user ? (profile?.company_id ?? null) : undefined;
   const { nodes: twinNodes, edges: twinEdges, myCompanyNodeId, emergeParent } = useTwinGraph(graphCompanyId);
   const [selectedNode, setSelectedNode] = useState<string | null>(null);

@@ -452,7 +452,7 @@ export function FounderWorkspaceProvider({ children, initialEntryContext }: { ch
         {
           id: 'welcome',
           sender: 'assistant',
-          text: 'Hello! I am your FounderOS AI Copilot. I have access to your workspace metrics (runway, OKRs, FTE count, risks, and GTM strategy). Ask me to analyze metrics, add new objectives, or run simulations!',
+          text: 'Hello! I am your WorkOS AI Copilot. I have access to your workspace metrics (runway, OKRs, FTE count, risks, and GTM strategy). Ask me to analyze metrics, add new objectives, or run simulations!',
           timestamp: new Date(),
         },
       ],
@@ -829,7 +829,7 @@ export function FounderWorkspaceProvider({ children, initialEntryContext }: { ch
         {
           id: 'welcome',
           sender: 'assistant',
-          text: `Hello! Welcome to your new ${name} workspace. I am your FounderOS AI Copilot. Ask me questions or simulate objectives for this project.`,
+          text: `Hello! Welcome to your new ${name} workspace. I am your WorkOS AI Copilot. Ask me questions or simulate objectives for this project.`,
           timestamp: new Date(),
         },
       ],

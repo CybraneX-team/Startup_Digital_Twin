@@ -1,5 +1,5 @@
 /* ================================================================
-   FounderOS — Universe Graph Builder
+   WorkOS — Universe Graph Builder
    Produces the UniverseData shape consumed by the
    /3d UniverseController. All data is fetched from Supabase:
      • industries        → lib/db/industries.ts

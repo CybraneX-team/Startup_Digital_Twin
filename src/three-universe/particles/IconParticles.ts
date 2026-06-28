@@ -2,7 +2,7 @@
 /**
  * IconParticles — Samples dark pixels from industry PNG icons → renders as colored particle cloud.
  * Each cloud billboards toward camera and floats above its galaxy.
- * Supports both startup-twin ids (technology, finance) and FounderOS ids (ind-saas, ind-fintech).
+ * Supports both startup-twin ids (technology, finance) and WorkOS ids (ind-saas, ind-fintech).
  */
 
 import * as THREE from 'three';
@@ -48,7 +48,7 @@ const IMAGE_MAP = {
   'mobility--transportation':    mobilityImg,
   'real-estate--infrastructure': realEstateImg,
   'agriculture--food':           agriImg,
-  // ── Old FounderOS IDs (legacy fallbacks) ────────────────────────
+  // ── Old WorkOS IDs (legacy fallbacks) ────────────────────────
   'ind-saas':      techImg,
   'ind-fintech':   financeImg,
   'ind-healthtech':healthImg,

@@ -6,7 +6,7 @@ export const hasSupabaseConfig = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
 
 if (!hasSupabaseConfig) {
   console.warn(
-    '[FounderOS] Supabase env vars missing. Add VITE_SUPABASE_URL and ' +
+    '[WorkOS] Supabase env vars missing. Add VITE_SUPABASE_URL and ' +
     'VITE_SUPABASE_ANON_KEY to .env.local. Running in offline/demo mode.'
   );
 }
