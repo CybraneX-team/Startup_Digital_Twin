@@ -29,6 +29,7 @@ import PolytopePage from './pages/PolytopePage';
 import UniversalPage from './pages/UniversalPage';
 import WorkspacePage from './pages/WorkspacePage';
 import SavedWorkflows from './pages/SavedWorkflows';
+import OAuthAuthorizePage from './pages/OAuthAuthorizePage';
 import { VoiceProvider } from './context/VoiceContext';
 
 
@@ -135,6 +136,16 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/pending" element={<PendingApproval />} />
+      </Routes>
+    );
+  }
+
+  // /oauth/authorize — ERPNext SSO bridge page (no TopBar, no AuthGuard —
+  // it does its own session check; see OAuthAuthorizePage's file comment)
+  if (location.pathname === '/oauth/authorize') {
+    return (
+      <Routes>
+        <Route path="/oauth/authorize" element={<OAuthAuthorizePage />} />
       </Routes>
     );
   }

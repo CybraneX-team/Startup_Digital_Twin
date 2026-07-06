@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import {
-  Settings, Palette, Bell, Layers, Plus, Trash2, ImagePlus, Save, Loader2,
+  Settings, Palette, Bell, Layers, Plus, Trash2, ImagePlus, Save, Loader2, ExternalLink,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
 import { useCompany } from '../lib/db/companies';
@@ -323,6 +323,15 @@ export default function SettingsPage() {
                     onFocus={e => (e.target.style.borderColor = `${AC}40`)}
                     onBlur={e => (e.target.style.borderColor = B)}
                   />
+                )},
+                { label: 'ERPNext', content: company?.slug ? (
+                  <a href={`https://${company.slug}.erp.os.cybranex.com/app`} target="_blank" rel="noopener noreferrer"
+                    style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 16px', borderRadius:8, fontSize:13, fontWeight:600,
+                      background:'rgba(193,174,255,0.1)', border:`1px solid rgba(193,174,255,0.2)`, color:AC, textDecoration:'none' }}>
+                    Open ERPNext <ExternalLink size={13} />
+                  </a>
+                ) : (
+                  <span style={{ fontSize:13, color:DIM }}>Not available yet</span>
                 )},
               ].map((row) => (
                 <div key={row.label} style={{ display:'flex', alignItems:'flex-start', padding:'18px 0', borderBottom:`1px solid ${B}`, gap:24 }}>
