@@ -1,14 +1,17 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
   Orbit, Target, Layers, CheckSquare, FileText, FolderOpen,
   TrendingUp, TrendingDown, Minus, ChevronRight, Zap,
-  AlertTriangle, Scale, Clock,
+  AlertTriangle, Scale, Clock, Plus,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useProjectsStore, generateAlerts } from '../../lib/useProjectsStore';
 import { useBdtMetrics, useBdtGoals, bdtMetricDisplay, bdtMetricProgress } from '../../lib/db/metrics';
 import { useAuth } from '../../lib/auth';
 import { useFounderWorkspace } from '../../context/FounderWorkspaceContext';
+import { useCanonicalMetrics, isMetricAdmin } from '../../lib/db/canonicalMetrics';
+import { useTeamMembers } from '../../lib/db/team';
+import { MetricCreateWizard, MetricRollupHealthPanel } from './metrics/MetricSystem';
 
 const ACCENT = '#C1AEFF';
 
@@ -47,11 +50,15 @@ export function WorkspaceSpherePanel() {
   const {
     projects, tasks, decisions, risks, members, files,
   } = useProjectsStore();
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
   const companyId = profile?.company_id ?? null;
   const { goals } = useBdtGoals(companyId);
   const { metrics } = useBdtMetrics(companyId);
-  const { setActiveSidebarTab, notes } = useFounderWorkspace();
+  const { setActiveSidebarTab, notes, departments } = useFounderWorkspace();
+  const { rollups, createMetric, createDraft } = useCanonicalMetrics(companyId, { target_type: 'department', status: 'active' });
+  const { members: teamMembers } = useTeamMembers(companyId);
+  const canEditMetrics = isMetricAdmin(role);
+  const [metricWizardTarget, setMetricWizardTarget] = useState<{ id: string; label: string } | null>(null);
 
   const today = useMemo(() => new Date().toISOString().slice(0, 10), []);
 
@@ -238,6 +245,35 @@ export function WorkspaceSpherePanel() {
       </div>
 
       {/* ── Quick Navigation ────────────────────────────────────────────────── */}
+      {departments.length > 0 && (
+        <div className="shrink-0">
+          <div className="text-[10px] font-bold tracking-[0.15em] uppercase text-white/35 mb-2.5 flex items-center gap-1.5 px-0.5">
+            <Target className="w-3.5 h-3.5" style={{ color: '#34d399' }} />
+            Department Health
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            {departments.map((department) => {
+              const rollup = rollups.find(r => r.target_type === 'department' && r.target_id === department.id);
+              return (
+                <div key={department.id} className="rounded-2xl p-3 bg-white/[0.03] border border-white/8">
+                  <MetricRollupHealthPanel rollup={rollup} title={department.name} />
+                  {canEditMetrics && (
+                    <button
+                      type="button"
+                      onClick={() => setMetricWizardTarget({ id: department.id, label: department.name })}
+                      className="mt-3 w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold"
+                      style={{ background: `${ACCENT}20`, border: `1px solid ${ACCENT}40`, color: ACCENT }}
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Create department metric
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       <div className="shrink-0">
         <div className="text-[10px] font-bold tracking-[0.15em] uppercase text-white/35 mb-2.5 px-0.5">Quick Navigate</div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -261,6 +297,19 @@ export function WorkspaceSpherePanel() {
           ))}
         </div>
       </div>
+
+      {metricWizardTarget && companyId && (
+        <MetricCreateWizard
+          companyId={companyId}
+          members={teamMembers}
+          targetType="department"
+          targetId={metricWizardTarget.id}
+          targetLabel={`Department Health: ${metricWizardTarget.label}`}
+          createMetric={createMetric}
+          createDraft={createDraft}
+          onClose={() => setMetricWizardTarget(null)}
+        />
+      )}
     </div>
   );
 }

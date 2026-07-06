@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react';
+import { useEffect, useCallback, useState } from 'react';
 import { Canvas } from '@react-three/fiber';
 import { Text, Billboard } from '@react-three/drei';
 import { PlasmaSphere } from '../PolytopeShared';
@@ -11,6 +11,19 @@ import { isProjectLeafNode } from '../../lib/bdtPolytopeData';
 import { filterReadableDepartments } from '../../lib/bdtTrailRbac';
 import type { BdtWorkflowTrailSession } from '../../lib/useWorkflowTrail';
 import WorkflowTrailRibbon from './WorkflowTrailRibbon';
+import { useAuth } from '../../lib/auth';
+import { useCanonicalMetrics, isMetricAdmin } from '../../lib/db/canonicalMetrics';
+import { useTeamMembers } from '../../lib/db/team';
+import {
+  fetchErpNextOperationsNodeSummary,
+  type ErpNextOpsNodeSummary,
+} from '../../lib/db/erpnextSupplyChain';
+import {
+  EmptyMetricsState,
+  MetricCard,
+  MetricCreateWizard,
+  MetricRollupHealthPanel,
+} from './metrics/MetricSystem';
 
 export interface BdtActionWorkspaceProps {
   node: UInternalNode;
@@ -54,6 +67,235 @@ function GlassCard({ children, className = '', style = {} }: { children: React.R
   );
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function parseApiErrorMessage(err: unknown): string {
+  if (!(err instanceof Error)) return 'ERPNext Operations data could not be loaded.';
+  const bodyText = err.message.replace(/^\d+:\s*/, '');
+  try {
+    const parsed = JSON.parse(bodyText) as { message?: string; error?: string };
+    return parsed.message || parsed.error || err.message;
+  } catch {
+    return err.message;
+  }
+}
+
+function opsToneClass(tone?: 'good' | 'neutral' | 'warning' | 'critical') {
+  if (tone === 'good') return 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100';
+  if (tone === 'warning') return 'border-amber-300/20 bg-amber-300/10 text-amber-100';
+  if (tone === 'critical') return 'border-rose-300/25 bg-rose-400/10 text-rose-100';
+  return 'border-white/10 bg-black/20 text-white/80';
+}
+
+function OperationsMetricCard({ metric }: { metric: ErpNextOpsNodeSummary['metricCards'][number] }) {
+  return (
+    <div className={`rounded-xl border p-3 ${opsToneClass(metric.tone)}`}>
+      <p className="text-[10px] uppercase tracking-[0.16em] opacity-55">{metric.label}</p>
+      <p className="mt-1 text-2xl font-semibold text-white">
+        {metric.value}
+        {metric.unit && <span className="ml-1 text-sm text-white/45">{metric.unit}</span>}
+      </p>
+      <p className="mt-1 text-[10px] leading-relaxed text-white/45">{metric.description}</p>
+    </div>
+  );
+}
+
+function OperationsBreakdown({ breakdown }: { breakdown: ErpNextOpsNodeSummary['breakdowns'][number] }) {
+  const max = Math.max(1, ...breakdown.items.map(item => Number(item.value) || 0));
+  return (
+    <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+      <p className="text-xs font-semibold text-white/75 mb-3">{breakdown.title}</p>
+      <div className="space-y-2">
+        {breakdown.items.slice(0, 8).map(item => {
+          const numericValue = Number(item.value) || 0;
+          return (
+            <div key={`${breakdown.id}:${item.label}`}>
+              <div className="flex items-center justify-between gap-3 text-[10px] text-white/45">
+                <span className="truncate">{item.label}</span>
+                <span className="text-white/65">{item.value}{item.unit ?? ''}</span>
+              </div>
+              <div className="mt-1 h-1.5 rounded-full bg-white/5 overflow-hidden">
+                <div
+                  className={item.tone === 'warning' || item.tone === 'critical' ? 'h-full rounded-full bg-amber-300/70' : 'h-full rounded-full bg-cyan-300/70'}
+                  style={{ width: `${Math.max(6, Math.round((numericValue / max) * 100))}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function OperationsInsightList({ insights }: { insights: ErpNextOpsNodeSummary['insights'] }) {
+  if (insights.length === 0) return null;
+  return (
+    <div className="space-y-2">
+      {insights.slice(0, 4).map(insight => (
+        <div key={insight.id} className={`rounded-lg border px-3 py-2 ${opsToneClass(insight.severity === 'info' ? 'neutral' : insight.severity)}`}>
+          <p className="text-xs font-semibold text-white/85">{insight.label}</p>
+          <p className="mt-0.5 text-[10px] leading-relaxed text-white/50">{insight.detail}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OperationsChildRollups({ children }: { children: NonNullable<ErpNextOpsNodeSummary['childRollups']> }) {
+  if (children.length === 0) return null;
+  return (
+    <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
+      {children.slice(0, 12).map(child => (
+        <div key={child.nodeId} className="rounded-lg border border-white/10 bg-black/20 p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-xs font-semibold text-white/80 truncate">{child.nodeLabel}</p>
+              <p className="text-[10px] text-white/35">{child.mappingLabel} · {child.status.replace('_', ' ')}</p>
+            </div>
+            <p className="text-sm font-semibold text-white/80">{child.healthScore ?? 'n/a'}</p>
+          </div>
+          <p className="mt-2 text-[10px] leading-relaxed text-white/45 line-clamp-2">{child.headline}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function OperationsEvidenceDrawer({ evidence }: { evidence: ErpNextOpsNodeSummary['evidence'] }) {
+  if (evidence.length === 0) return null;
+  return (
+    <details className="rounded-xl border border-white/10 bg-black/20 p-3">
+      <summary className="cursor-pointer text-xs font-semibold text-white/65">
+        Evidence ({evidence.length} ERPNext references)
+      </summary>
+      <div className="mt-3 space-y-2">
+        {evidence.map(item => (
+          <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-black/25 px-3 py-2">
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-white/75 truncate">{item.sourceId}</p>
+              <p className="text-[10px] text-white/35 truncate">{item.sourceDoctype} · {item.label}</p>
+            </div>
+            <div className="text-right shrink-0">
+              {item.detail && <p className="text-[10px] text-white/45">{item.detail}</p>}
+              {item.status && <p className="text-[10px] text-white/35">{item.status}</p>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+function OperationsErpNextPanel({ summary, loading, error, onRefresh }: {
+  summary: ErpNextOpsNodeSummary | null;
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => void;
+}) {
+  return (
+    <GlassCard>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <SectionTitle icon={Activity}>ERPNext OPERATIONS</SectionTitle>
+          {summary && (
+            <div className="text-[10px] text-white/30 -mt-2 space-y-0.5">
+              <p>{summary.mappingLabel} · {summary.status.replace('_', ' ')}</p>
+              {summary.siteName && <p>Site: {summary.siteName}</p>}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg border border-white/10 text-xs text-white/70 hover:bg-white/5 disabled:opacity-50"
+        >
+          {loading ? 'Loading' : 'Refresh'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100/80">
+          {error}
+        </div>
+      )}
+
+      {!error && !summary && (
+        <p className="text-sm text-white/45">Loading ERPNext Operations data...</p>
+      )}
+
+      {summary && (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-white/10 bg-[#111]/70 p-3">
+            <p className="text-xs font-semibold text-white/75">{summary.path.join(' / ')}</p>
+            <p className="text-[10px] text-white/35 mt-1">{summary.sourceDoctypes.length ? summary.sourceDoctypes.join(', ') : 'No ERPNext source doctypes mapped.'}</p>
+          </div>
+
+          <div className="rounded-2xl border border-cyan-300/15 bg-gradient-to-br from-cyan-300/10 via-white/[0.03] to-black/20 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-100/45">Metric story</p>
+                <p className="mt-2 text-lg font-semibold text-white">{summary.headline}</p>
+                <p className="mt-1 text-[10px] text-white/35">
+                  {summary.templateKey.replace(/_/g, ' ')} · generated {new Date(summary.generatedAt).toLocaleString()}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-white/35">Health</p>
+                <p className="text-3xl font-semibold text-white">{summary.healthScore ?? 'n/a'}</p>
+              </div>
+            </div>
+          </div>
+
+          {summary.unsupportedReason && (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-xs font-semibold text-white/70 mb-1">Not connected yet</p>
+              <p className="text-xs text-white/45">{summary.unsupportedReason}</p>
+            </div>
+          )}
+
+          {summary.warnings.length > 0 && (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-xs font-semibold text-white/70 mb-1">Partial data warnings</p>
+              {summary.warnings.slice(0, 3).map(warning => (
+                <p key={warning} className="text-[10px] text-white/40">{warning}</p>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            {summary.metricCards.map(metric => <OperationsMetricCard key={metric.id} metric={metric} />)}
+          </div>
+
+          {summary.childRollups && <OperationsChildRollups children={summary.childRollups} />}
+
+          {summary.breakdowns.length > 0 && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+              {summary.breakdowns.map(breakdown => <OperationsBreakdown key={breakdown.id} breakdown={breakdown} />)}
+            </div>
+          )}
+
+          <OperationsInsightList insights={summary.insights} />
+
+          {summary.recommendedActions.length > 0 && (
+            <div className="space-y-2">
+              {summary.recommendedActions.map(action => (
+                <div key={`${summary.mappingKey}:${action.label}`} className="rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-2">
+                  <p className="text-xs font-semibold text-amber-100">{action.label}</p>
+                  <p className="text-[10px] text-amber-100/55 mt-0.5">{action.reason}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <OperationsEvidenceDrawer evidence={summary.evidence} />
+        </div>
+      )}
+    </GlassCard>
+  );
+}
+
 export function BdtActionWorkspace({
   node,
   department,
@@ -76,10 +318,51 @@ export function BdtActionWorkspace({
   onReplayPrev,
 }: BdtActionWorkspaceProps) {
   const primaryColor = U_DOMAIN_COLOR[department.domain] || '#8b5cf6';
+  const { profile, role } = useAuth();
+  const companyId = profile?.company_id ?? null;
+  const canEditMetrics = isMetricAdmin(role);
+  const isPersistedBdtNode = UUID_RE.test(node.id);
+  const { metrics: nodeMetrics, rollups, createMetric, createDraft, updateMetricValue } = useCanonicalMetrics(
+    isPersistedBdtNode ? companyId : null,
+    { target_type: 'bdt_node', target_id: node.id, status: 'active' },
+  );
+  const { members: workspaceMembers } = useTeamMembers(companyId);
+  const [showMetricWizard, setShowMetricWizard] = useState(false);
   const isTeamNode = node.type === 'team';
   const isProjectNode = isProjectLeafNode(node);
   const teamMembers = node.members ?? [];
   const teamMemberCount = node.memberCount ?? teamMembers.length;
+  const isOperationsContext = (
+    (department.sourceKey === 'dept_operations' || department.id === 'dept_operations' || department.label === 'Operations')
+    && isPersistedBdtNode
+  );
+  const [operationsSummary, setOperationsSummary] = useState<ErpNextOpsNodeSummary | null>(null);
+  const [operationsLoading, setOperationsLoading] = useState(false);
+  const [operationsError, setOperationsError] = useState<string | null>(null);
+
+  const loadOperationsSummary = useCallback(() => {
+    if (!isOperationsContext) return;
+    setOperationsLoading(true);
+    fetchErpNextOperationsNodeSummary(node.id)
+      .then(summary => {
+        setOperationsSummary(summary);
+        setOperationsError(null);
+      })
+      .catch(err => {
+        setOperationsSummary(null);
+        setOperationsError(parseApiErrorMessage(err));
+      })
+      .finally(() => setOperationsLoading(false));
+  }, [isOperationsContext, node.id]);
+
+  useEffect(() => {
+    if (isOpen && isOperationsContext) {
+      loadOperationsSummary();
+    } else {
+      setOperationsSummary(null);
+      setOperationsError(null);
+    }
+  }, [isOpen, isOperationsContext, loadOperationsSummary]);
 
   const panelIconByType: Record<string, typeof Activity> = {
     signal: Radio,
@@ -414,6 +697,60 @@ export function BdtActionWorkspace({
               </GlassCard>
             )}
 
+            {isOperationsContext && (
+              <OperationsErpNextPanel
+                summary={operationsSummary}
+                loading={operationsLoading}
+                error={operationsError}
+                onRefresh={loadOperationsSummary}
+              />
+            )}
+
+            {!isTeamNode && companyId && isPersistedBdtNode && (
+              <GlassCard>
+                <div className="flex items-center justify-between gap-3 mb-4">
+                  <SectionTitle icon={BarChart3}>LIVE METRICS</SectionTitle>
+                  {canEditMetrics && (
+                    <button
+                      type="button"
+                      onClick={() => setShowMetricWizard(true)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold"
+                      style={{ background: `${primaryColor}22`, color: primaryColor, border: `1px solid ${primaryColor}44` }}
+                    >
+                      Create Metric
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-3">
+                  <MetricRollupHealthPanel rollup={rollups.find(r => r.target_type === 'bdt_node' && r.target_id === node.id)} title={`${node.label} Health`} />
+                  <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {nodeMetrics.map(metric => (
+                      <MetricCard key={metric.id} metric={metric} canEdit={canEditMetrics} onUpdateValue={updateMetricValue} />
+                    ))}
+                  </div>
+                </div>
+                {nodeMetrics.length === 0 && (
+                  <div className="mt-3">
+                    <EmptyMetricsState canEdit={canEditMetrics} onCreate={() => setShowMetricWizard(true)} />
+                  </div>
+                )}
+                {node.metricDetails && (
+                  <p className="text-[10px] text-white/30 mt-3">
+                    Seed metric details are shown above as node context only. They are not live metrics until converted here.
+                  </p>
+                )}
+              </GlassCard>
+            )}
+
+            {!isTeamNode && companyId && !isPersistedBdtNode && node.metricDetails && (
+              <GlassCard>
+                <SectionTitle icon={BarChart3}>METRIC TEMPLATE</SectionTitle>
+                <p className="text-sm text-white/45 leading-relaxed">
+                  This seed metric is template context only. Canonical metrics can be created once this node exists as a persisted BDT row.
+                </p>
+              </GlassCard>
+            )}
+
             {!isTeamNode && !isProjectNode && (
             <GlassCard>
               <SectionTitle icon={Zap}>METADATA</SectionTitle>
@@ -501,7 +838,19 @@ export function BdtActionWorkspace({
         </div>
 
       </div>
-    </div>
+      </div>
+      {showMetricWizard && companyId && (
+        <MetricCreateWizard
+          companyId={companyId}
+          members={workspaceMembers}
+          targetType="bdt_node"
+          targetId={node.id}
+          targetLabel={`BDT Node: ${node.label}`}
+          createMetric={createMetric}
+          createDraft={createDraft}
+          onClose={() => setShowMetricWizard(false)}
+        />
+      )}
     </div>
   );
 }

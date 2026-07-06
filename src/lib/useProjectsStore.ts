@@ -8,7 +8,6 @@
 
 import { useState, useCallback, useEffect } from 'react';
 import type { Goal } from './useGoalsStore';
-import { api } from './api';
 import { metricProgress } from './useGoalsStore';
 
 const STORAGE_KEY = 'bdt_projects_v1';
@@ -34,8 +33,6 @@ export interface ProjectTask {
   createdAt: string;
   sourceCardId?: string;     // linked SavedWorkflowItem id
   blockedByTaskId?: string;  // task id that blocks this task
-  metricImpactId?: string;   // linked MetricImpact id (localStorage, legacy)
-  dbMetricImpactId?: string; // DB UUID of the bdt_metric_impacts row (after seed)
   agentSuitable?: boolean;   // can an agent auto-implement this? (Phase 5/6)
   estimatedEffortHours?: number; // effort estimate for priority scoring
 }
@@ -49,7 +46,7 @@ export interface Project {
   memberIds: string[];
   status: ProjectStatus;
   health: number;        // 0–100
-  goalId?: string;       // explicit link to a Goal (see useGoalsStore)
+  goalId?: string;       // explicit link to a backend BDT goal
   goalLink?: string;     // cached goal title for display
   sourceCardIds?: string[];  // multiple linked SavedWorkflowItem ids
   createdAt: string;
@@ -233,7 +230,7 @@ function load(): ProjectsState {
 function persist(state: ProjectsState) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    window.dispatchEvent(new Event('projects_updated'));
+    window.setTimeout(() => window.dispatchEvent(new Event('projects_updated')), 0);
   } catch { /* quota */ }
 }
 
@@ -332,29 +329,8 @@ export function useProjectsStore() {
     }));
   }, [update]);
 
-  const updateTask = useCallback((
-    id: string,
-    patch: Partial<ProjectTask>,
-    opts?: { companyId?: string },
-  ) => {
-    update(s => {
-      const existing = s.tasks.find(t => t.id === id);
-      if (patch.status === 'done' && existing && existing.status !== 'done') {
-        if (existing.dbMetricImpactId && opts?.companyId) {
-          // Backend path: resolve impact via API, which triggers propagation
-          api.patch(
-            `/api/bdt-metrics/${opts.companyId}/impacts/${existing.dbMetricImpactId}/resolve`,
-            { actual_delta: null, reason: `Task completed: ${existing.title}` },
-          ).catch((err) => console.error('[task] resolve impact failed', err));
-        } else if (existing.metricImpactId) {
-          // Legacy fallback: fire browser event for useGoalsStore localStorage handler
-          window.dispatchEvent(new CustomEvent('task-completed-metric-impact', {
-            detail: { impactId: existing.metricImpactId, taskTitle: existing.title },
-          }));
-        }
-      }
-      return { ...s, tasks: s.tasks.map(t => t.id === id ? { ...t, ...patch } : t) };
-    });
+  const updateTask = useCallback((id: string, patch: Partial<ProjectTask>) => {
+    update(s => ({ ...s, tasks: s.tasks.map(t => t.id === id ? { ...t, ...patch } : t) }));
   }, [update]);
 
   const deleteTask = useCallback((id: string) => {

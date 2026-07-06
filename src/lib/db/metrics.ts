@@ -8,6 +8,43 @@ export interface LatestMetric {
   period_end: string;
 }
 
+interface CanonicalMetricRow {
+  id: string;
+  company_id: string;
+  name: string;
+  unit: string;
+  direction: 'higher_is_better' | 'lower_is_better' | 'target_band';
+  baseline_value: number | string;
+  target_value: number | string;
+  current_value: number | string;
+  normalized_score: number | string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  links?: Array<{
+    target_type: 'company' | 'department' | 'bdt_node' | 'goal';
+    target_id: string;
+  }>;
+}
+
+function metricKeyFor(name: string): string {
+  const key = name.trim().toLowerCase();
+  if (key.includes('mrr') || key.includes('revenue')) return 'revenue';
+  if (key.includes('burn')) return 'burn';
+  if (key.includes('cash')) return 'cash';
+  if (key.includes('headcount') || key.includes('team size') || key.includes('employee')) return 'headcount';
+  if (key.includes('sign')) return 'signups';
+  if (key.includes('buyer')) return 'buyer_count';
+  if (key.includes('conversion')) return 'conversion_rate';
+  if (key.includes('order value') || key.includes('aov')) return 'avg_order_value';
+  if (key.includes('cogs')) return 'cogs';
+  if (key.includes('ltv')) return 'customer_ltv';
+  if (key.includes('arpu')) return 'arpu';
+  if (key.includes('cac') || key.includes('cpa')) return 'cpa';
+  if (key.includes('margin')) return 'contribution_margin';
+  return key.replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'metric';
+}
+
 export function useCompanyMetrics(companyId: string | null | undefined) {
   const [metrics, setMetrics] = useState<Record<string, LatestMetric>>({});
   const [loading, setLoading] = useState(false);
@@ -30,12 +67,18 @@ export function useCompanyMetrics(companyId: string | null | undefined) {
     queueMicrotask(() => {
       if (!cancelled) setLoading(true);
     });
-    api.get<LatestMetric[]>(`/api/metrics/${companyId}/latest`)
+    api.get<CanonicalMetricRow[]>(`/api/metrics/${companyId}?target_type=company&target_id=${companyId}&status=active`)
       .then((rows) => {
         if (cancelled) return;
         const next: Record<string, LatestMetric> = {};
         for (const r of rows) {
-          next[r.metric_key] = r;
+          const metric_key = metricKeyFor(r.name);
+          next[metric_key] = {
+            metric_key,
+            value: Number(r.current_value),
+            unit: r.unit,
+            period_end: r.updated_at ?? r.created_at,
+          };
         }
         setMetrics(next);
         setError(null);
@@ -132,8 +175,31 @@ export function useBdtMetrics(companyId: string | null | undefined) {
   const refetch = useCallback(() => {
     if (!companyId) return;
     setLoading(true);
-    api.get<BdtMetric[]>(`/api/bdt-metrics/${companyId}/metrics`)
-      .then((rows) => { setMetrics(rows); setError(null); })
+    api.get<CanonicalMetricRow[]>(`/api/metrics/${companyId}?status=active`)
+      .then((rows) => {
+        setMetrics(rows.map((row) => {
+          const departmentLink = row.links?.find(link => link.target_type === 'department');
+          return {
+            id: row.id,
+            company_id: row.company_id,
+            department_id: departmentLink?.target_id ?? null,
+            name: row.name,
+            metric_key: metricKeyFor(row.name),
+            scope: departmentLink ? 'department' : 'company',
+            value: Number(row.current_value),
+            target: Number(row.target_value),
+            baseline: Number(row.baseline_value),
+            unit: row.unit,
+            higher_is_better: row.direction !== 'lower_is_better',
+            trend: 'flat',
+            alert_threshold: null,
+            local_id: null,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+          };
+        }));
+        setError(null);
+      })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
   }, [companyId]);
@@ -146,7 +212,7 @@ export function useBdtMetrics(companyId: string | null | undefined) {
     reason?: string,
   ) => {
     if (!companyId) return;
-    await api.patch(`/api/bdt-metrics/${companyId}/metrics/${metricId}`, { value: newValue, reason });
+    await api.post(`/api/metrics/${companyId}/${metricId}/values`, { raw_value: newValue, reason });
     refetch();
   }, [companyId, refetch]);
 
@@ -200,16 +266,11 @@ export function useBdtGoals(companyId: string | null | undefined) {
 
 export function useBdtImpacts(companyId: string | null | undefined) {
   const [impacts, setImpacts] = useState<BdtMetricImpact[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading] = useState(false);
 
   const refetch = useCallback(() => {
-    if (!companyId) return;
-    setLoading(true);
-    api.get<BdtMetricImpact[]>(`/api/bdt-metrics/${companyId}/impacts`)
-      .then((rows) => setImpacts(rows))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [companyId]);
+    setImpacts([]);
+  }, []);
 
   useEffect(() => { refetch(); }, [refetch]);
 
@@ -221,25 +282,21 @@ export function useBdtImpacts(companyId: string | null | undefined) {
     estimated_confidence: number;
     local_id?: string;
   }) => {
-    if (!companyId) return null;
-    const result = await api.post<BdtMetricImpact>(
-      `/api/bdt-metrics/${companyId}/impacts`, input,
-    );
-    refetch();
-    return result;
-  }, [companyId, refetch]);
+    void companyId;
+    void input;
+    return null;
+  }, [companyId]);
 
   const resolveImpact = useCallback(async (
     impactId: string,
     actualDelta: number,
     reason?: string,
   ) => {
-    if (!companyId) return;
-    await api.patch(`/api/bdt-metrics/${companyId}/impacts/${impactId}/resolve`, {
-      actual_delta: actualDelta, reason,
-    });
-    refetch();
-  }, [companyId, refetch]);
+    void companyId;
+    void impactId;
+    void actualDelta;
+    void reason;
+  }, [companyId]);
 
   return { impacts, loading, refetch, addImpact, resolveImpact };
 }

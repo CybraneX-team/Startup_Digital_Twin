@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Folder, Plus, X, ChevronRight, ArrowLeft, Users, Target, Trash2,
-  Clock, Briefcase, LayoutGrid, UserCircle2, TrendingUp, TrendingDown, Minus, Flag,
+  Clock, Briefcase, LayoutGrid, UserCircle2, Flag,
   Scale, AlertTriangle, FileText, MessageSquare, Send, Check, Bot,
   Zap, Activity, ChevronDown, ChevronUp, Layers,
 } from 'lucide-react';
@@ -32,11 +32,15 @@ import {
 } from '../../lib/useGoalsStore';
 import {
   useBdtGoals,
-  useBdtMetrics,
-  bdtMetricProgress,
-  bdtMetricDisplay,
-  bdtMetricTargetDisplay,
 } from '../../lib/db/metrics';
+import { useCanonicalMetrics, isMetricAdmin } from '../../lib/db/canonicalMetrics';
+import { useTeamMembers } from '../../lib/db/team';
+import {
+  EmptyMetricsState,
+  MetricCard,
+  MetricCreateWizard,
+  MetricRollupHealthPanel,
+} from './metrics/MetricSystem';
 import { useAuth } from '../../lib/auth';
 import { useFounderWorkspace } from '../../context/FounderWorkspaceContext';
 
@@ -1196,14 +1200,12 @@ function MemberSpace({ onSelectTask }: { onSelectTask?: (id: string) => void }) 
 
 /* ── goals & metrics (Goal Superalignment + Metric Impact) ───────────────── */
 
-function NewGoalForm({ metricOptions, onCreate, onClose }: {
-  metricOptions: { id: string; name: string }[];
-  onCreate: (input: { title: string; horizon: Horizon; metricId?: string }) => void;
+function NewGoalForm({ onCreate, onClose }: {
+  onCreate: (input: { title: string; horizon: Horizon }) => void;
   onClose: () => void;
 }) {
   const [title, setTitle] = useState('');
   const [horizon, setHorizon] = useState<Horizon>('quarterly');
-  const [metricId, setMetricId] = useState('');
 
   return (
     <div className="fixed inset-0 z-[140] grid place-items-center p-6" style={{ background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)' }}>
@@ -1228,17 +1230,14 @@ function NewGoalForm({ metricOptions, onCreate, onClose }: {
           ))}
         </div>
 
-        <label className="text-[10px] uppercase tracking-wider text-white/40">Drives metric (optional)</label>
-        <select value={metricId} onChange={e => setMetricId(e.target.value)}
-          className="w-full mt-1 mb-6 bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white/85 focus:outline-none focus:border-white/30">
-          <option value="" className="bg-[#0e0e14]">None</option>
-          {metricOptions.map(m => <option key={m.id} value={m.id} className="bg-[#0e0e14]">{m.name}</option>)}
-        </select>
+        <p className="text-[11px] text-white/35 mb-6">
+          Metrics are now production objects. Create this goal first, then attach a canonical metric from the goal row.
+        </p>
 
         <div className="flex items-center gap-2 justify-end">
           <button type="button" onClick={onClose} className="px-4 py-2 rounded-lg text-sm text-white/55 hover:text-white border border-white/10">Cancel</button>
           <button type="button" disabled={!title.trim()}
-            onClick={() => { onCreate({ title: title.trim(), horizon, metricId: metricId || undefined }); onClose(); }}
+            onClick={() => { onCreate({ title: title.trim(), horizon }); onClose(); }}
             className="px-4 py-2 rounded-lg text-sm font-semibold disabled:opacity-40"
             style={{ background: `${ACCENT}26`, border: `1px solid ${ACCENT}55`, color: ACCENT }}>
             Create Goal
@@ -1251,12 +1250,26 @@ function NewGoalForm({ metricOptions, onCreate, onClose }: {
 
 function GoalsMetrics() {
   const { projects, tasks, members } = useProjectsStore();
-  const { profile } = useAuth();
+  const { profile, role } = useAuth();
   const companyId = profile?.company_id ?? null;
   const { goals, createGoal, deleteGoal } = useBdtGoals(companyId);
-  const { metrics } = useBdtMetrics(companyId);
+  const {
+    metrics,
+    rollups,
+    loading: metricsLoading,
+    createMetric,
+    createDraft,
+    updateMetricValue,
+  } = useCanonicalMetrics(companyId, { status: 'active' });
+  const { members: teamMembers } = useTeamMembers(companyId);
+  const canEditMetrics = isMetricAdmin(role);
   const [showForm, setShowForm] = useState(false);
-  const handleCreateGoal = ({ title, horizon }: { title: string; horizon: string; metricId?: string }) => {
+  const [metricWizardTarget, setMetricWizardTarget] = useState<{
+    target_type: 'company' | 'goal';
+    target_id: string;
+    label: string;
+  } | null>(null);
+  const handleCreateGoal = ({ title, horizon }: { title: string; horizon: string }) => {
     createGoal({ title, horizon });
   };
 
@@ -1271,6 +1284,13 @@ function GoalsMetrics() {
   };
 
   const horizons = HORIZON_ORDER.filter(h => goals.some(g => g.horizon === h));
+  const companyRollup = rollups.find(r => r.target_type === 'company' && r.target_id === companyId);
+  const goalRollup = (goalId: string) => rollups.find(r => r.target_type === 'goal' && r.target_id === goalId);
+  const goalMetric = (goalId: string) => metrics.find(m => m.links.some(l => l.target_type === 'goal' && l.target_id === goalId));
+  const openCompanyMetricWizard = () => {
+    if (!companyId) return;
+    setMetricWizardTarget({ target_type: 'company', target_id: companyId, label: 'Company Health' });
+  };
 
   return (
     <div className="w-full h-full flex flex-col min-h-0">
@@ -1280,39 +1300,34 @@ function GoalsMetrics() {
           <h3 className="text-sm font-semibold text-white">Goals &amp; Metrics</h3>
           <span className="text-[10px] text-white/40">alignment &amp; impact</span>
         </div>
-        <button type="button" onClick={() => setShowForm(true)} className="ml-auto flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: `${ACCENT}22`, border: `1px solid ${ACCENT}44`, color: ACCENT }}>
-          <Plus className="w-3.5 h-3.5" /> New Goal
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          {canEditMetrics && companyId && (
+            <button type="button" onClick={openCompanyMetricWizard} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: `${ACCENT}22`, border: `1px solid ${ACCENT}44`, color: ACCENT }}>
+              <Plus className="w-3.5 h-3.5" /> New Metric
+            </button>
+          )}
+          <button type="button" onClick={() => setShowForm(true)} className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-lg" style={{ background: `${ACCENT}22`, border: `1px solid ${ACCENT}44`, color: ACCENT }}>
+            <Plus className="w-3.5 h-3.5" /> New Goal
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide pr-1 pb-2 space-y-5">
-        {/* metric impact row */}
+        <MetricRollupHealthPanel rollup={companyRollup} title="Company Health" />
+
         <div>
-          <div className="text-[10px] font-bold tracking-[0.16em] uppercase text-white/45 mb-2 px-1">Metric impact</div>
-          <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
-            {metrics.map(m => {
-              const pct = bdtMetricProgress(m);
-              const good = m.trend === 'flat' ? null : ((m.trend === 'up') === m.higher_is_better);
-              const tcolor = good === null ? '#94a3b8' : good ? '#34d399' : '#fb7185';
-              const TrendIcon = m.trend === 'up' ? TrendingUp : m.trend === 'down' ? TrendingDown : Minus;
-              const linked = goals.filter(g => g.links.some(l => l.metric_id === m.id)).length;
-              return (
-                <div key={m.id} className="rounded-xl p-3 bg-white/[0.03] border border-white/8">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[9px] uppercase tracking-wider text-white/40">{m.scope === 'company' ? 'Company' : 'Dept'}</span>
-                    <TrendIcon className="w-3.5 h-3.5" style={{ color: tcolor }} />
-                  </div>
-                  <div className="text-[13px] font-bold text-white mt-1">{m.name}</div>
-                  <div className="flex items-baseline gap-1 mt-0.5">
-                    <span className="text-lg font-bold" style={{ color: tcolor }}>{bdtMetricDisplay(m)}</span>
-                    <span className="text-[10px] text-white/35">/ {bdtMetricTargetDisplay(m)}</span>
-                  </div>
-                  <div className="h-1 rounded-full bg-white/10 mt-2 overflow-hidden"><div className="h-full rounded-full" style={{ width: `${pct}%`, background: tcolor }} /></div>
-                  <div className="text-[9px] text-white/30 mt-1.5">{linked} goal{linked !== 1 ? 's' : ''} linked</div>
-                </div>
-              );
-            })}
+          <div className="flex items-center justify-between mb-2 px-1">
+            <div className="text-[10px] font-bold tracking-[0.16em] uppercase text-white/45">Canonical Metrics</div>
+            {metricsLoading && <span className="text-[10px] text-white/30">Loading...</span>}
           </div>
+          <div className="grid gap-2.5" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+            {metrics.map(m => (
+              <MetricCard key={m.id} metric={m} canEdit={canEditMetrics} onUpdateValue={updateMetricValue} />
+            ))}
+          </div>
+          {!metricsLoading && metrics.length === 0 && (
+            <EmptyMetricsState canEdit={canEditMetrics && Boolean(companyId)} onCreate={openCompanyMetricWizard} />
+          )}
         </div>
 
         {/* goal hierarchy */}
@@ -1328,8 +1343,10 @@ function GoalsMetrics() {
                 <div className="space-y-2">
                   {goals.filter(g => g.horizon === h).map(g => {
                     const owner = members.find(m => m.id === g.owner_id);
-                    const prog = goalProgress(g.id, g.title);
-                    const metric = metrics.find(m => g.links.some(l => l.metric_id === m.id));
+                    const legacyProg = goalProgress(g.id, g.title);
+                    const rollup = goalRollup(g.id);
+                    const prog = rollup?.health_score ?? legacyProg;
+                    const metric = goalMetric(g.id);
                     const ps = projsForGoal(g.id, g.title);
                     return (
                       <div key={g.id} className="group flex items-center gap-4 p-3.5 rounded-xl bg-white/[0.03] border border-white/8 hover:border-white/15 transition-all">
@@ -1345,7 +1362,7 @@ function GoalsMetrics() {
                         </div>
                         <div className="w-40 shrink-0">
                           {prog === null ? (
-                            <span className="text-[10px] text-white/30">No linked projects</span>
+                            <span className="text-[10px] text-white/30">No linked metrics</span>
                           ) : (
                             <>
                               <div className="flex justify-between text-[10px] text-white/40 mb-1"><span>Progress</span><span style={{ color: ACCENT }}>{prog}%</span></div>
@@ -1353,6 +1370,16 @@ function GoalsMetrics() {
                             </>
                           )}
                         </div>
+                        {canEditMetrics && (
+                          <button
+                            type="button"
+                            onClick={() => setMetricWizardTarget({ target_type: 'goal', target_id: g.id, label: `Goal: ${g.title}` })}
+                            className="opacity-0 group-hover:opacity-100 p-1 text-white/25 hover:text-white transition-all"
+                            title="Create metric for this goal"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                          </button>
+                        )}
                         <button type="button" onClick={() => deleteGoal(g.id)} className="opacity-0 group-hover:opacity-100 p-1 text-white/25 hover:text-rose-300 transition-all"><Trash2 className="w-3.5 h-3.5" /></button>
                       </div>
                     );
@@ -1361,11 +1388,23 @@ function GoalsMetrics() {
               </div>
             ))}
           </div>
-          <p className="text-[10px] text-white/30 mt-3 px-1 flex items-center gap-1.5"><Flag className="w-3 h-3" /> Goal progress rolls up from the linked projects' task completion. Link a project by setting its goal to match a goal title.</p>
+          <p className="text-[10px] text-white/30 mt-3 px-1 flex items-center gap-1.5"><Flag className="w-3 h-3" /> Goal progress now rolls up from canonical metric links. Local project/task completion is visual-only until those objects are rebuilt.</p>
         </div>
       </div>
 
-      {showForm && <NewGoalForm metricOptions={metrics.map(m => ({ id: m.id, name: m.name }))} onCreate={handleCreateGoal} onClose={() => setShowForm(false)} />}
+      {showForm && <NewGoalForm onCreate={handleCreateGoal} onClose={() => setShowForm(false)} />}
+      {metricWizardTarget && companyId && (
+        <MetricCreateWizard
+          companyId={companyId}
+          members={teamMembers}
+          targetType={metricWizardTarget.target_type}
+          targetId={metricWizardTarget.target_id}
+          targetLabel={metricWizardTarget.label}
+          createMetric={createMetric}
+          createDraft={createDraft}
+          onClose={() => setMetricWizardTarget(null)}
+        />
+      )}
     </div>
   );
 }

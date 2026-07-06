@@ -43,6 +43,7 @@ import {
   type WorkspaceCanvasCard,
 } from '../../lib/workspaceLayoutData';
 import { WorkspaceCanvasFrame } from './WorkspaceCanvasFrame';
+import { api } from '../../lib/api';
 import { useFounderWorkspace, type NoteBlock, type Note, type WorkspaceMode, type AuditEntry } from '../../context/FounderWorkspaceContext';
 import { BrainIcon } from './BrainIcon';
 import Orb from '../Orb';
@@ -1386,20 +1387,10 @@ function ThinkingBlock({ content }: { content: string }) {
 
 function WorkspaceChatCopilot() {
   const {
-    goals,
-    addGoal,
     goalProgress,
     cashBalance,
-    baseMRR,
-    mrrGrowthRate,
-    operatingBurn,
     projectedRunway,
-    monthlyRev,
-    departments,
-    hireHeadcount,
     totalFTE,
-    risks,
-    addRisk,
     confidenceScore,
     gtmChannels,
     chatMessages: messages,
@@ -1520,9 +1511,6 @@ function WorkspaceChatCopilot() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [stagedFile, setStagedFile] = useState<File | null>(null);
-  const selectedModel: string = 'gemini-3.5-flash';
-  const reasoningLevel: string = 'standard';
-
   const [activeView, setActiveView] = useState<'upload' | 'nodes'>('upload');
   const [showNodesDrawer, setShowNodesDrawer] = useState(false);
 
@@ -1813,103 +1801,70 @@ function WorkspaceChatCopilot() {
           saveFile('https://images.unsplash.com/photo-1557804506-669a67965ba0?q=80&w=1000');
         };
         reader.readAsDataURL(fileToUpload);
-      } else if (fileType === 'pdf') {
-        const mockPdfJson = JSON.stringify([
-          { section: 'SEC-1', title: 'Data Encryption', requirement: 'Ensure all customer data is encrypted in transit and at rest.', status: 'Compliant', owner: 'Product & Eng' },
-          { section: 'SEC-2', title: 'MFA Enforcement', requirement: 'Enforce multi-factor authentication for all internal accounts.', status: 'Compliant', owner: 'Ops & Finance' },
-          { section: 'SEC-3', title: 'Intrusion Detection', requirement: 'Configure VPC flow logs and anomaly alerts in production.', status: 'In Progress', owner: 'Product & Eng' },
-          { section: 'SEC-4', title: 'Vulnerability Scan', requirement: 'Run automated daily dependency vulnerability scans.', status: 'Attention Needed', owner: 'Product & Eng' }
-        ]);
-        saveFile(mockPdfJson);
-      } else if (fileType === 'excel') {
-        const mockExcelJson = JSON.stringify({
-          headers: ['Index', 'Item Description', 'Qty', 'Unit Cost', 'Total Cost', 'Category'],
-          rows: [
-            ['1', 'Vercel Enterprise Tier Hosting', '1', '$2,500.00', '$2,500.00', 'Infrastructure'],
-            ['2', 'OpenAI API Token Credits', '15,000', '$0.002', '$30.00', 'AI Operations'],
-            ['3', 'Google Workspace Seats', '27', '$18.00', '$486.00', 'SaaS Tools'],
-            ['4', 'Retool Developer Licenses', '8', '$50.00', '$400.00', 'Internal Tools'],
-            ['5', 'GitHub Enterprise Accounts', '20', '$21.00', '$420.00', 'Development']
-          ],
-          summary: {
-            startingCash: '$1.5M',
-            burnTarget: 'Software Subscriptions',
-            breakEvenGoal: 'Monthly OpEx Subtotal'
-          }
-        });
-        saveFile(mockExcelJson);
+      } else if (fileType === 'pdf' || fileType === 'excel') {
+        saveFile('File content parsing is not implemented yet — this file was saved but its contents were not extracted or analysed.');
       } else {
         saveFile('Binary or unreadable file format');
       }
     }
 
-    // AI thinking state simulation
-    setTimeout(() => {
-      let replyText = '';
-      const query = text.toLowerCase();
+    if (fileToUpload) {
+      // File uploads aren't sent to the inventory chat — no channel to receive
+      // file content, and parsing isn't implemented. Honest local confirmation only.
+      setTimeout(() => {
+        const assistantMsg: ChatMessage = {
+          id: `msg-${Date.now()}`,
+          sender: 'assistant',
+          text: `I've saved your file **${fileToUpload.name}** (${sizeStr}) to this chat's Files tab. I can't automatically read file contents yet, so I can't analyse what's inside it — you can open it from the Files tab.`,
+          timestamp: new Date(),
+        };
+        setMessages(prev => [...prev, assistantMsg]);
+        triggerScroll();
+      }, 400);
+      return;
+    }
 
-      let reasoningPrefix = '';
-      if (reasoningLevel === 'deep-thought') {
-        const thinkingSteps = [
-          `Parsing input query: "${text || 'File upload analysis'}"`,
-          `Querying digital twin metrics context...`,
-          fileToUpload ? `Accessing attachment meta: ${fileToUpload.name} (${sizeStr})` : null,
-          `Configuring simulation variables on model: ${selectedModel}`,
-          `Evaluating runway correlation (${projectedRunway} months remaining)`,
-          `Synthesizing response payload...`
-        ].filter(Boolean);
-        reasoningPrefix = `:::thinking\n${thinkingSteps.map(step => `> ${step}`).join('\n')}\n:::\n\n`;
+    // Every message goes to the real backend — no client-side topic pre-filtering.
+    // Full history is resent each turn so the model has session context (session-only,
+    // same lifetime as `messages` — no server-side persistence).
+    (async () => {
+      const history = [...messages, userMsg].map((m) => ({
+        sender: m.sender,
+        text: m.sender === 'assistant' ? parseMessageText(m.text).mainContent : m.text,
+      }));
+
+      let replyText: string;
+      let toolTrace: string[] = [];
+      try {
+        const result = await api.post<{
+          reply: string;
+          toolCalls?: Array<{ name: string; args: Record<string, unknown> }>;
+        }>('/api/erpnext/chat', { messages: history });
+        replyText = result.reply;
+        toolTrace = (result.toolCalls ?? []).map(
+          (call) => `Called ERPNext: ${call.name}(${JSON.stringify(call.args)})`,
+        );
+      } catch (err) {
+        // api.ts throws `${status}: ${rawResponseText}` — the backend sends a real,
+        // specific `message` field for known error cases (e.g. still provisioning);
+        // prefer that over a generic wrapper when present.
+        const backendMessage = (() => {
+          if (!(err instanceof Error)) return null;
+          const bodyText = err.message.replace(/^\d+:\s*/, '');
+          try {
+            const parsed = JSON.parse(bodyText) as { message?: string };
+            return typeof parsed.message === 'string' ? parsed.message : null;
+          } catch {
+            return null;
+          }
+        })();
+        replyText = backendMessage
+          ?? `I couldn't reach the inventory system just now (${err instanceof Error ? err.message : 'unknown error'}). Try again in a moment.`;
       }
 
-      if (fileToUpload) {
-        replyText = `### File Attached & Parsed Successfully\n\nI have received your file **${fileToUpload.name}** (${sizeStr}) and integrated its data points into the **WorkOS Twin Model**.\n\n${text.trim() ? `In response to your query *"${text.trim()}"*:\n\n` : ''}- **Target Entity**: Startup financials and pipeline\n- **Extracted Fields**: Operations log, channel weights\n\nWhat analysis or simulation would you like to run on this data?`;
-      } else if (query.includes('runway') || query.includes('cash') || query.includes('burn') || query.includes('rev')) {
-        replyText = `### Financial Projections Analysis\n\n- **Projected Cash Runway**: **${projectedRunway} Months**\n- **Monthly Revenue (MRR)**: **$${monthlyRev.toLocaleString()}** (Base: $${baseMRR.toLocaleString()} with **${mrrGrowthRate}%** growth)\n- **Operating Burn (Est)**: **$${operatingBurn.toLocaleString()}/mo**\n- **Total Cash Balance**: **$${cashBalance.toLocaleString()}**\n\n*Simulator suggestion:* Adjust the MRR Growth Rate slider on your **Financial Metrics** card to project runway extensions under higher growth profiles.`;
-      } else if (query.includes('goals') || query.includes('okr') || query.includes('milestone')) {
-        const pending = goals.filter(g => !g.done);
-        const completed = goals.filter(g => g.done);
-        replyText = `### OKRs & Milestone Status\n\n- **Completion rate**: **${goalProgress}%** (${completed.length} of ${goals.length} achieved)\n\n**Achieved Milestones:**\n${completed.map(g => ` - [x] ${g.label}`).join('\n') || ' - None yet'}\n\n**Pending Milestones:**\n${pending.map(g => ` - [ ] ${g.label}`).join('\n') || ' - None! All OKRs complete.'}\n\n*Action tip:* You can log a new OKR directly by typing: \`add okr: [your new goal text]\``;
-      } else if (query.includes('risk') || query.includes('blocker') || query.includes('mitigat')) {
-        const activeRisks = risks.filter(r => r.status !== 'Mitigated');
-        const mitigatedRisks = risks.filter(r => r.status === 'Mitigated');
-        replyText = `### Security & Risk Dashboard\n\n- **Roadmap Confidence Score**: **${confidenceScore}%**\n\n**Active Blockers:**\n${activeRisks.map(r => ` - [ ] [${r.impact} Impact] ${r.label}`).join('\n') || ' - None! Your risk roadmap is clear.'}\n\n**Mitigated Blockers:**\n${mitigatedRisks.map(r => ` - [x] [Mitigated] ${r.label}`).join('\n') || ' - None'}\n\n*Action tip:* Log a blocker by typing: \`add blocker: [issue text]\``;
-      } else if (query.includes('gtm') || query.includes('channel') || query.includes('market')) {
-        replyText = `### GTM & Channel Allocation\n\n- **Active Wedge Channels**: **${gtmChannels.length} channels configured**\n\n**Budget Weightings:**\n${gtmChannels.map(c => ` - **${c.name}**: **${c.budget}%** (Focus: *${c.impact}*)`).join('\n')}\n\n*GTM balance strategy:* Adjust budgets dynamically on the **GTM & Channels** card. High direct weights leverage Series A runway targets, while dev relations boost product scaling.`;
-      } else if (query.includes('add okr:') || query.includes('add goal:')) {
-        const goalText = text.replace(/^(add okr:|add goal:)/i, '').trim();
-        if (goalText) {
-          addGoal(goalText);
-          replyText = `✅ **Objective Added Successfully!**\n\nI have appended **"${goalText}"** to your OKR roster. Your goals card has been refreshed.`;
-        } else {
-          replyText = `Could you please specify the text for the new OKR? Example: \`add okr: Launch Beta version 1.0\``;
-        }
-      } else if (query.includes('add blocker:') || query.includes('add risk:')) {
-        const riskText = text.replace(/^(add blocker:|add risk:)/i, '').trim();
-        if (riskText) {
-          addRisk(riskText, 'Medium');
-          replyText = `⚠️ **Blocker Reported!**\n\nI have logged **"${riskText}"** as a Medium-impact blocker in your risks registry.`;
-        } else {
-          replyText = `Please describe the blocker. Example: \`add blocker: API provider rate limits\``;
-        }
-      } else if (query.includes('hire') || query.includes('add role')) {
-        const roleText = text.replace(/^(hire|add role)/i, '').trim();
-        if (roleText) {
-          hireHeadcount('eng', roleText);
-          replyText = `👤 **Headcount Expansion Logged!**\n\nI have added **"${roleText}"** to the Engineering division roster. Your team payroll now tracks **${totalFTE + 1} FTEs** across all divisions.`;
-        } else {
-          replyText = `Please specify the job title. Example: \`hire Senior QA Engineer\``;
-        }
-      } else if (query.includes('fte') || query.includes('department') || query.includes('team') || query.includes('payroll')) {
-        replyText = `### Division Payroll & Roster\n\n- **Total FTEs**: **${totalFTE} Operators**\n\n**Divisional Headcounts:**\n${departments.map(d => ` - **${d.name}**: **${d.fte} FTEs** (${d.roles.length} roles)`).join('\n')}\n\n*Action tip:* Expand payroll in Engineering by typing: \`hire [role title]\``;
-      } else {
-        replyText = `### How can I help you build your startup twin?\n\nI can run simulator operations and update your workspace variables dynamically. Try typing one of these instructions:\n\n- **"How does our cash runway look?"** to fetch runway projections.\n- **"List our active OKRs"** to review milestone completion.\n- **"What blockers are active?"** to check risks.\n- **"add okr: Launch Android App"** to append a goal.\n- **"add blocker: Database migration delay"** to report a risk.\n- **"hire Senior Backend Engineer"** to log payroll expansion.`;
-      }
-
-      if (selectedModel === 'gemini-3.5-pro') {
-        replyText += `\n\n*Calculations optimized by Gemini 3.5 Pro.*`;
-      } else if (selectedModel === 'founder-copilot') {
-        replyText += `\n\n*Optimized by WorkOS Twin Agent Engine.*`;
-      }
+      const reasoningPrefix = toolTrace.length
+        ? `:::thinking\n${toolTrace.map((step) => `> ${step}`).join('\n')}\n:::\n\n`
+        : '';
 
       const assistantMsg: ChatMessage = {
         id: `msg-${Date.now()}`,
@@ -1917,17 +1872,16 @@ function WorkspaceChatCopilot() {
         text: reasoningPrefix + replyText,
         timestamp: new Date(),
       };
-
       setMessages(prev => [...prev, assistantMsg]);
       triggerScroll();
-    }, 800);
+    })();
   };
 
   const suggestedChips = [
-    { text: 'Analyze Runway & Burn', prompt: 'How does our cash runway look?' },
-    { text: 'List Active OKRs', prompt: 'List our active OKRs' },
-    { text: 'Check active blockers', prompt: 'What blockers are active?' },
-    { text: 'Expand engineering headcount', prompt: 'hire Senior Backend Engineer' },
+    { text: 'Check stock levels', prompt: 'How much stock of WIDGET-A do we have?' },
+    { text: 'Low stock check', prompt: 'What items are running low on stock?' },
+    { text: 'Open opportunities', prompt: 'What open sales opportunities do we have?' },
+    { text: 'Our leads', prompt: 'List our current leads' },
   ];
 
   return (

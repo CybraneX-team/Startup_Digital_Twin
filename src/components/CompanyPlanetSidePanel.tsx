@@ -77,6 +77,15 @@ export function CompanyPlanetSidePanel({
   const coreDetails = useMemo(() => getPlanetCoreDetails(context), [context]);
   const showCoreCard = depth === 0 && !isSearchActive;
   const listKey = `${level}-${path.join('-')}-${context.role}`;
+  const isBaseResearchRunning = context.status === 'pending' || context.status === 'running';
+  const isClassifyRunning = context.classifyJob?.status === 'pending' || context.classifyJob?.status === 'running';
+  const researchStatusLabel = isClassifyRunning
+    ? 'Applying lens'
+    : context.status === 'pending'
+      ? 'Research queued'
+      : context.status === 'running'
+        ? 'Building twin'
+        : null;
 
   const selectedRoot = path[0] ? findRoot(context, path[0]) : null;
   const selectedBranch = selectedRoot && path[1] ? findBranch(selectedRoot, path[1]) : null;
@@ -241,6 +250,32 @@ export function CompanyPlanetSidePanel({
         label={`Back to ${exitToSubdomainLabel}`}
         onClick={onExitToSubdomain}
       />
+
+      {(isBaseResearchRunning || isClassifyRunning) && (
+        <div
+          className="research-status-card"
+          style={{
+            width: '196px',
+            borderColor: `${industryColor}33`,
+            boxShadow: `0 0 24px ${industryColor}12, inset 0 1px 0 rgba(255,255,255,0.06)`,
+          }}
+        >
+          <div className="research-status-card__bar" style={{ background: `linear-gradient(90deg, transparent, ${industryColor}, transparent)` }} />
+          <div className="flex items-center gap-2 px-3 py-2.5">
+            <span className="research-status-card__ring" style={{ color: industryColor }}>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            </span>
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-wider truncate" style={{ color: industryColor }}>
+                {researchStatusLabel}
+              </p>
+              <p className="text-[9px] text-white/38 truncate">
+                {isClassifyRunning ? 'Generating dynamic roots' : 'Keeping planet stable'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Role Switcher (Commented out per feedback)
       <div
