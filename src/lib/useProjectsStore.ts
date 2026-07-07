@@ -69,6 +69,8 @@ export interface Decision {
   rationale?: string;
   status: DecisionStatus;
   createdAt: string;
+  reviewNote?: string;
+  reviewedAt?: string;
 }
 
 export type RiskSeverity = 'low' | 'medium' | 'high';
@@ -382,8 +384,13 @@ export function useProjectsStore() {
   const addDecision = useCallback((projectId: string, title: string, rationale?: string) => {
     update(s => ({ ...s, decisions: [{ id: uid('d'), projectId, title, rationale, status: 'open', createdAt: new Date().toISOString() }, ...s.decisions] }));
   }, [update]);
-  const setDecisionStatus = useCallback((id: string, status: DecisionStatus) => {
-    update(s => ({ ...s, decisions: s.decisions.map(x => x.id === id ? { ...x, status } : x) }));
+  const setDecisionStatus = useCallback((id: string, status: DecisionStatus, note?: string) => {
+    update(s => ({
+      ...s,
+      decisions: s.decisions.map(x => x.id === id
+        ? { ...x, status, reviewNote: note ?? x.reviewNote, reviewedAt: new Date().toISOString() }
+        : x),
+    }));
   }, [update]);
   const deleteDecision = useCallback((id: string) => {
     update(s => ({ ...s, decisions: s.decisions.filter(x => x.id !== id) }));

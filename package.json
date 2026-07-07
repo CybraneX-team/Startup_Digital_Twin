@@ -16,6 +16,7 @@
     "@react-three/drei": "^10.7.7",
     "@react-three/fiber": "^9.5.0",
     "@supabase/supabase-js": "^2.101.1",
+    "clsx": "^2.1.1",
     "gsap": "^3.12.7",
     "iconsax-reactjs": "^0.0.8",
     "lenis": "^1.3.23",
@@ -25,6 +26,7 @@
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-is": "^19.2.4",
+    "tailwind-merge": "^3.6.0",
     "three": "^0.183.2"
   },
   "devDependencies": {

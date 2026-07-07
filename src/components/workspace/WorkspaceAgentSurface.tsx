@@ -384,10 +384,15 @@ export function WorkspaceAgentSurface() {
         </button>
       </div>
 
+      {/* ── Mission statement ─────────────────────────────────────── */}
+      <p className="shrink-0 px-1 -mt-1 text-[11px] text-white/35 leading-relaxed">
+        Agents research, draft, and execute multi-step work using your live workspace data — every plan is shown to you before it runs, so nothing ships without your approval.
+      </p>
+
       {/* ── New task form ─────────────────────────────────────────── */}
       {showForm && (
         <div className="shrink-0 rounded-2xl p-4 flex flex-col gap-3" style={{ background: 'rgba(193,174,255,0.04)', border: `1px solid ${ACCENT}25` }}>
-          <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">Launch Agent</div>
+          <div className="text-[10px] font-bold uppercase tracking-widest text-white/40">Launch Agent — pick a type, describe the task</div>
 
           {/* Agent type grid */}
           <div className="grid grid-cols-3 sm:grid-cols-5 gap-1.5">
@@ -414,6 +419,11 @@ export function WorkspaceAgentSurface() {
               );
             })}
           </div>
+
+          {/* Selected type description — always visible, not just on hover */}
+          <p className="text-[10px] text-white/40 leading-relaxed -mt-1.5 px-0.5">
+            {AGENT_TYPE_META[selectedType].description}
+          </p>
 
           {/* Prompt */}
           <div className="flex gap-2">

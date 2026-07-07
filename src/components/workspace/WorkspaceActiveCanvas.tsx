@@ -44,15 +44,20 @@ import {
 } from '../../lib/workspaceLayoutData';
 import { WorkspaceCanvasFrame } from './WorkspaceCanvasFrame';
 import { api } from '../../lib/api';
-import { useFounderWorkspace, type NoteBlock, type Note, type WorkspaceMode, type AuditEntry } from '../../context/FounderWorkspaceContext';
+import { useFounderWorkspace, type NoteBlock, type Note, type WorkspaceMode, type AuditEntry, type ShortcutItem } from '../../context/FounderWorkspaceContext';
 import { BrainIcon } from './BrainIcon';
 import Orb from '../Orb';
 import { WorkspaceFilesDashboard } from './WorkspaceFilesDashboard';
 import { WorkspaceSavedNodesCanvas } from './WorkspaceSavedNodesCanvas';
+import { WorkspaceHierarchyNodesCanvas } from './WorkspaceHierarchyNodesCanvas';
 import { WorkspaceProjectsSpace } from './WorkspaceProjectsSpace';
 import { WorkspaceCanvasOverview } from './WorkspaceCanvasOverview';
 import { WorkspaceAgentSurface } from './WorkspaceAgentSurface';
 import { WorkspaceShortcutPanel } from './WorkspaceShortcutPanel';
+import { WorkspaceMyWorkPanel } from './WorkspaceMyWorkPanel';
+import { WorkspaceDecisionsPanel } from './WorkspaceDecisionsPanel';
+import { WorkspaceGoalsMetricsPanel } from './WorkspaceGoalsMetricsPanel';
+import { WorkspaceCreateModal } from './WorkspaceCreateModal';
 import { WorkspaceSpherePanel } from './WorkspaceSpherePanel';
 import { WorkspaceModeBar } from './WorkspaceModeBar';
 import { WorkspaceUniverseCanvas } from './WorkspaceUniverseCanvas';
@@ -345,22 +350,26 @@ function CardBody({ card }: { card: WorkspaceCanvasCard }) {
       return (
         <div className="flex flex-col h-full">
           <CardHeader card={card} />
-          <div className="flex gap-2 flex-1 min-h-0">
-            <ul className="flex-1 space-y-1 text-[9px] text-white/70">
-              {departments.map(d => (
-                <li key={d.id} className="flex items-center justify-between">
-                  <span className="flex items-center gap-1">
-                    <span className="w-1 h-1 rounded-full shrink-0" style={{ background: card.accent }} />
-                    {d.name.split(' ')[0]}
-                  </span>
-                  <span className="font-semibold text-white/40">{d.fte}</span>
-                </li>
-              ))}
-            </ul>
-            <div className="w-[38%] shrink-0">
-              <MiniRadar color={card.accent} />
+          {departments.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-[9px] text-white/25 text-center px-2">No departments yet — add one in Team.</div>
+          ) : (
+            <div className="flex gap-2 flex-1 min-h-0">
+              <ul className="flex-1 space-y-1 text-[9px] text-white/70">
+                {departments.map(d => (
+                  <li key={d.id} className="flex items-center justify-between">
+                    <span className="flex items-center gap-1">
+                      <span className="w-1 h-1 rounded-full shrink-0" style={{ background: card.accent }} />
+                      {d.name.split(' ')[0]}
+                    </span>
+                    <span className="font-semibold text-white/40">{d.fte}</span>
+                  </li>
+                ))}
+              </ul>
+              <div className="w-[38%] shrink-0">
+                <MiniRadar color={card.accent} />
+              </div>
             </div>
-          </div>
+          )}
           <span className="text-[9px] text-white/35 self-end mt-1">{totalFTE} Total FTE</span>
         </div>
       );
@@ -369,14 +378,18 @@ function CardBody({ card }: { card: WorkspaceCanvasCard }) {
       return (
         <div className="flex flex-col h-full">
           <CardHeader card={card} />
-          <ul className="space-y-1 text-[10px] text-white/80 mb-auto">
-            {goals.slice(0, 3).map(g => (
-              <li key={g.id} className="flex items-center gap-1.5 truncate">
-                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${g.done ? 'bg-emerald-400' : 'bg-rose-400'}`} />
-                <span className={g.done ? 'line-through text-white/40' : ''}>{g.label}</span>
-              </li>
-            ))}
-          </ul>
+          {goals.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-[9px] text-white/25 text-center px-2">No goals yet — add your first OKR in Review mode.</div>
+          ) : (
+            <ul className="space-y-1 text-[10px] text-white/80 mb-auto">
+              {goals.slice(0, 3).map(g => (
+                <li key={g.id} className="flex items-center gap-1.5 truncate">
+                  <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${g.done ? 'bg-emerald-400' : 'bg-rose-400'}`} />
+                  <span className={g.done ? 'line-through text-white/40' : ''}>{g.label}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           <div className="flex items-center justify-between gap-2 mt-2 pt-1.5 border-t border-white/5">
             <span className="text-[9px] text-white/45">OKR Goals Complete</span>
             <span className="text-[11px] font-bold text-rose-400">{goalProgress}%</span>
@@ -388,17 +401,21 @@ function CardBody({ card }: { card: WorkspaceCanvasCard }) {
       return (
         <div className="flex flex-col h-full">
           <CardHeader card={card} />
-          <div className="flex items-center gap-3 flex-1">
-            <ul className="flex-1 space-y-1">
-              {risks.slice(0, 3).map(r => (
-                <CheckRow key={r.id} label={r.label.split(':')[1]?.trim() || r.label} color={card.accent} done={r.status === 'Mitigated'} />
-              ))}
-            </ul>
-            <div className="flex flex-col items-center gap-0.5 shrink-0">
-              <GaugeRing color={card.accent} value={confidenceScore} />
-              <span className="text-[8px] text-white/45">Risk Index</span>
+          {risks.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-[9px] text-white/25 text-center px-2">No risks logged yet.</div>
+          ) : (
+            <div className="flex items-center gap-3 flex-1">
+              <ul className="flex-1 space-y-1">
+                {risks.slice(0, 3).map(r => (
+                  <CheckRow key={r.id} label={r.label.split(':')[1]?.trim() || r.label} color={card.accent} done={r.status === 'Mitigated'} />
+                ))}
+              </ul>
+              <div className="flex flex-col items-center gap-0.5 shrink-0">
+                <GaugeRing color={card.accent} value={confidenceScore} />
+                <span className="text-[8px] text-white/45">Risk Index</span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       );
 
@@ -406,11 +423,15 @@ function CardBody({ card }: { card: WorkspaceCanvasCard }) {
       return (
         <div className="flex flex-col h-full">
           <CardHeader card={card} />
+          {gtmChannels.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center text-[9px] text-white/25 text-center px-2">No GTM channels yet.</div>
+          ) : (
           <ul className="space-y-1 mb-1">
             {gtmChannels.map(c => (
               <CheckRow key={c.id} label={`${c.name.split(' ')[0]} (${c.budget}%)`} color={card.accent} />
             ))}
           </ul>
+          )}
           <div className="mt-auto h-12">
             <MiniLine color={card.accent} id={card.id} />
           </div>
@@ -501,15 +522,26 @@ function timeAgoShort(iso: string): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-function ProjectsRedirect({ view }: { view: 'member' | 'goals' }) {
-  const { setActiveSidebarTab } = useFounderWorkspace();
+function WorkspaceShortcutRouter({ shortcut }: { shortcut: ShortcutItem }) {
+  const { setActiveWorkspaceId, setActiveSidebarTab } = useFounderWorkspace();
+
   useEffect(() => {
-    setActiveSidebarTab('projects');
-    window.dispatchEvent(new CustomEvent(view === 'member' ? 'open-my-work' : 'open-goals-metrics'));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    if (shortcut.kind === 'workspace' && shortcut.targetId) {
+      setActiveWorkspaceId(shortcut.targetId);
+      setActiveSidebarTab('canvas');
+    } else if (shortcut.kind === 'project' && shortcut.targetId) {
+      setActiveSidebarTab('projects');
+      window.dispatchEvent(new CustomEvent('open-project', { detail: { projectId: shortcut.targetId } }));
+    }
+  }, [shortcut, setActiveWorkspaceId, setActiveSidebarTab]);
+
+  if (shortcut.kind === 'template' && shortcut.templateTab) {
+    return <WorkspaceShortcutPanel tabId={shortcut.templateTab} />;
+  }
+
   return (
     <div className="flex items-center justify-center h-full">
-      <div className="text-sm text-white/30">Opening Projects…</div>
+      <div className="text-sm text-white/30">Opening {shortcut.label}…</div>
     </div>
   );
 }
@@ -2505,7 +2537,22 @@ export function WorkspaceActiveCanvas() {
     activeRole,
     workspaceMode,
     entryContext,
+    shortcuts,
   } = useFounderWorkspace();
+
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const activeShortcut = useMemo(() => shortcuts.find(s => s.id === activeSidebarTab) ?? null, [shortcuts, activeSidebarTab]);
+
+  const [showFullscreenHint, setShowFullscreenHint] = useState(false);
+  useEffect(() => {
+    if (!isFullscreen) return;
+    const seen = window.localStorage.getItem('ws_fullscreen_hint_seen_v1');
+    if (seen) return;
+    setShowFullscreenHint(true);
+    window.localStorage.setItem('ws_fullscreen_hint_seen_v1', '1');
+    const timer = window.setTimeout(() => setShowFullscreenHint(false), 5000);
+    return () => window.clearTimeout(timer);
+  }, [isFullscreen]);
 
   const canvasWrapRef = useRef<HTMLDivElement>(null);
 
@@ -2701,13 +2748,7 @@ export function WorkspaceActiveCanvas() {
                 {/* Plus button to add a new workspace tab */}
                 <button
                   type="button"
-                  onClick={() => {
-                    let nextNum = 1;
-                    while (workspaces.some(w => w.name === `Workspace ${nextNum}`)) {
-                      nextNum++;
-                    }
-                    createWorkspace(`Workspace ${nextNum}`);
-                  }}
+                  onClick={() => setShowCreateModal(true)}
                   className="p-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 text-white/70 hover:text-white transition-colors flex items-center justify-center"
                   title="Add Workspace Tab"
                 >
@@ -2733,7 +2774,7 @@ export function WorkspaceActiveCanvas() {
 
 
             <div className="flex items-center gap-2 shrink-0">
-              {!['tasks', 'goals', 'notes', 'files', 'projects', 'sphere', 'roadmap', 'fundraising', 'interviews', 'competitors'].includes(activeSidebarTab) && !activeDetailCard && (
+              {!['tasks', 'decisions', 'goals', 'goals-metrics', 'notes', 'files', 'projects', 'sphere', 'roadmap', 'fundraising', 'interviews', 'competitors'].includes(activeSidebarTab) && !activeShortcut && !activeDetailCard && (
                 <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5 border border-white/10 mr-1">
                   {([
                     { id: 'overview',         label: 'Overview', Icon: Building2 },
@@ -2783,9 +2824,11 @@ export function WorkspaceActiveCanvas() {
             <WorkspaceModeLensBanner />
             <div className="relative flex-1 min-h-0 overflow-hidden">
             {activeSidebarTab === 'tasks' ? (
-              <ProjectsRedirect view="member" />
-            ) : activeSidebarTab === 'goals' ? (
-              <ProjectsRedirect view="goals" />
+              <WorkspaceMyWorkPanel />
+            ) : activeSidebarTab === 'decisions' ? (
+              <WorkspaceDecisionsPanel />
+            ) : activeSidebarTab === 'goals' || activeSidebarTab === 'goals-metrics' ? (
+              <WorkspaceGoalsMetricsPanel />
             ) : activeSidebarTab === 'notes' ? (
               <WorkspaceNotesDashboard />
             ) : activeSidebarTab === 'files' ? (
@@ -2798,6 +2841,8 @@ export function WorkspaceActiveCanvas() {
               <WorkspaceActivityFeed />
             ) : activeSidebarTab === 'roadmap' || activeSidebarTab === 'fundraising' || activeSidebarTab === 'interviews' || activeSidebarTab === 'competitors' ? (
               <WorkspaceShortcutPanel tabId={activeSidebarTab} />
+            ) : activeShortcut ? (
+              <WorkspaceShortcutRouter shortcut={activeShortcut} />
             ) : canvasView === 'overview' ? (
               activeRole !== 'member' && workspaceMode === 'agent'
                 ? <WorkspaceAgentSurface />
@@ -2812,6 +2857,8 @@ export function WorkspaceActiveCanvas() {
                         : <WorkspaceCanvasOverview />
             ) : canvasView === 'nodes' && !activeDetailCard ? (
               <WorkspaceSavedNodesCanvas isFullscreen={isFullscreen} />
+            ) : canvasView === 'workspace-nodes' ? (
+              <WorkspaceHierarchyNodesCanvas isFullscreen={isFullscreen} />
             ) : (
               <div
                 className={`ws-canvas-stage-area absolute transition-all ${transClass} ${activeDetailCard ? 'ws-canvas-stage-area--active' : ''
@@ -2893,8 +2940,8 @@ export function WorkspaceActiveCanvas() {
                 {WORKSPACE_CANVAS_CARDS.filter(c => {
                   if (activeRole === 'founder') return true;
                   if (activeRole === 'manager') return c.id !== 'metrics';
-                  // member: only overview + goals
-                  return c.id === 'company_hub' || c.id === 'goals';
+                  // member (Preview Mode): hide financial and risk-sensitive cards, keep the rest
+                  return c.id !== 'metrics' && c.id !== 'risks' && c.id !== 'gtm';
                 }).map((card, index) => {
                   const isActive = activeDetailCard === card.id;
                   const isAnyActive = activeDetailCard !== null;
@@ -3348,6 +3395,25 @@ export function WorkspaceActiveCanvas() {
           </div>
         </WorkspaceCanvasFrame>
       </div>
+
+      {showCreateModal && (
+        <WorkspaceCreateModal
+          onCreate={(name, purpose) => {
+            createWorkspace(name, purpose);
+            setShowCreateModal(false);
+          }}
+          onClose={() => setShowCreateModal(false)}
+        />
+      )}
+
+      {showFullscreenHint && (
+        <div
+          className="fixed top-16 left-1/2 -translate-x-1/2 z-[150] flex items-center gap-2 px-4 py-2.5 rounded-xl text-[12px] font-medium text-white/80 animate-slide-up-fade"
+          style={{ background: 'rgba(10,10,18,0.85)', border: '1px solid rgba(255,255,255,0.12)', backdropFilter: 'blur(12px)' }}
+        >
+          Hover the left or right edge of the screen to reveal your panels
+        </div>
+      )}
     </div>
   );
 }

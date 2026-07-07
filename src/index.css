@@ -798,9 +798,11 @@
   height: 100%;
   min-height: 0;
   overflow: visible;
-  filter:
-    drop-shadow(0 8px 32px rgba(0, 0, 0, 0.45))
-    drop-shadow(0 2px 8px rgba(0, 0, 0, 0.25));
+  /* Do NOT put `filter` here: any non-none `filter` on an ancestor creates a
+     CSS "backdrop root", which caps what a descendant's `backdrop-filter`
+     (the LiquidGlass layer in WorkspaceCanvasFrame.tsx) can sample — it would
+     only see this subtree's own near-empty content instead of the real page
+     behind it. The equivalent drop-shadow now lives on the sibling SVG below. */
 }
 
 .ws-canvas-frame-svg {
@@ -810,6 +812,9 @@
   height: 100%;
   pointer-events: none;
   overflow: visible;
+  filter:
+    drop-shadow(0 8px 32px rgba(0, 0, 0, 0.45))
+    drop-shadow(0 2px 8px rgba(0, 0, 0, 0.25));
 }
 
 .ws-canvas-frame-fill {
@@ -832,12 +837,7 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset -1px 0 0 rgba(129, 140, 248, 0.12);
+  /* Visual fill now comes from the LiquidGlass layer rendered inside — see WorkspaceCanvasFrame.tsx. */
 }
 
 .ws-canvas-tab-slot {
@@ -864,6 +864,8 @@
 }
 
 .ws-canvas-frame-body {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   flex: 1;
@@ -1075,15 +1077,8 @@
   width: 228px;
   padding: 20px 14px 16px;
   border-radius: 20px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-right-color: rgba(148, 163, 255, 0.2);
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.01) 100%);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
-    inset -1px 0 0 rgba(129, 140, 248, 0.12);
+  /* Visual fill (background/border/backdrop-filter) now comes from the
+     LiquidGlass layer rendered inside — see WorkspaceLeftPanel.tsx. */
 }
 
 .ws-right-panel {
@@ -1293,17 +1288,10 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
-/* Focus Today panel */
+/* Focus Today panel — visual fill now comes from the LiquidGlass wrapper in WorkspaceFocusToday.tsx */
 .ws-focus-panel {
   padding: 16px 16px 14px;
   border-radius: 16px;
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.01) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.4),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .ws-focus-header {
@@ -2009,6 +1997,27 @@ input[type="range"]::-moz-range-thumb:hover {
   width: 3px;
 }
 
+/* Persistent grab-handle pill — visible before hover so the panel is discoverable, not just a faint line */
+.twin-workspace-fullscreen-hover-zone::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 32px;
+  border-radius: 2px;
+  background: rgba(147, 197, 253, 0.35);
+  box-shadow: 0 0 8px rgba(147, 197, 253, 0.25);
+  transition: background-color 0.2s, box-shadow 0.2s, height 0.2s;
+}
+
+.twin-workspace-fullscreen-hover-zone:hover::before {
+  background: rgba(147, 197, 253, 0.75);
+  box-shadow: 0 0 12px rgba(147, 197, 253, 0.45);
+  height: 40px;
+}
+
 /* ──────────────────────────────────────────────────
    1. TwinWorkspaceLayout Fullscreen Hover Sidepanel
    ────────────────────────────────────────────────── */
@@ -2104,6 +2113,27 @@ input[type="range"]::-moz-range-thumb:hover {
   background: linear-gradient(to bottom, transparent, rgba(147, 197, 253, 0.45), transparent);
   opacity: 1;
   width: 3px;
+}
+
+/* Persistent grab-handle pill — visible before hover so the panel is discoverable, not just a faint line */
+.twin-workspace-fullscreen-hover-zone-right::before {
+  content: '';
+  position: absolute;
+  right: 3px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 32px;
+  border-radius: 2px;
+  background: rgba(147, 197, 253, 0.35);
+  box-shadow: 0 0 8px rgba(147, 197, 253, 0.25);
+  transition: background-color 0.2s, box-shadow 0.2s, height 0.2s;
+}
+
+.twin-workspace-fullscreen-hover-zone-right:hover::before {
+  background: rgba(147, 197, 253, 0.75);
+  box-shadow: 0 0 12px rgba(147, 197, 253, 0.45);
+  height: 40px;
 }
 
 /* ──────────────────────────────────────────────────

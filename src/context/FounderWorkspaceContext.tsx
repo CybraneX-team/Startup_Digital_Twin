@@ -130,14 +130,26 @@ export interface WorkspaceFile {
   content: string;
 }
 
+export interface ShortcutItem {
+  id: string;
+  label: string;
+  kind: 'workspace' | 'project' | 'template';
+  targetId?: string;
+  templateTab?: string;
+}
+
 export interface WorkspaceState {
   id: string;
   name: string;
+  purpose?: string;
   goals: OKRGoal[];
   departments: DepartmentFTE[];
   risks: RiskBlocker[];
   gtmChannels: GTMChannel[];
   tasks: FocusTask[];
+  shortcuts: ShortcutItem[];
+  cashBalance: number;
+  baseMRR: number;
   mrrGrowthRate: number;
   chatMessages: ChatMessage[];
   isVoiceChat: boolean;
@@ -193,9 +205,14 @@ interface FounderWorkspaceContextType {
   workspaces: WorkspaceState[];
   activeWorkspaceId: string;
   setActiveWorkspaceId: (id: string) => void;
-  createWorkspace: (name: string) => void;
+  createWorkspace: (name: string, purpose?: string) => void;
   deleteWorkspace: (id: string) => void;
   renameWorkspace: (id: string, name: string) => void;
+
+  // Shortcuts (per-workspace, user-managed)
+  shortcuts: ShortcutItem[];
+  addShortcut: (item: Omit<ShortcutItem, 'id'>) => void;
+  removeShortcut: (id: string) => void;
 
   // Notes API
   notes: Note[];
@@ -447,6 +464,9 @@ export function FounderWorkspaceProvider({ children, initialEntryContext }: { ch
       risks: DEFAULT_RISKS,
       gtmChannels: DEFAULT_GTM,
       tasks: DEFAULT_TASKS,
+      shortcuts: [],
+      cashBalance: 1500000,
+      baseMRR: 125000,
       mrrGrowthRate: 8,
       chatMessages: [
         {
@@ -530,15 +550,17 @@ export function FounderWorkspaceProvider({ children, initialEntryContext }: { ch
   const selectedDeptId = activeWorkspace.selectedDeptId;
   const notes = activeWorkspace.notes || [];
   const uploadedFiles = activeWorkspace.uploadedFiles || [];
+  const shortcuts = activeWorkspace.shortcuts || [];
 
   // Helper to update active workspace fields
   const updateActiveWorkspace = (updater: (prev: WorkspaceState) => Partial<WorkspaceState>) => {
     setWorkspaces(prev => prev.map(w => w.id === activeWorkspaceId ? { ...w, ...updater(w) } : w));
   };
 
-  // Financial parameters (constant base and cash)
-  const cashBalance = 1500000; // $1.5M cash
-  const baseMRR = 125000; // $125k base MRR
+  // Financial parameters — per-workspace so a fresh workspace doesn't inherit
+  // another workspace's cash/revenue (a new workspace starts genuinely at zero).
+  const cashBalance = activeWorkspace.cashBalance;
+  const baseMRR = activeWorkspace.baseMRR;
 
   // Dynamic metrics calculated on active workspace values
   const totalFTE = departments.reduce((acc, curr) => acc + curr.fte, 0);
@@ -813,40 +835,50 @@ export function FounderWorkspaceProvider({ children, initialEntryContext }: { ch
     }));
   };
 
-  // Create workspace method
-  const createWorkspace = (name: string) => {
+  // Create workspace method — a new workspace starts genuinely empty (no cloned
+  // demo data) so it doesn't just look like a duplicate of an existing one.
+  const createWorkspace = (name: string, purpose?: string) => {
     const newId = `ws_${Date.now()}`;
+    const ts = Date.now();
     const newWorkspace: WorkspaceState = {
       id: newId,
       name,
-      goals: DEFAULT_GOALS.map(g => ({ ...g, done: false })),
-      departments: DEFAULT_DEPARTMENTS.map(d => ({ ...d })),
-      risks: DEFAULT_RISKS.map(r => ({ ...r, status: 'Active' })),
-      gtmChannels: DEFAULT_GTM.map(gtm => ({ ...gtm })),
-      tasks: DEFAULT_TASKS.map(t => ({ ...t, done: false })),
-      mrrGrowthRate: 8,
+      purpose,
+      goals: [],
+      departments: [],
+      risks: [],
+      gtmChannels: [],
+      tasks: [],
+      shortcuts: [],
+      cashBalance: 0,
+      baseMRR: 0,
+      mrrGrowthRate: 0,
       chatMessages: [
         {
           id: 'welcome',
           sender: 'assistant',
-          text: `Hello! Welcome to your new ${name} workspace. I am your WorkOS AI Copilot. Ask me questions or simulate objectives for this project.`,
+          text: `Hello! Welcome to ${name}. I am your WorkOS AI Copilot — ask me to help you set up goals, departments, or a GTM plan for this workspace.`,
           timestamp: new Date(),
         },
       ],
       isVoiceChat: false,
       activeDetailCard: null,
-      selectedDeptId: 'eng',
+      selectedDeptId: '',
       notes: [
         {
-          id: `n_welcome_${Date.now()}`,
+          id: `n_welcome_${ts}`,
           title: `Getting Started with ${name}`,
           createdAt: new Date(),
           updatedAt: new Date(),
           blocks: [
-            { id: `b_welcome_h1_${Date.now()}`, type: 'h1', content: `Getting Started with ${name}` },
-            { id: `b_welcome_text_${Date.now()}`, type: 'text', content: `This is your first note in the ${name} workspace. You can write rich text, headings, checklists, and tables here.` }
-          ]
-        }
+            { id: `b_welcome_h1_${ts}`, type: 'h1', content: `Getting Started with ${name}` },
+            ...(purpose ? [{ id: `b_welcome_purpose_${ts}`, type: 'text' as const, content: purpose }] : []),
+            { id: `b_welcome_h3_${ts}`, type: 'h3', content: 'Next steps' },
+            { id: `b_welcome_todo1_${ts}`, type: 'todo' as const, content: 'Add your first goal in Review mode', checked: false },
+            { id: `b_welcome_todo2_${ts}`, type: 'todo' as const, content: 'Log a decision that needs a call', checked: false },
+            { id: `b_welcome_todo3_${ts}`, type: 'todo' as const, content: 'Add a department or risk to track', checked: false },
+          ],
+        },
       ],
       uploadedFiles: [],
     };
@@ -855,6 +887,15 @@ export function FounderWorkspaceProvider({ children, initialEntryContext }: { ch
     setActiveWorkspaceId(newId);
     setActiveNoteId(null);
     setActiveSidebarTab('canvas');
+  };
+
+  const addShortcut = (item: Omit<ShortcutItem, 'id'>) => {
+    const newItem: ShortcutItem = { ...item, id: `sc_${Date.now()}` };
+    updateActiveWorkspace(w => ({ shortcuts: [...(w.shortcuts || []), newItem] }));
+  };
+
+  const removeShortcut = (id: string) => {
+    updateActiveWorkspace(w => ({ shortcuts: (w.shortcuts || []).filter(s => s.id !== id) }));
   };
 
   const deleteWorkspace = (id: string) => {
@@ -976,6 +1017,11 @@ export function FounderWorkspaceProvider({ children, initialEntryContext }: { ch
         createWorkspace,
         deleteWorkspace,
         renameWorkspace,
+
+        // Shortcuts API
+        shortcuts,
+        addShortcut,
+        removeShortcut,
 
         // Notes API
         notes,

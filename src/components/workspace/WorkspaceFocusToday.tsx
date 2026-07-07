@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Plus, Check } from 'lucide-react';
 import { useFounderWorkspace } from '../../context/FounderWorkspaceContext';
+import { LiquidGlass } from '../ui/LiquidGlass';
 
 function FocusTaskCheck({ done, onClick }: { done: boolean; onClick: () => void }) {
   return (
@@ -37,7 +38,15 @@ export function WorkspaceFocusToday() {
   };
 
   return (
-    <div className="ws-focus-panel flex-1 w-full ws-glass-strong rounded-2xl p-4 flex flex-col min-h-0 overflow-hidden">
+    <LiquidGlass
+      className="relative flex-1 w-full rounded-2xl overflow-hidden"
+      radius={16}
+      depth={18}
+      scale={13}
+      glow={0.3}
+      edgeHighlight={0.22}
+    >
+    <div className="ws-focus-panel h-full flex flex-col min-h-0">
       <div className="ws-focus-header flex items-center justify-between mb-1">
         <h2 className="ws-focus-title text-sm font-semibold text-white">Focus Today</h2>
         <button
@@ -101,6 +110,7 @@ export function WorkspaceFocusToday() {
         ))}
       </ul>
     </div>
+    </LiquidGlass>
   );
 }
 

@@ -10,9 +10,9 @@ const ACCENT = '#C1AEFF';
 
 const MODES: { id: WorkspaceMode; label: string; Icon: LucideIcon; color: string; tab: string }[] = [
   { id: 'explore', label: 'Explore', Icon: Compass, color: '#60a5fa', tab: 'canvas' },
-  { id: 'decision', label: 'Decision', Icon: Scale, color: '#fbbf24', tab: 'projects' },
-  { id: 'execution', label: 'Execution', Icon: Zap, color: ACCENT, tab: 'tasks' },
-  { id: 'review', label: 'Review', Icon: CheckCircle, color: '#34d399', tab: 'goals' },
+  { id: 'decision', label: 'Decision', Icon: Scale, color: '#fbbf24', tab: 'decisions' },
+  { id: 'execution', label: 'My Work', Icon: Zap, color: ACCENT, tab: 'tasks' },
+  { id: 'review', label: 'Review', Icon: CheckCircle, color: '#34d399', tab: 'goals-metrics' },
   { id: 'agent', label: 'Agent', Icon: Bot, color: '#f472b6', tab: 'canvas' },
 ];
 
@@ -90,7 +90,7 @@ export function WorkspaceModeBar({ placement = 'top' }: WorkspaceModeBarProps) {
 
           {/* Role lens */}
           <div className="flex items-center gap-1 shrink-0">
-            <span className="text-[9px] uppercase tracking-wider text-white/22 mr-0.5 font-bold">Lens</span>
+            <span className="text-[9px] uppercase tracking-wider text-white/22 mr-0.5 font-bold">Preview Mode</span>
             {ROLES.map(r => {
               const active = activeRole === r.id;
               return (
@@ -157,7 +157,7 @@ export function WorkspaceModeBar({ placement = 'top' }: WorkspaceModeBarProps) {
 
         {/* Role lens */}
         <div className="flex items-center gap-1 shrink-0">
-          <span className="text-[9px] uppercase tracking-wider text-white/25 mr-1 font-bold">Lens</span>
+          <span className="text-[9px] uppercase tracking-wider text-white/25 mr-1 font-bold">Preview Mode</span>
           {ROLES.map(r => {
             const active = activeRole === r.id;
             return (
@@ -229,7 +229,7 @@ export function WorkspaceModeBar({ placement = 'top' }: WorkspaceModeBarProps) {
 
       {/* Role lens */}
       <div className="flex items-center gap-1 shrink-0">
-        <span className="text-[9px] uppercase tracking-wider text-white/22 mr-1 font-bold hidden sm:inline">Lens</span>
+        <span className="text-[9px] uppercase tracking-wider text-white/22 mr-1 font-bold hidden sm:inline">Preview Mode</span>
         {ROLES.map(r => {
           const active = activeRole === r.id;
           return (
