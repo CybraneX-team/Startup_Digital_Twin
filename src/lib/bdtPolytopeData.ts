@@ -168,6 +168,37 @@ export function isBdtWorkspaceLeafNode(node: Pick<UInternalNode, 'type' | 'nodeL
   return isActionLeafNode(node) || isProjectLeafNode(node);
 }
 
+/**
+ * Whether a leaf has any wired-up data panel (real ERPNext data or intentional Marketing demo
+ * data) — used to dim/block unwired leaves in the 3D graph and the sidebar node list.
+ *
+ * Matching happens against the nearest BRANCH ancestor's label, not the leaf's own label — the
+ * BDT tree is Level-1 → branch (e.g. "contracts") → optional team/process/project nodes →
+ * action/metric leaves (e.g. "review vendor performance", "contracts health"), and the backend's
+ * mapping keys are branch-level (`ops_vendors_contracts`), not per-individual-leaf. Callers must
+ * therefore thread the nearest known branch ancestor label down to the leaf; for a path-walking
+ * consumer (e.g. the sidebar) that's the nearest node with `nodeLevel === 'branch'`.
+ *
+ * When `activeKeys`/`departmentSourceKey` aren't passed (e.g. the unrelated reference-company
+ * planet view, or the Twin route whose legacy departments never set `sourceKey`), this returns
+ * true — "fully active" — so unrelated callers keep working unchanged.
+ */
+export function isBdtNodeActive(
+  branchLabel: string | undefined,
+  level1Label: string | undefined,
+  departmentSourceKey: string | undefined,
+  activeKeys: Set<string> | undefined,
+): boolean {
+  // No departmentSourceKey means this caller never opted into gating (e.g. the Twin/
+  // reference-company planet view) — always active there, regardless of whether the
+  // separate BDT store happens to have activeKeys loaded elsewhere in the session.
+  if (!departmentSourceKey) return true;
+  // Active-nodes not loaded yet (e.g. still fetching) — don't block prematurely.
+  if (!activeKeys) return true;
+  if (!level1Label || !branchLabel) return false;
+  return activeKeys.has(`${departmentSourceKey}::${level1Label}::${branchLabel}`);
+}
+
 export interface UExternalNode {
   id: string;
   /** Catalog key from DB source_key column (e.g. "dept_engineering") — used for size-based visibility filtering */
@@ -222,4 +253,3 @@ export function resolvePolytopeNodeCount(deptCount: number): {
     Math.ceil(minTotal / 12) * 12;
   return { totalNodes: target, inactiveCount: target - deptCount };
 }
-

@@ -19,6 +19,15 @@ import {
   type ErpNextOpsNodeSummary,
 } from '../../lib/db/erpnextSupplyChain';
 import {
+  fetchErpNextSalesNodeSummary,
+  type ErpNextSalesNodeSummary,
+} from '../../lib/db/erpnextSales';
+import {
+  fetchErpNextProductsNodeSummary,
+  type ErpNextProductsNodeSummary,
+} from '../../lib/db/erpnextProducts';
+import { MarketingMockPanel, isMarketingMockActive } from './panels/MarketingMockPanel';
+import {
   EmptyMetricsState,
   MetricCard,
   MetricCreateWizard,
@@ -142,7 +151,20 @@ function OperationsInsightList({ insights }: { insights: ErpNextOpsNodeSummary['
   );
 }
 
-function OperationsChildRollups({ children }: { children: NonNullable<ErpNextOpsNodeSummary['childRollups']> }) {
+// Widened templateKey (string, not the Operations-specific union) so Sales/Products
+// childRollups — structurally identical otherwise — can reuse this renderer too; templateKey
+// itself is never read below.
+interface GenericChildRollup {
+  nodeId: string;
+  nodeLabel: string;
+  mappingLabel: string;
+  status: string;
+  templateKey: string;
+  healthScore: number | null;
+  headline: string;
+}
+
+function OperationsChildRollups({ children }: { children: GenericChildRollup[] }) {
   if (children.length === 0) return null;
   return (
     <div className="grid grid-cols-1 xl:grid-cols-2 gap-2">
@@ -162,7 +184,22 @@ function OperationsChildRollups({ children }: { children: NonNullable<ErpNextOps
   );
 }
 
-function OperationsEvidenceDrawer({ evidence }: { evidence: ErpNextOpsNodeSummary['evidence'] }) {
+type ErpNextEvidenceRow = {
+  id: string;
+  label: string;
+  sourceDoctype: string;
+  sourceId: string;
+  detail?: string;
+  status?: string;
+  href?: string;
+  attributes?: Array<{
+    label: string;
+    value: string | number;
+    tone?: 'good' | 'neutral' | 'warning' | 'critical';
+  }>;
+};
+
+function OperationsEvidenceDrawer({ evidence }: { evidence: ErpNextEvidenceRow[] }) {
   if (evidence.length === 0) return null;
   return (
     <details className="rounded-xl border border-white/10 bg-black/20 p-3">
@@ -171,14 +208,42 @@ function OperationsEvidenceDrawer({ evidence }: { evidence: ErpNextOpsNodeSummar
       </summary>
       <div className="mt-3 space-y-2">
         {evidence.map(item => (
-          <div key={item.id} className="flex items-center justify-between gap-3 rounded-lg border border-white/5 bg-black/25 px-3 py-2">
+          <div key={item.id} className="flex items-start justify-between gap-3 rounded-lg border border-white/5 bg-black/25 px-3 py-2">
             <div className="min-w-0">
               <p className="text-xs font-medium text-white/75 truncate">{item.sourceId}</p>
               <p className="text-[10px] text-white/35 truncate">{item.sourceDoctype} · {item.label}</p>
+              {item.attributes && item.attributes.length > 0 && (
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {item.attributes.slice(0, 6).map(attribute => (
+                    <span
+                      key={`${item.id}:${attribute.label}:${attribute.value}`}
+                      className={`rounded-md border px-1.5 py-0.5 text-[9px] leading-none ${
+                        attribute.tone === 'warning' || attribute.tone === 'critical'
+                          ? 'border-amber-300/20 bg-amber-300/10 text-amber-100/75'
+                          : attribute.tone === 'good'
+                            ? 'border-emerald-300/20 bg-emerald-300/10 text-emerald-100/75'
+                            : 'border-white/10 bg-white/5 text-white/45'
+                      }`}
+                    >
+                      {attribute.label}: {attribute.value}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="text-right shrink-0">
               {item.detail && <p className="text-[10px] text-white/45">{item.detail}</p>}
               {item.status && <p className="text-[10px] text-white/35">{item.status}</p>}
+              {item.href && (
+                <a
+                  href={item.href}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-flex items-center gap-1 text-[10px] font-semibold text-cyan-200/75 hover:text-cyan-100"
+                >
+                  Open <ExternalLink className="h-3 w-3" />
+                </a>
+              )}
             </div>
           </div>
         ))}
@@ -223,6 +288,248 @@ function OperationsErpNextPanel({ summary, loading, error, onRefresh }: {
 
       {!error && !summary && (
         <p className="text-sm text-white/45">Loading ERPNext Operations data...</p>
+      )}
+
+      {summary && (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-white/10 bg-[#111]/70 p-3">
+            <p className="text-xs font-semibold text-white/75">{summary.path.join(' / ')}</p>
+            <p className="text-[10px] text-white/35 mt-1">{summary.sourceDoctypes.length ? summary.sourceDoctypes.join(', ') : 'No ERPNext source doctypes mapped.'}</p>
+          </div>
+
+          <div className="rounded-2xl border border-cyan-300/15 bg-gradient-to-br from-cyan-300/10 via-white/[0.03] to-black/20 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-100/45">Metric story</p>
+                <p className="mt-2 text-lg font-semibold text-white">{summary.headline}</p>
+                <p className="mt-1 text-[10px] text-white/35">
+                  {summary.templateKey.replace(/_/g, ' ')} · generated {new Date(summary.generatedAt).toLocaleString()}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-white/35">Health</p>
+                <p className="text-3xl font-semibold text-white">{summary.healthScore ?? 'n/a'}</p>
+              </div>
+            </div>
+          </div>
+
+          {summary.unsupportedReason && (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-xs font-semibold text-white/70 mb-1">Not connected yet</p>
+              <p className="text-xs text-white/45">{summary.unsupportedReason}</p>
+            </div>
+          )}
+
+          {summary.warnings.length > 0 && (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-xs font-semibold text-white/70 mb-1">Partial data warnings</p>
+              {summary.warnings.slice(0, 3).map(warning => (
+                <p key={warning} className="text-[10px] text-white/40">{warning}</p>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            {summary.metricCards.map(metric => <OperationsMetricCard key={metric.id} metric={metric} />)}
+          </div>
+
+          {summary.childRollups && <OperationsChildRollups children={summary.childRollups} />}
+
+          {summary.breakdowns.length > 0 && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+              {summary.breakdowns.map(breakdown => <OperationsBreakdown key={breakdown.id} breakdown={breakdown} />)}
+            </div>
+          )}
+
+          <OperationsInsightList insights={summary.insights} />
+
+          {summary.recommendedActions.length > 0 && (
+            <div className="space-y-2">
+              {summary.recommendedActions.map(action => (
+                <div key={`${summary.mappingKey}:${action.label}`} className="rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-2">
+                  <p className="text-xs font-semibold text-amber-100">{action.label}</p>
+                  <p className="text-[10px] text-amber-100/55 mt-0.5">{action.reason}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <OperationsEvidenceDrawer evidence={summary.evidence} />
+        </div>
+      )}
+    </GlassCard>
+  );
+}
+
+// Sales/Products panels share the exact same NodeSummaryResult shape and sub-renderers as
+// Operations (OperationsMetricCard/OperationsBreakdown/OperationsInsightList/
+// OperationsChildRollups/OperationsEvidenceDrawer are structurally generic — reused as-is).
+function SalesErpNextPanel({ summary, loading, error, onRefresh }: {
+  summary: ErpNextSalesNodeSummary | null;
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => void;
+}) {
+  return (
+    <GlassCard>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <SectionTitle icon={Activity}>ERPNext SALES</SectionTitle>
+          {summary && (
+            <div className="text-[10px] text-white/30 -mt-2 space-y-0.5">
+              <p>{summary.mappingLabel} · {summary.status.replace('_', ' ')}</p>
+              {summary.siteName && <p>Site: {summary.siteName}</p>}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg border border-white/10 text-xs text-white/70 hover:bg-white/5 disabled:opacity-50"
+        >
+          {loading ? 'Loading' : 'Refresh'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100/80">
+          {error}
+        </div>
+      )}
+
+      {!error && !summary && (
+        <p className="text-sm text-white/45">Loading ERPNext Sales data...</p>
+      )}
+
+      {summary && (
+        <div className="space-y-3">
+          <div className="rounded-xl border border-white/10 bg-[#111]/70 p-3">
+            <p className="text-xs font-semibold text-white/75">{summary.path.join(' / ')}</p>
+            <p className="text-[10px] text-white/35 mt-1">{summary.sourceDoctypes.length ? summary.sourceDoctypes.join(', ') : 'No ERPNext source doctypes mapped.'}</p>
+            {summary.erpnextActions && summary.erpnextActions.length > 0 && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {summary.erpnextActions.map(action => (
+                  <a
+                    key={action.id}
+                    href={action.href}
+                    target="_blank"
+                    rel="noreferrer"
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[10px] font-semibold transition ${
+                      action.kind === 'new'
+                        ? 'border-cyan-300/25 bg-cyan-300/10 text-cyan-100/85 hover:bg-cyan-300/15'
+                        : 'border-white/10 bg-white/5 text-white/65 hover:bg-white/10 hover:text-white/80'
+                    }`}
+                    title={`${action.doctype} in ERPNext`}
+                  >
+                    {action.label}
+                    <ExternalLink className="h-3 w-3" />
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-cyan-300/15 bg-gradient-to-br from-cyan-300/10 via-white/[0.03] to-black/20 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-100/45">Metric story</p>
+                <p className="mt-2 text-lg font-semibold text-white">{summary.headline}</p>
+                <p className="mt-1 text-[10px] text-white/35">
+                  {summary.templateKey.replace(/_/g, ' ')} · generated {new Date(summary.generatedAt).toLocaleString()}
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-[10px] uppercase tracking-[0.14em] text-white/35">Health</p>
+                <p className="text-3xl font-semibold text-white">{summary.healthScore ?? 'n/a'}</p>
+              </div>
+            </div>
+          </div>
+
+          {summary.unsupportedReason && (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-xs font-semibold text-white/70 mb-1">Not connected yet</p>
+              <p className="text-xs text-white/45">{summary.unsupportedReason}</p>
+            </div>
+          )}
+
+          {summary.warnings.length > 0 && (
+            <div className="rounded-xl border border-white/10 bg-white/5 p-3">
+              <p className="text-xs font-semibold text-white/70 mb-1">Partial data warnings</p>
+              {summary.warnings.slice(0, 3).map(warning => (
+                <p key={warning} className="text-[10px] text-white/40">{warning}</p>
+              ))}
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+            {summary.metricCards.map(metric => <OperationsMetricCard key={metric.id} metric={metric} />)}
+          </div>
+
+          {summary.childRollups && <OperationsChildRollups children={summary.childRollups} />}
+
+          {summary.breakdowns.length > 0 && (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+              {summary.breakdowns.map(breakdown => <OperationsBreakdown key={breakdown.id} breakdown={breakdown} />)}
+            </div>
+          )}
+
+          <OperationsInsightList insights={summary.insights} />
+
+          {summary.recommendedActions.length > 0 && (
+            <div className="space-y-2">
+              {summary.recommendedActions.map(action => (
+                <div key={`${summary.mappingKey}:${action.label}`} className="rounded-lg border border-amber-300/20 bg-amber-300/10 px-3 py-2">
+                  <p className="text-xs font-semibold text-amber-100">{action.label}</p>
+                  <p className="text-[10px] text-amber-100/55 mt-0.5">{action.reason}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <OperationsEvidenceDrawer evidence={summary.evidence} />
+        </div>
+      )}
+    </GlassCard>
+  );
+}
+
+function ProductsErpNextPanel({ summary, loading, error, onRefresh }: {
+  summary: ErpNextProductsNodeSummary | null;
+  loading: boolean;
+  error: string | null;
+  onRefresh: () => void;
+}) {
+  return (
+    <GlassCard>
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <SectionTitle icon={Activity}>ERPNext PRODUCTS</SectionTitle>
+          {summary && (
+            <div className="text-[10px] text-white/30 -mt-2 space-y-0.5">
+              <p>{summary.mappingLabel} · {summary.status.replace('_', ' ')}</p>
+              {summary.siteName && <p>Site: {summary.siteName}</p>}
+            </div>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onRefresh}
+          disabled={loading}
+          className="px-3 py-1.5 rounded-lg border border-white/10 text-xs text-white/70 hover:bg-white/5 disabled:opacity-50"
+        >
+          {loading ? 'Loading' : 'Refresh'}
+        </button>
+      </div>
+
+      {error && (
+        <div className="rounded-xl border border-amber-300/20 bg-amber-300/10 p-3 text-sm text-amber-100/80">
+          {error}
+        </div>
+      )}
+
+      {!error && !summary && (
+        <p className="text-sm text-white/45">Loading ERPNext Products data...</p>
       )}
 
       {summary && (
@@ -363,6 +670,75 @@ export function BdtActionWorkspace({
       setOperationsError(null);
     }
   }, [isOpen, isOperationsContext, loadOperationsSummary]);
+
+  const isSalesContext = (
+    (department.sourceKey === 'dept_sales' || department.id === 'dept_sales' || department.label === 'Sales')
+    && isPersistedBdtNode
+  );
+  const [salesSummary, setSalesSummary] = useState<ErpNextSalesNodeSummary | null>(null);
+  const [salesLoading, setSalesLoading] = useState(false);
+  const [salesError, setSalesError] = useState<string | null>(null);
+
+  const loadSalesSummary = useCallback(() => {
+    if (!isSalesContext) return;
+    setSalesLoading(true);
+    fetchErpNextSalesNodeSummary(node.id)
+      .then(summary => {
+        setSalesSummary(summary);
+        setSalesError(null);
+      })
+      .catch(err => {
+        setSalesSummary(null);
+        setSalesError(parseApiErrorMessage(err));
+      })
+      .finally(() => setSalesLoading(false));
+  }, [isSalesContext, node.id]);
+
+  useEffect(() => {
+    if (isOpen && isSalesContext) {
+      loadSalesSummary();
+    } else {
+      setSalesSummary(null);
+      setSalesError(null);
+    }
+  }, [isOpen, isSalesContext, loadSalesSummary]);
+
+  const isProductsContext = (
+    (department.sourceKey === 'dept_product' || department.id === 'dept_product' || department.label === 'Product')
+    && isPersistedBdtNode
+  );
+  const [productsSummary, setProductsSummary] = useState<ErpNextProductsNodeSummary | null>(null);
+  const [productsLoading, setProductsLoading] = useState(false);
+  const [productsError, setProductsError] = useState<string | null>(null);
+
+  const loadProductsSummary = useCallback(() => {
+    if (!isProductsContext) return;
+    setProductsLoading(true);
+    fetchErpNextProductsNodeSummary(node.id)
+      .then(summary => {
+        setProductsSummary(summary);
+        setProductsError(null);
+      })
+      .catch(err => {
+        setProductsSummary(null);
+        setProductsError(parseApiErrorMessage(err));
+      })
+      .finally(() => setProductsLoading(false));
+  }, [isProductsContext, node.id]);
+
+  useEffect(() => {
+    if (isOpen && isProductsContext) {
+      loadProductsSummary();
+    } else {
+      setProductsSummary(null);
+      setProductsError(null);
+    }
+  }, [isOpen, isProductsContext, loadProductsSummary]);
+
+  const isMarketingContext = (
+    (department.sourceKey === 'dept_marketing' || department.id === 'dept_marketing' || department.label === 'Marketing')
+    && isPersistedBdtNode
+  );
 
   const panelIconByType: Record<string, typeof Activity> = {
     signal: Radio,
@@ -704,6 +1080,28 @@ export function BdtActionWorkspace({
                 error={operationsError}
                 onRefresh={loadOperationsSummary}
               />
+            )}
+
+            {isSalesContext && (
+              <SalesErpNextPanel
+                summary={salesSummary}
+                loading={salesLoading}
+                error={salesError}
+                onRefresh={loadSalesSummary}
+              />
+            )}
+
+            {isProductsContext && (
+              <ProductsErpNextPanel
+                summary={productsSummary}
+                loading={productsLoading}
+                error={productsError}
+                onRefresh={loadProductsSummary}
+              />
+            )}
+
+            {isMarketingContext && isMarketingMockActive(node) && (
+              <MarketingMockPanel node={node} />
             )}
 
             {!isTeamNode && companyId && isPersistedBdtNode && (

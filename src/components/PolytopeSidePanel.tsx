@@ -3,7 +3,8 @@ import { Search, Command, ArrowLeft, Plus, ChevronRight, Pencil, Trash2, Target,
 import { useNavigate } from 'react-router-dom';
 import type { UExternalNode, UInternalNode } from '../lib/universalPolytopeData';
 import { getExternalNodeColor, isActionLeafNode, isBdtWorkspaceLeafNode } from '../lib/universalPolytopeData';
-import { resolveDepartmentDelete, resolveDepartmentWrite } from '../lib/bdtPolytopeData';
+import { resolveDepartmentDelete, resolveDepartmentWrite, isBdtNodeActive } from '../lib/bdtPolytopeData';
+import { usePolytopeStore } from '../lib/usePolytopeStore';
 
 export interface PolytopeSidePanelProps {
   departments: UExternalNode[];
@@ -51,6 +52,32 @@ function getNodesAtPath(dept: UExternalNode, path: string[]): UInternalNode[] {
   if (path.length === 0) return dept.internalNodes;
   const node = findNodeAtPath(dept.internalNodes, path);
   return node?.children ?? [];
+}
+
+/**
+ * Walks the ancestor chain along `path` to find the nearest level1 ancestor's label and the
+ * nearest branch ancestor's label — i.e. the correct active/inactive key context for whatever
+ * node rows are currently visible, even if the user drilled deeper than branch level into
+ * team/process/project intermediary nodes.
+ */
+function resolveAncestorLabels(dept: UExternalNode, path: string[]): { level1Label?: string; branchLabel?: string } {
+  if (path.length === 0) return {};
+  let level1Label: string | undefined;
+  let branchLabel: string | undefined;
+  let nodes = dept.internalNodes;
+  for (const id of path) {
+    const node = nodes.find(n => n.id === id);
+    if (!node) break;
+    if (!level1Label && node.nodeLevel === 'level1') level1Label = node.label;
+    if (node.nodeLevel === 'branch') branchLabel = node.label;
+    nodes = node.children ?? [];
+  }
+  // Fallback: this catalog's convention is depth-1 nodes are always level1, even if
+  // node_level metadata is missing on an older/custom row.
+  if (!level1Label) {
+    level1Label = dept.internalNodes.find(n => n.id === path[0])?.label;
+  }
+  return { level1Label, branchLabel };
 }
 
 /** Recursively collect every internal node from a dept with its parent dept reference */
@@ -219,6 +246,18 @@ export function PolytopeSidePanel({
   const selectInternalNode = (node: UInternalNode) => {
     onNodeSelect?.([...selectedInternalPath, node.id]);
   };
+
+  // Active/inactive gating — BDT route only (bdtWorkspaceLeaves), matches the same choke
+  // point used in the 3D graph (InternalNode.tsx) so the sidebar can't be used to route
+  // around dimmed/blocked leaves.
+  const { activeKeys: bdtActiveKeys } = usePolytopeStore('bdt');
+  const { level1Label: ancestorLevel1Label, branchLabel: ancestorBranchLabel } = effectiveDept
+    ? resolveAncestorLabels(effectiveDept, selectedInternalPath)
+    : {};
+  const isNodeInactive = (node: UInternalNode) =>
+    bdtWorkspaceLeaves
+    && isLeafInternalNode(node)
+    && !isBdtNodeActive(ancestorBranchLabel, ancestorLevel1Label, effectiveDept?.sourceKey, bdtActiveKeys);
 
   // Dynamic back button logic based on drill-down level
   let backLabel: string | null = null;
@@ -688,6 +727,7 @@ export function PolytopeSidePanel({
               const isLeaf = isLeafInternalNode(node);
               const memberCount = node.memberCount ?? node.members?.length ?? 0;
               const isActiveNode = node.id === selectedInternalPath[selectedInternalPath.length - 1];
+              const isInactive = isNodeInactive(node);
               return (
                 <div
                   key={node.id}
@@ -696,7 +736,9 @@ export function PolytopeSidePanel({
                     animationDelay: `${i * 22}ms`,
                     background: isActiveNode ? `${deptColor}18` : 'transparent',
                     borderLeft: isActiveNode ? `2px solid ${deptColor}` : '2px solid transparent',
+                    opacity: isInactive ? 0.4 : 1,
                   }}
+                  title={isInactive ? 'Not connected yet' : undefined}
                 >
                   <span
                     className="w-2 h-2 rounded-full shrink-0 transition-transform group-hover/row:scale-125"
@@ -704,8 +746,9 @@ export function PolytopeSidePanel({
                   />
 
                   <div
-                    onClick={() => selectInternalNode(node)}
-                    className="flex-1 min-w-0 cursor-pointer"
+                    onClick={() => { if (!isInactive) selectInternalNode(node); }}
+                    className="flex-1 min-w-0"
+                    style={{ cursor: isInactive ? 'not-allowed' : 'pointer' }}
                   >
                     <span className="block text-[12px] text-gray-300 group-hover/row:text-white transition-colors leading-tight truncate">
                       {node.label}
@@ -718,13 +761,15 @@ export function PolytopeSidePanel({
                         {node.type}
                       </span>
                       <span className="text-[9px] truncate" style={{ color: '#4b5563' }}>
-                        {isLeaf ? (node.type === 'team' ? `${memberCount} teammate${memberCount === 1 ? '' : 's'}` : 'dashboard') : `${childCount} node${childCount === 1 ? '' : 's'}`}
+                        {isInactive
+                          ? 'not connected'
+                          : isLeaf ? (node.type === 'team' ? `${memberCount} teammate${memberCount === 1 ? '' : 's'}` : 'dashboard') : `${childCount} node${childCount === 1 ? '' : 's'}`}
                       </span>
                     </span>
                   </div>
 
                   <div className="relative flex items-center justify-end gap-0.5 shrink-0 min-w-[2.75rem]">
-                    {effectiveDept && (canWriteEffectiveDept || canDeleteEffectiveDept) && (
+                    {effectiveDept && !isInactive && (canWriteEffectiveDept || canDeleteEffectiveDept) && (
                       <div className="flex items-center gap-0.5 opacity-0 pointer-events-none group-hover/row:opacity-100 group-hover/row:pointer-events-auto transition-opacity duration-150">
                         {canWriteEffectiveDept && node.type === 'team' && isLeaf && (
                           <button
@@ -771,10 +816,14 @@ export function PolytopeSidePanel({
                         )}
                       </div>
                     )}
-                    <ChevronRight
-                      className={`w-3 h-3 shrink-0 transition-opacity duration-150 ${effectiveDept && (canWriteEffectiveDept || canDeleteEffectiveDept) ? 'group-hover/row:opacity-0' : ''}`}
-                      style={{ color: typeColor, opacity: 0.55 }}
-                    />
+                    {isInactive ? (
+                      <Lock className="w-3 h-3 shrink-0" style={{ color: '#6b7280', opacity: 0.6 }} />
+                    ) : (
+                      <ChevronRight
+                        className={`w-3 h-3 shrink-0 transition-opacity duration-150 ${effectiveDept && (canWriteEffectiveDept || canDeleteEffectiveDept) ? 'group-hover/row:opacity-0' : ''}`}
+                        style={{ color: typeColor, opacity: 0.55 }}
+                      />
+                    )}
                   </div>
                 </div>
               );

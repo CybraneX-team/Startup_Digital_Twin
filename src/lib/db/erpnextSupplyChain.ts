@@ -112,6 +112,11 @@ export interface ErpNextOpsEvidence {
   sourceId: string;
   detail?: string;
   status?: string;
+  attributes?: Array<{
+    label: string;
+    value: string | number;
+    tone?: ErpNextOpsTone;
+  }>;
 }
 
 export interface ErpNextOpsChildRollup {
