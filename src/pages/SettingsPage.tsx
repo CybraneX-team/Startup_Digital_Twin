@@ -324,11 +324,11 @@ export default function SettingsPage() {
                     onBlur={e => (e.target.style.borderColor = B)}
                   />
                 )},
-                { label: 'ERPNext', content: company?.slug ? (
+                { label: 'WorkOS', content: company?.slug ? (
                   <a href={`https://${company.slug}.erp.os.cybranex.com/app`} target="_blank" rel="noopener noreferrer"
                     style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 16px', borderRadius:8, fontSize:13, fontWeight:600,
                       background:'rgba(193,174,255,0.1)', border:`1px solid rgba(193,174,255,0.2)`, color:AC, textDecoration:'none' }}>
-                    Open ERPNext <ExternalLink size={13} />
+                    Open WorkOS <ExternalLink size={13} />
                   </a>
                 ) : (
                   <span style={{ fontSize:13, color:DIM }}>Not available yet</span>

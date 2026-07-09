@@ -29,7 +29,7 @@ export default function OAuthAuthorizePage() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
         // Rare path — see OAuthAuthorizePage's file comment. Send them to log
-        // in; clicking "Open ERPNext" again afterward starts a fresh flow.
+        // in; clicking "Open WorkOS" again afterward starts a fresh flow.
         window.location.href = '/auth';
         return;
       }
@@ -57,13 +57,13 @@ export default function OAuthAuthorizePage() {
     }}>
       {error ? (
         <>
-          <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)' }}>Couldn't complete ERPNext login</div>
+          <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.6)' }}>Couldn't complete WorkOS login</div>
           <div style={{ fontSize: 12, color: 'rgba(255,80,80,0.8)' }}>{error}</div>
         </>
       ) : (
         <>
           <Loader2 size={20} className="animate-spin" />
-          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Connecting to ERPNext…</div>
+          <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)' }}>Connecting to WorkOS…</div>
         </>
       )}
     </div>

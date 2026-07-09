@@ -79,7 +79,7 @@ function GlassCard({ children, className = '', style = {} }: { children: React.R
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function parseApiErrorMessage(err: unknown): string {
-  if (!(err instanceof Error)) return 'ERPNext Operations data could not be loaded.';
+  if (!(err instanceof Error)) return 'WorkOS Operations data could not be loaded.';
   const bodyText = err.message.replace(/^\d+:\s*/, '');
   try {
     const parsed = JSON.parse(bodyText) as { message?: string; error?: string };
@@ -204,7 +204,7 @@ function OperationsEvidenceDrawer({ evidence }: { evidence: ErpNextEvidenceRow[]
   return (
     <details className="rounded-xl border border-white/10 bg-black/20 p-3">
       <summary className="cursor-pointer text-xs font-semibold text-white/65">
-        Evidence ({evidence.length} ERPNext references)
+        Evidence ({evidence.length} WorkOS references)
       </summary>
       <div className="mt-3 space-y-2">
         {evidence.map(item => (
@@ -262,7 +262,7 @@ function OperationsErpNextPanel({ summary, loading, error, onRefresh }: {
     <GlassCard>
       <div className="flex items-center justify-between gap-3 mb-4">
         <div>
-          <SectionTitle icon={Activity}>ERPNext OPERATIONS</SectionTitle>
+          <SectionTitle icon={Activity}>WORKOS OPERATIONS</SectionTitle>
           {summary && (
             <div className="text-[10px] text-white/30 -mt-2 space-y-0.5">
               <p>{summary.mappingLabel} · {summary.status.replace('_', ' ')}</p>
@@ -287,14 +287,14 @@ function OperationsErpNextPanel({ summary, loading, error, onRefresh }: {
       )}
 
       {!error && !summary && (
-        <p className="text-sm text-white/45">Loading ERPNext Operations data...</p>
+        <p className="text-sm text-white/45">Loading WorkOS Operations data...</p>
       )}
 
       {summary && (
         <div className="space-y-3">
           <div className="rounded-xl border border-white/10 bg-[#111]/70 p-3">
             <p className="text-xs font-semibold text-white/75">{summary.path.join(' / ')}</p>
-            <p className="text-[10px] text-white/35 mt-1">{summary.sourceDoctypes.length ? summary.sourceDoctypes.join(', ') : 'No ERPNext source doctypes mapped.'}</p>
+            <p className="text-[10px] text-white/35 mt-1">{summary.sourceDoctypes.length ? summary.sourceDoctypes.join(', ') : 'No WorkOS source doctypes mapped.'}</p>
           </div>
 
           <div className="rounded-2xl border border-cyan-300/15 bg-gradient-to-br from-cyan-300/10 via-white/[0.03] to-black/20 p-4">
@@ -374,7 +374,7 @@ function SalesErpNextPanel({ summary, loading, error, onRefresh }: {
     <GlassCard>
       <div className="flex items-center justify-between gap-3 mb-4">
         <div>
-          <SectionTitle icon={Activity}>ERPNext SALES</SectionTitle>
+          <SectionTitle icon={Activity}>WORKOS SALES</SectionTitle>
           {summary && (
             <div className="text-[10px] text-white/30 -mt-2 space-y-0.5">
               <p>{summary.mappingLabel} · {summary.status.replace('_', ' ')}</p>
@@ -399,14 +399,14 @@ function SalesErpNextPanel({ summary, loading, error, onRefresh }: {
       )}
 
       {!error && !summary && (
-        <p className="text-sm text-white/45">Loading ERPNext Sales data...</p>
+        <p className="text-sm text-white/45">Loading WorkOS Sales data...</p>
       )}
 
       {summary && (
         <div className="space-y-3">
           <div className="rounded-xl border border-white/10 bg-[#111]/70 p-3">
             <p className="text-xs font-semibold text-white/75">{summary.path.join(' / ')}</p>
-            <p className="text-[10px] text-white/35 mt-1">{summary.sourceDoctypes.length ? summary.sourceDoctypes.join(', ') : 'No ERPNext source doctypes mapped.'}</p>
+            <p className="text-[10px] text-white/35 mt-1">{summary.sourceDoctypes.length ? summary.sourceDoctypes.join(', ') : 'No WorkOS source doctypes mapped.'}</p>
             {summary.erpnextActions && summary.erpnextActions.length > 0 && (
               <div className="mt-3 flex flex-wrap gap-2">
                 {summary.erpnextActions.map(action => (
@@ -420,7 +420,7 @@ function SalesErpNextPanel({ summary, loading, error, onRefresh }: {
                         ? 'border-cyan-300/25 bg-cyan-300/10 text-cyan-100/85 hover:bg-cyan-300/15'
                         : 'border-white/10 bg-white/5 text-white/65 hover:bg-white/10 hover:text-white/80'
                     }`}
-                    title={`${action.doctype} in ERPNext`}
+                    title={`${action.doctype} in WorkOS`}
                   >
                     {action.label}
                     <ExternalLink className="h-3 w-3" />
@@ -504,7 +504,7 @@ function ProductsErpNextPanel({ summary, loading, error, onRefresh }: {
     <GlassCard>
       <div className="flex items-center justify-between gap-3 mb-4">
         <div>
-          <SectionTitle icon={Activity}>ERPNext PRODUCTS</SectionTitle>
+          <SectionTitle icon={Activity}>WORKOS PRODUCTS</SectionTitle>
           {summary && (
             <div className="text-[10px] text-white/30 -mt-2 space-y-0.5">
               <p>{summary.mappingLabel} · {summary.status.replace('_', ' ')}</p>
@@ -529,14 +529,14 @@ function ProductsErpNextPanel({ summary, loading, error, onRefresh }: {
       )}
 
       {!error && !summary && (
-        <p className="text-sm text-white/45">Loading ERPNext Products data...</p>
+        <p className="text-sm text-white/45">Loading WorkOS Products data...</p>
       )}
 
       {summary && (
         <div className="space-y-3">
           <div className="rounded-xl border border-white/10 bg-[#111]/70 p-3">
             <p className="text-xs font-semibold text-white/75">{summary.path.join(' / ')}</p>
-            <p className="text-[10px] text-white/35 mt-1">{summary.sourceDoctypes.length ? summary.sourceDoctypes.join(', ') : 'No ERPNext source doctypes mapped.'}</p>
+            <p className="text-[10px] text-white/35 mt-1">{summary.sourceDoctypes.length ? summary.sourceDoctypes.join(', ') : 'No WorkOS source doctypes mapped.'}</p>
           </div>
 
           <div className="rounded-2xl border border-cyan-300/15 bg-gradient-to-br from-cyan-300/10 via-white/[0.03] to-black/20 p-4">

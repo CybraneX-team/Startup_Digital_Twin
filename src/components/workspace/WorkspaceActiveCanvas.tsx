@@ -1874,7 +1874,7 @@ function WorkspaceChatCopilot() {
         }>('/api/erpnext/chat', { messages: history });
         replyText = result.reply;
         toolTrace = (result.toolCalls ?? []).map(
-          (call) => `Called ERPNext: ${call.name}(${JSON.stringify(call.args)})`,
+          (call) => `Called WorkOS: ${call.name}(${JSON.stringify(call.args)})`,
         );
       } catch (err) {
         // api.ts throws `${status}: ${rawResponseText}` — the backend sends a real,
