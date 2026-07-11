@@ -1,14 +1,12 @@
-import { useState } from 'react';
-import { Eye, EyeOff, Building2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Eye, EyeOff, Building2, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
+import { api } from '../lib/api';
 import SpaceAuthLayout from '../components/SpaceAuthLayout';
 
 const ACCENT = '#a78bfa';
 const ACCENT2 = '#7c3aed';
-
-const BYPASS_EMAIL    = 'developer.cybranex@gmail.com';
-const BYPASS_PASSWORD = '12345678';
 
 function IncubatorLeft() {
   return (
@@ -100,38 +98,153 @@ function Input({ focused, setFocused, accent = ACCENT, ...props }: {
   );
 }
 
+type Mode = 'signin' | 'signup';
+
 export default function IncubatorAuthPage() {
-  const { signIn } = useAuth();
+  const { signIn, signUp, user } = useAuth();
   const navigate   = useNavigate();
 
-  const [email, setEmail]       = useState(BYPASS_EMAIL);
-  const [password, setPassword] = useState(BYPASS_PASSWORD);
+  const [mode, setMode]         = useState<Mode>('signin');
+  const [email, setEmail]       = useState('');
+  const [password, setPassword] = useState('');
+  const [name, setName]         = useState('');
   const [showPw, setShowPw]     = useState(false);
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState<string | null>(null);
   const [focused, setFocused]   = useState<string | null>(null);
+  const [checkEmail, setCheckEmail] = useState<string | null>(null);
+  // signIn() resolves as soon as the Supabase call itself completes, but
+  // AuthProvider's own `user` state only updates later via a separate
+  // onAuthStateChange listener (deferred with setTimeout(...,0)). Navigating
+  // immediately after signIn() used to race that update — AuthGuard on the
+  // destination route would still see `user === null` for a moment and bounce
+  // to /auth. Waiting for `user` to actually populate (below) closes that gap.
+  const [pendingRedirect, setPendingRedirect] = useState(false);
+
+  function switchMode(m: Mode) {
+    setMode(m);
+    setError(null);
+    setCheckEmail(null);
+    setEmail('');
+    setPassword('');
+    if (m === 'signup') {
+      setName('');
+    }
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (loading) return;
     setLoading(true); setError(null);
-    const { error: err } = await signIn(email, password);
-    setLoading(false);
-    if (err) { setError(err); return; }
-    localStorage.setItem('active_role', 'vc');
-    navigate('/3d');
+
+    if (mode === 'signin') {
+      const { error: err } = await signIn(email, password);
+      if (err) { setLoading(false); setError(err); return; }
+      localStorage.setItem('active_role', 'incubator');
+      setPendingRedirect(true);
+      return;
+    }
+
+    if (!name.trim()) { setLoading(false); setError('Your name is required'); return; }
+    const { error: err, needsEmailConfirm } = await signUp(email, password, {
+      first_name: name.trim(), last_name: '',
+    });
+    if (err) { setLoading(false); setError(err); return; }
+    localStorage.setItem('active_role', 'incubator');
+    if (needsEmailConfirm) {
+      setLoading(false);
+      setCheckEmail(email);
+      return;
+    }
+    setPendingRedirect(true);
+  }
+
+  useEffect(() => {
+    if (!pendingRedirect || !user) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        await api.get('/api/incubators/me');
+        if (!cancelled) navigate('/3d');
+      } catch {
+        if (!cancelled) navigate('/incubator/onboarding');
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          setPendingRedirect(false);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [pendingRedirect, user, navigate]);
+
+  if (checkEmail) {
+    return (
+      <SpaceAuthLayout leftPanel={<IncubatorLeft />}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center' }}>
+          <div style={{
+            width: 64, height: 64, borderRadius: '50%', marginBottom: 24,
+            background: 'rgba(167,139,250,0.08)', border: '1px solid rgba(167,139,250,0.22)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Mail size={28} color={ACCENT} />
+          </div>
+          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#fff', letterSpacing: '-0.02em', margin: '0 0 10px' }}>Check your inbox</h1>
+          <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.38)', margin: '0 0 4px' }}>We sent a verification link to</p>
+          <p style={{ fontSize: 14, fontWeight: 600, color: ACCENT, margin: '0 0 24px', wordBreak: 'break-all' }}>{checkEmail}</p>
+          <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.3)', margin: '0 0 24px' }}>Confirm it, then sign in below.</p>
+          <button
+            onClick={() => switchMode('signin')}
+            style={{
+              width: '100%', padding: '13px', borderRadius: 12, border: 'none',
+              background: `linear-gradient(135deg, ${ACCENT} 0%, ${ACCENT2} 100%)`,
+              color: '#fff', fontSize: 14, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >
+            Go to sign in
+          </button>
+        </div>
+      </SpaceAuthLayout>
+    );
   }
 
   return (
     <SpaceAuthLayout leftPanel={<IncubatorLeft />}>
 
       {/* Heading */}
-      <div style={{ marginBottom: 32 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, color: '#fff', letterSpacing: '-0.025em', margin: '0 0 6px' }}>Sign in</h1>
-        <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.38)', margin: 0 }}>Access the Work OS Universe as an incubator</p>
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ fontSize: 28, fontWeight: 700, color: '#fff', letterSpacing: '-0.025em', margin: '0 0 6px' }}>
+          {mode === 'signin' ? 'Sign in' : 'Create incubator account'}
+        </h1>
+        <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.38)', margin: 0 }}>
+          {mode === 'signin' ? 'Access the Work OS Universe as an incubator' : 'Set up your incubator program on WorkOS'}
+        </p>
+      </div>
+
+      {/* Mode toggle */}
+      <div style={{ display: 'flex', background: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 3, border: '1px solid rgba(255,255,255,0.07)', marginBottom: 24 }}>
+        {(['signin', 'signup'] as Mode[]).map(m => (
+          <button key={m} type="button" onClick={() => switchMode(m)} style={{
+            flex: 1, padding: '8px 0', borderRadius: 8, border: 'none', cursor: 'pointer',
+            fontSize: 13, fontWeight: 600, fontFamily: 'inherit', transition: 'all 0.18s',
+            background: mode === m ? 'rgba(167,139,250,0.13)' : 'transparent',
+            color: mode === m ? ACCENT : 'rgba(255,255,255,0.32)',
+          }}>
+            {m === 'signin' ? 'Sign In' : 'Sign Up'}
+          </button>
+        ))}
       </div>
 
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        {mode === 'signup' && (
+          <div>
+            <label style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Your name</label>
+            <Input focused={focused} setFocused={setFocused} accent={ACCENT} name="name" type="text" placeholder="Full name" value={name} onChange={e => { setName(e.target.value); setError(null); }} required />
+          </div>
+        )}
+
         <div>
           <label style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.08em', textTransform: 'uppercase', display: 'block', marginBottom: 8 }}>Email</label>
           <Input focused={focused} setFocused={setFocused} accent={ACCENT} name="email" type="email" placeholder="Email address" value={email} onChange={e => { setEmail(e.target.value); setError(null); }} required />
@@ -140,14 +253,16 @@ export default function IncubatorAuthPage() {
         <div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
             <label style={{ fontSize: 11, fontWeight: 600, color: 'rgba(255,255,255,0.28)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Password</label>
-            <span style={{ fontSize: 12, color: `rgba(167,139,250,0.4)`, cursor: 'pointer', transition: 'color 0.15s' }}
-              onMouseEnter={e => (e.currentTarget.style.color = ACCENT)}
-              onMouseLeave={e => (e.currentTarget.style.color = 'rgba(167,139,250,0.4)')}>
-              Forgot password?
-            </span>
+            {mode === 'signin' && (
+              <span style={{ fontSize: 12, color: `rgba(167,139,250,0.4)`, cursor: 'pointer', transition: 'color 0.15s' }}
+                onMouseEnter={e => (e.currentTarget.style.color = ACCENT)}
+                onMouseLeave={e => (e.currentTarget.style.color = 'rgba(167,139,250,0.4)')}>
+                Forgot password?
+              </span>
+            )}
           </div>
           <div style={{ position: 'relative' }}>
-            <Input focused={focused} setFocused={setFocused} accent={ACCENT} name="password" type={showPw ? 'text' : 'password'} placeholder="Password" value={password} onChange={e => { setPassword(e.target.value); setError(null); }} required style={{ paddingRight: 48 }} />
+            <Input focused={focused} setFocused={setFocused} accent={ACCENT} name="password" type={showPw ? 'text' : 'password'} placeholder="Password" value={password} onChange={e => { setPassword(e.target.value); setError(null); }} required minLength={6} style={{ paddingRight: 48 }} />
             <button type="button" onClick={() => setShowPw(p => !p)} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'rgba(255,255,255,0.3)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', padding: 4 }}>
               {showPw ? <EyeOff size={15} /> : <Eye size={15} />}
             </button>
@@ -167,7 +282,7 @@ export default function IncubatorAuthPage() {
           onMouseEnter={e => { if (!loading) e.currentTarget.style.transform = 'translateY(-1px)'; }}
           onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; }}
         >
-          {loading ? 'Signing in…' : 'Enter as Incubator'}
+          {loading ? (mode === 'signin' ? 'Signing in…' : 'Creating account…') : mode === 'signin' ? 'Enter as Incubator' : 'Create Account'}
         </button>
       </form>
 

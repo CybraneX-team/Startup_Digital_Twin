@@ -25,8 +25,11 @@ export default function TopBar() {
   }, []);
 
   const isAuthed     = !!user;
-  const hasCompany   = !!profile?.company_id;
-  const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
+  const activeRole = localStorage.getItem('active_role');
+  const isBypassUser = !!user && (activeRole === 'vc' || activeRole === 'incubator');
+  // Bypass users (VC/Incubator) may have a stray profile.company_id from prior
+  // testing as another persona — never treat that as "their" workspace.
+  const hasCompany   = !isBypassUser && !!profile?.company_id;
   const canManageTeam = canWrite('team');
 
   const { totalCount: workspaceSavedCount } = useSavedWorkflows();
@@ -78,7 +81,14 @@ export default function TopBar() {
   if (workspaceOpen) return null;
 
   // ── Tabs ─────────────────────────────────────────────────────────────────
-  const tabs = isBypassUser
+  const tabs = activeRole === 'incubator'
+    ? [
+        { path: '/3d',                    label: '3D Twin',       active: is3D },
+        { path: '/incubator/discover',     label: 'Find Startups', active: location.pathname === '/incubator/discover' },
+        { path: '/incubator/dashboard',    label: 'Manage',        active: location.pathname === '/incubator/dashboard' },
+        { path: '/incubator/portfolio',    label: 'My Portfolio',  active: location.pathname === '/incubator/portfolio' },
+      ]
+    : isBypassUser
     ? [
         { path: '/3d',           label: '3D Twin',       active: is3D },
         { path: '/vc/find',      label: 'Find Startups', active: location.pathname === '/vc/find' },

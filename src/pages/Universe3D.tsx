@@ -66,10 +66,11 @@ export default function Universe3DPage() {
   const navigate = useNavigate();
   const { pathname, state } = useLocation();
   const { user, profile, canRead, canWrite, role: authRole } = useAuth();
-  const { company } = useCompany(profile?.company_id);
   // Bypass users (VC/Incubator) have no company — pass null so the universe loads without waiting
-  const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
+  const activeRole = localStorage.getItem('active_role');
+  const isBypassUser = !!user && (activeRole === 'vc' || activeRole === 'incubator');
   const companyId = isBypassUser ? null : (user ? (profile?.company_id ?? null) : undefined);
+  const { company } = useCompany(companyId ?? undefined);
   const {
     data,
     loading,
@@ -82,7 +83,7 @@ export default function Universe3DPage() {
     && ['super_admin', 'founder', 'co_founder', 'admin'].includes(authRole ?? '');
 
   // Company name for the polytope core sphere — same fallback chain as UniversalPage
-  const bhCompanyName = company?.name || (profile?.company_id
+  const bhCompanyName = company?.name || (companyId
     ? profile?.first_name ? `${profile.first_name}'s workspace` : 'My workspace'
     : 'My Organisation');
 
@@ -476,7 +477,8 @@ export default function Universe3DPage() {
   }, [rootPolytopeDeptId, rootPolytopeInternalPath.length]);
 
   const resolvePlanetRole = useCallback((): UserPlanetRole => {
-    if (localStorage.getItem('active_role') === 'vc') return 'vc';
+    const role = localStorage.getItem('active_role');
+    if (role === 'vc' || role === 'incubator') return 'vc';
     return (authRole === 'founder' || authRole === 'co_founder' || authRole === 'admin') ? 'founder' : 'career';
   }, [authRole]);
 

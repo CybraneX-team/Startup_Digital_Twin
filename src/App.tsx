@@ -29,6 +29,18 @@ import PolytopePage from './pages/PolytopePage';
 import UniversalPage from './pages/UniversalPage';
 import WorkspacePage from './pages/WorkspacePage';
 import SavedWorkflows from './pages/SavedWorkflows';
+import JoinStartupInvite from './pages/JoinStartupInvite';
+import IncubatorGuard from './components/incubator/IncubatorGuard';
+import IncubatorShell from './components/incubator/IncubatorShell';
+import IncubatorOnboarding from './pages/incubator/IncubatorOnboarding';
+import IncubatorDashboard from './pages/incubator/IncubatorDashboard';
+import IncubatorDiscover from './pages/incubator/IncubatorDiscover';
+import IncubatorRosterImport from './pages/incubator/IncubatorRosterImport';
+import IncubatorPortfolio from './pages/incubator/IncubatorPortfolio';
+import IncubatorInvites from './pages/incubator/IncubatorInvites';
+import IncubatorCohorts from './pages/incubator/IncubatorCohorts';
+import IncubatorCohortDetail from './pages/incubator/IncubatorCohortDetail';
+import IncubatorSettings from './pages/incubator/IncubatorSettings';
 import { VoiceProvider } from './context/VoiceContext';
 
 
@@ -139,11 +151,59 @@ function AppRoutes() {
     );
   }
 
+  // /join-startup — incubator invite landing page (no TopBar, no layout)
+  if (location.pathname === '/join-startup') {
+    return (
+      <Routes>
+        <Route path="/join-startup" element={<JoinStartupInvite />} />
+      </Routes>
+    );
+  }
+
+  // /incubator/* — entirely separate shell from the founder app (own sidebar,
+  // no TopBar, no persistent-overlay logic). /onboarding is only AuthGuard'd
+  // (not IncubatorGuard'd) since IncubatorGuard itself redirects a
+  // not-yet-onboarded incubator to this same route — wrapping it too would loop.
+  if (location.pathname.startsWith('/incubator')) {
+    return (
+      <Routes>
+        <Route
+          path="/incubator/onboarding"
+          element={
+            <AuthGuard>
+              <IncubatorOnboarding />
+            </AuthGuard>
+          }
+        />
+        <Route
+          element={
+            <AuthGuard>
+              <IncubatorGuard />
+            </AuthGuard>
+          }
+        >
+          <Route element={<IncubatorShell />}>
+            <Route path="/incubator/dashboard" element={<IncubatorDashboard />} />
+            <Route path="/incubator/discover" element={<IncubatorDiscover />} />
+            <Route path="/incubator/portfolio" element={<IncubatorPortfolio />} />
+            <Route path="/incubator/cohorts" element={<IncubatorCohorts />} />
+            <Route path="/incubator/cohorts/:cohortId" element={<IncubatorCohortDetail />} />
+            <Route path="/incubator/import" element={<IncubatorRosterImport />} />
+            <Route path="/incubator/invites" element={<IncubatorInvites />} />
+            <Route path="/incubator/settings" element={<IncubatorSettings />} />
+            <Route path="/incubator" element={<Navigate to="/incubator/dashboard" replace />} />
+          </Route>
+        </Route>
+      </Routes>
+    );
+  }
+
   const isTwinGraph = location.pathname === '/twin';
   const is3DUniverse = location.pathname === '/3d';
   const isUniversal = location.pathname === '/universal';
   // Bypass users (VC / Incubator) are authed but have no company — still let them see /3d
-  const isBypassUser = !!user && localStorage.getItem('active_role') === 'vc';
+  const activeRole = localStorage.getItem('active_role');
+  const isBypassUser = !!user && (activeRole === 'vc' || activeRole === 'incubator');
   // Universe3D stays mounted for fully-authed users so camera/galaxy state persists across navigation
   const isFullyAuthed = (!!user && !!profile?.onboarding_completed && !!profile?.company_id) || isBypassUser;
 

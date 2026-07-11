@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import {
-  Settings, Palette, Bell, Layers, Plus, Trash2, ImagePlus, Save, Loader2,
+  Settings, Palette, Bell, Layers, Plus, Trash2, ImagePlus, Save, Loader2, Link2, Check, X as XIcon,
 } from 'lucide-react';
 import { useAuth } from '../lib/auth';
-import { useCompany } from '../lib/db/companies';
+import { useCompany, useConnectionRequests, respondToConnectionRequest } from '../lib/db/companies';
 import { INDUSTRIES } from '../db/industries';
 import type { CompanyStage } from '../lib/supabase';
 import { api } from '../lib/api';
@@ -25,7 +25,7 @@ interface DeptConfig {
   access?: { read: boolean; write: boolean; delete: boolean; manage: boolean };
 }
 
-type Section = 'organization' | 'profile' | 'departments' | 'workspace' | 'notifications';
+type Section = 'organization' | 'profile' | 'departments' | 'workspace' | 'notifications' | 'connections';
 
 const NAV: { id: Section; icon: React.ReactNode; label: string }[] = [
   { id: 'organization',  icon: <Layers   size={15} />, label: 'Organization'  },
@@ -33,6 +33,7 @@ const NAV: { id: Section; icon: React.ReactNode; label: string }[] = [
   { id: 'departments',   icon: <Plus     size={15} />, label: 'Departments'   },
   { id: 'workspace',     icon: <Palette  size={15} />, label: 'Workspace'     },
   { id: 'notifications', icon: <Bell     size={15} />, label: 'Notifications' },
+  { id: 'connections',   icon: <Link2    size={15} />, label: 'Connections'   },
 ];
 
 const B  = 'rgba(255,255,255,0.06)';
@@ -52,6 +53,8 @@ const inputStyle: React.CSSProperties = {
 export default function SettingsPage() {
   const { user, profile, refreshProfile, canWrite, role } = useAuth();
   const { company, loading: companyLoading } = useCompany(profile?.company_id);
+  const { requests: connectionRequests, loading: connectionsLoading, refresh: refreshConnections } = useConnectionRequests(profile?.company_id);
+  const [respondingId, setRespondingId] = useState<string | null>(null);
   const canEditSettings = canWrite('settings');
   const canCreateDepartments = canWrite('twin') && canWrite('team');
   const departmentStore = usePolytopeStore('bdt');
@@ -137,6 +140,17 @@ export default function SettingsPage() {
     }
     setSaving(false);
     setTimeout(() => setSaveMsg(null), 3000);
+  }
+
+  async function handleRespondConnection(requestId: string, accept: boolean) {
+    if (!profile?.company_id) return;
+    setRespondingId(requestId);
+    try {
+      await respondToConnectionRequest(profile.company_id, requestId, accept);
+      await refreshConnections();
+    } finally {
+      setRespondingId(null);
+    }
   }
 
   async function handleSaveProfile() {
@@ -598,6 +612,54 @@ export default function SettingsPage() {
                   <div style={{ width:8, height:8, borderRadius:'50%', background: item.active ? '#10b981' : 'rgba(255,255,255,0.2)', flexShrink:0 }} />
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* ── Connections ──────────────────────────────────── */}
+          {section === 'connections' && (
+            <div>
+              <div style={{ marginBottom:28 }}>
+                <h2 style={{ fontSize:18, fontWeight:700, color:'#fff', margin:0 }}>Connections</h2>
+                <p style={{ fontSize:13, color:DIM, marginTop:4, margin:'4px 0 0' }}>
+                  Incubators that want to manage your company. Accepting shares your live metrics with them.
+                </p>
+              </div>
+
+              {connectionsLoading ? (
+                <div style={{ display:'flex', justifyContent:'center', padding:'40px 0' }}>
+                  <Loader2 size={20} className="animate-spin" style={{ color: AC }} />
+                </div>
+              ) : connectionRequests.length === 0 ? (
+                <div style={{ fontSize:13, color:DIM, padding:'24px 0' }}>No pending requests.</div>
+              ) : (
+                <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
+                  {connectionRequests.map(req => (
+                    <div key={req.id} style={{
+                      display:'flex', alignItems:'center', justifyContent:'space-between', gap:12,
+                      padding:'14px 16px', borderRadius:10, border:`1px solid ${B}`, background:'rgba(255,255,255,0.02)',
+                    }}>
+                      <div>
+                        <div style={{ fontSize:14, color:'#fff', fontWeight:500 }}>{req.incubator_name}</div>
+                        {req.message && <div style={{ fontSize:12, color:DIM, marginTop:3 }}>{req.message}</div>}
+                      </div>
+                      <div style={{ display:'flex', gap:8, flexShrink:0 }}>
+                        <button onClick={() => handleRespondConnection(req.id, true)} disabled={respondingId === req.id}
+                          style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:8, fontSize:13, fontWeight:600,
+                            background:'rgba(16,185,129,0.1)', border:'1px solid rgba(16,185,129,0.25)', color:'#34d399',
+                            cursor: respondingId === req.id ? 'not-allowed' : 'pointer', opacity: respondingId === req.id ? 0.6 : 1, fontFamily:'inherit' }}>
+                          <Check size={13} /> Accept
+                        </button>
+                        <button onClick={() => handleRespondConnection(req.id, false)} disabled={respondingId === req.id}
+                          style={{ display:'flex', alignItems:'center', gap:6, padding:'7px 14px', borderRadius:8, fontSize:13, fontWeight:600,
+                            background:'rgba(255,255,255,0.03)', border:`1px solid ${B}`, color:'rgba(255,255,255,0.5)',
+                            cursor: respondingId === req.id ? 'not-allowed' : 'pointer', opacity: respondingId === req.id ? 0.6 : 1, fontFamily:'inherit' }}>
+                          <XIcon size={13} /> Decline
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 

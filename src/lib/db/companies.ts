@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../supabase';
 import type { DbCompany, CompanyStage, BusinessModel } from '../supabase';
 import { INDUSTRIES } from '../../db/industries';
@@ -100,6 +100,50 @@ export function useCompany(companyId: string | null | undefined): {
 
   return { company, loading };
 }
+
+/* ──────────────────────────────────────────────────
+   Incubator connection requests — founder-side half of Discover
+   (backend/src/routes/incubatorDiscover.ts). An incubator finding this
+   company via Discover sends a request here rather than being silently
+   attached; the founder must explicitly accept before
+   managed_by_incubator_id is set on the company.
+────────────────────────────────────────────────── */
+export interface CompanyConnectionRequest {
+  id: string;
+  status: 'pending' | 'accepted' | 'declined';
+  message: string | null;
+  created_at: string;
+  incubator_id: string;
+  incubator_name: string;
+}
+
+export function useConnectionRequests(companyId: string | null | undefined) {
+  const [requests, setRequests] = useState<CompanyConnectionRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    if (!companyId) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    try {
+      const data = await api.get<{ requests: CompanyConnectionRequest[] }>(`/api/companies/${companyId}/connection-requests`);
+      setRequests(data.requests);
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  return { requests, loading, refresh: load };
+}
+
+export const respondToConnectionRequest = (companyId: string, requestId: string, accept: boolean) =>
+  api.post<{ status: string }>(`/api/companies/${companyId}/connection-requests/${requestId}/respond`, { accept });
 
 /* ──────────────────────────────────────────────────
    Convert DbCompany → TwinNode-compatible shape
