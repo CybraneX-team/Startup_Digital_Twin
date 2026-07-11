@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useMemo } from 'react';
 import {
-  Building2, TrendingUp, Zap, Search, ChevronRight, ChevronLeft,
-  Users, BadgeCheck, Star, Filter,
+  Building2, TrendingUp, Zap, ChevronRight, ChevronLeft,
+  BadgeCheck, Star, Filter, Compass,
 } from 'lucide-react';
 import { useFounderWorkspace } from '../../context/FounderWorkspaceContext';
 
@@ -27,9 +27,6 @@ type Company = {
 
 export function WorkspaceSubdomainCanvas() {
   const { entryContext, setEntryContext } = useFounderWorkspace();
-  const [search, setSearch] = useState('');
-  const [stageFilter, setStageFilter] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<'name' | 'employees' | 'stage'>('name');
 
   const subdomainName = entryContext?.subdomainName ?? 'Subdomain';
   const subdomainDescription = entryContext?.subdomainDescription;
@@ -63,8 +60,6 @@ export function WorkspaceSubdomainCanvas() {
       companyStage: c.stage,
       companyEmployees: c.employees,
       companyIsLive: c.isLive,
-      // isLive = user's own company already tracked in OS → default to 'own'
-      // non-live = external; no relationship set yet (picker will appear)
       companyRelationship: c.isLive ? 'own' : undefined,
       companyRole: 'founder',
       industryId,
@@ -80,21 +75,6 @@ export function WorkspaceSubdomainCanvas() {
     const found = [...new Set(companies.map(c => c.stage).filter(Boolean) as string[])];
     return found.sort((a, b) => STAGE_ORDER.indexOf(a) - STAGE_ORDER.indexOf(b));
   }, [companies]);
-
-  const filtered = useMemo(() => {
-    let list = companies;
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(c => c.name.toLowerCase().includes(q) || c.description?.toLowerCase().includes(q));
-    }
-    if (stageFilter) {
-      list = list.filter(c => c.stage === stageFilter);
-    }
-    if (sortBy === 'name') list = [...list].sort((a, b) => a.name.localeCompare(b.name));
-    if (sortBy === 'employees') list = [...list].sort((a, b) => (b.employees ?? 0) - (a.employees ?? 0));
-    if (sortBy === 'stage') list = [...list].sort((a, b) => STAGE_ORDER.indexOf(a.stage ?? '') - STAGE_ORDER.indexOf(b.stage ?? ''));
-    return list;
-  }, [companies, search, stageFilter, sortBy]);
 
   const liveCompanies = companies.filter(c => c.isLive);
   const stageDistribution = useMemo(() =>
@@ -155,7 +135,7 @@ export function WorkspaceSubdomainCanvas() {
         </div>
       </div>
 
-      {/* ── Stage Distribution ───────────────────────────────────────────── */}
+      {/* ── Stage Distribution (insight, not a filter — the full directory now lives in Nodes) ── */}
       {stageDistribution.length > 0 && (
         <div className="shrink-0">
           <div className="text-[10px] font-bold tracking-[0.15em] uppercase text-white/30 mb-2.5 flex items-center gap-1.5">
@@ -164,116 +144,59 @@ export function WorkspaceSubdomainCanvas() {
           </div>
           <div className="flex gap-2 flex-wrap">
             {stageDistribution.map(({ stage, count }) => (
-              <button
+              <div
                 key={stage}
-                type="button"
-                onClick={() => setStageFilter(stageFilter === stage ? null : stage)}
-                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold transition-all"
-                style={{
-                  background: stageFilter === stage ? `${stageColor(stage)}22` : 'rgba(255,255,255,0.03)',
-                  color: stageFilter === stage ? stageColor(stage) : 'rgba(255,255,255,0.45)',
-                  border: stageFilter === stage ? `1px solid ${stageColor(stage)}40` : '1px solid rgba(255,255,255,0.08)',
-                }}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[10px] font-semibold"
+                style={{ background: 'rgba(255,255,255,0.03)', color: 'rgba(255,255,255,0.45)', border: '1px solid rgba(255,255,255,0.08)' }}
               >
-                <span
-                  className="w-1.5 h-1.5 rounded-full"
-                  style={{ background: stageColor(stage) }}
-                />
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: stageColor(stage) }} />
                 {stage}
                 <span className="opacity-60">({count})</span>
-              </button>
+              </div>
             ))}
           </div>
         </div>
       )}
 
-      {/* ── Company Directory ─────────────────────────────────────────────── */}
-      <div>
-        <div className="flex items-center justify-between mb-3 gap-2">
-          <div className="text-[10px] font-bold tracking-[0.15em] uppercase text-white/30 flex items-center gap-1.5 shrink-0">
-            <Building2 className="w-3.5 h-3.5" style={{ color: ACCENT }} />
-            Companies ({filtered.length})
+      {/* ── Live in the OS (curated, not a full listing) ──────────────────── */}
+      {liveCompanies.length > 0 && (
+        <div>
+          <div className="text-[10px] font-bold tracking-[0.15em] uppercase text-white/30 mb-3 flex items-center gap-1.5">
+            <BadgeCheck className="w-3.5 h-3.5" style={{ color: ACCENT }} />
+            Live in the OS
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-white/5 border border-white/10">
-              {(['name', 'employees', 'stage'] as const).map(s => (
-                <button
-                  key={s}
-                  type="button"
-                  onClick={() => setSortBy(s)}
-                  className={`px-2 py-1 rounded-md text-[9px] font-semibold transition-all ${sortBy === s ? 'bg-white/10 text-white' : 'text-white/35 hover:text-white/60'}`}
-                >
-                  {s === 'name' ? 'A–Z' : s === 'employees' ? 'Size' : 'Stage'}
-                </button>
-              ))}
-            </div>
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-white/25" />
-              <input
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                placeholder="Search…"
-                className="pl-6 pr-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-[11px] text-white placeholder-white/20 outline-none focus:border-white/20 w-32"
-              />
-            </div>
-          </div>
-        </div>
-
-        {filtered.length === 0 && (
-          <div className="py-10 text-center text-white/25 text-sm">No companies match your filters.</div>
-        )}
-
-        <div className="space-y-1.5">
-          {filtered.map(c => (
-            <button
-              key={c.id}
-              type="button"
-              onClick={() => handleOpenCompany(c)}
-              className="group w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-white/[0.07] bg-white/[0.015] hover:bg-white/[0.04] hover:border-white/18 transition-all text-left"
-            >
-              {/* Avatar */}
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold text-white"
-                style={{ background: c.isLive ? `${industryColor}25` : 'rgba(255,255,255,0.06)' }}
+          <div className="space-y-1.5">
+            {liveCompanies.slice(0, 4).map(c => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => handleOpenCompany(c)}
+                className="group w-full flex items-center gap-3 px-3.5 py-2.5 rounded-xl border border-white/[0.07] bg-white/[0.015] hover:bg-white/[0.04] hover:border-white/18 transition-all text-left"
               >
-                {c.name.charAt(0).toUpperCase()}
-              </div>
-
-              {/* Info */}
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-sm font-semibold text-white truncate">{c.name}</span>
-                  {c.isLive && (
-                    <BadgeCheck className="w-3 h-3 shrink-0" style={{ color: industryColor }} />
-                  )}
+                <div
+                  className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0 text-xs font-bold text-white"
+                  style={{ background: `${industryColor}25` }}
+                >
+                  {c.name.charAt(0).toUpperCase()}
                 </div>
-                {c.description && (
-                  <p className="text-[10px] text-white/35 mt-0.5 truncate">{c.description}</p>
-                )}
-              </div>
-
-              {/* Stage & size */}
-              <div className="flex items-center gap-2 shrink-0">
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-semibold text-white truncate">{c.name}</span>
+                  {c.description && <p className="text-[10px] text-white/35 mt-0.5 truncate">{c.description}</p>}
+                </div>
                 {c.stage && (
                   <span
-                    className="text-[9px] font-bold px-2 py-0.5 rounded-full"
+                    className="text-[9px] font-bold px-2 py-0.5 rounded-full shrink-0"
                     style={{ background: `${stageColor(c.stage)}16`, color: stageColor(c.stage), border: `1px solid ${stageColor(c.stage)}30` }}
                   >
                     {c.stage}
                   </span>
                 )}
-                {c.employees != null && (
-                  <div className="flex items-center gap-1 text-[10px] text-white/30">
-                    <Users className="w-3 h-3" />
-                    {c.employees > 1000 ? `${(c.employees / 1000).toFixed(1)}k` : c.employees}
-                  </div>
-                )}
-                <ChevronRight className="w-3.5 h-3.5 text-white/20 group-hover:text-white/55 transition-colors" />
-              </div>
-            </button>
-          ))}
+                <ChevronRight className="w-3.5 h-3.5 text-white/20 group-hover:text-white/55 transition-colors shrink-0" />
+              </button>
+            ))}
+          </div>
         </div>
-      </div>
+      )}
 
       {/* ── Insights ─────────────────────────────────────────────────────── */}
       <div className="shrink-0 rounded-xl p-4 border border-white/8 bg-white/[0.02]">
@@ -295,6 +218,15 @@ export function WorkspaceSubdomainCanvas() {
             </span>
           </div>
         </div>
+      </div>
+
+      {/* ── Nodes CTA ────────────────────────────────────────────────────── */}
+      <div
+        className="shrink-0 flex items-center justify-center gap-2 px-4 py-3 rounded-xl text-[11px] font-medium"
+        style={{ background: `${industryColor}0a`, color: `${industryColor}90`, border: `1px solid ${industryColor}18` }}
+      >
+        <Compass className="w-3.5 h-3.5" />
+        Switch to the Nodes tab to browse all {companies.length} companies and drill into any of them
       </div>
     </div>
   );

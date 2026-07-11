@@ -4,9 +4,11 @@ import { Text, Billboard, Html } from '@react-three/drei';
 import * as THREE from 'three';
 import { gsap } from 'gsap';
 import type { UInternalNode } from '../../lib/universalPolytopeData';
-import { isActionLeafNode } from '../../lib/universalPolytopeData';
+import { isActionLeafNode, isBdtWorkspaceLeafNode } from '../../lib/universalPolytopeData';
+import { isBdtNodeActive } from '../../lib/bdtPolytopeData';
 import { PlasmaSphere } from '../PolytopeShared';
 import { useDragWorkspaceStore } from '../../lib/useDragWorkspaceStore';
+import { usePolytopeStore } from '../../lib/usePolytopeStore';
 
 // DraggableHtmlCard removed per page feedback.
 
@@ -51,6 +53,13 @@ interface InternalNodeProps {
   entryEase?: string;
   /** When true, place the node at its target immediately (session restore). */
   skipEntryAnimation?: boolean;
+  /** BDT active/inactive gating — omitted by callers outside the BDT department tree (e.g.
+   * the reference-company planet view), in which case gating is a no-op (fully active). */
+  departmentSourceKey?: string;
+  /** This node's level1 ancestor's label — set by the level1 node itself for its children. */
+  level1Label?: string;
+  /** Nearest branch ancestor label for this subtree; used for active/inactive gating. */
+  branchLabel?: string;
 }
 
 
@@ -77,15 +86,27 @@ export function InternalNode({
   entryDuration = 1.1,
   entryEase = 'power3.out',
   skipEntryAnimation = false,
+  departmentSourceKey,
+  level1Label,
+  branchLabel,
 }: InternalNodeProps) {
   const groupRef = useRef<THREE.Group>(null);
   const currentPos = useRef(startPos.clone());
   const [entryAnimDone, setEntryAnimDone] = useState(isDraft);
   const hasFocusedRef = useRef(false);
+  const [showInactiveTooltip, setShowInactiveTooltip] = useState(false);
 
   const radii = [0.25, 0.20, 0.15, 0.12, 0.09];
   const isLevel1 = node.nodeLevel === 'level1';
+  const isBranch = node.nodeLevel === 'branch';
   const radius = isLevel1 ? radii[0] * 1.4 : (radii[depth] || 0.05);
+  const childLevel1Label = isLevel1 ? node.label : level1Label;
+  const childBranchLabel = isBranch ? node.label : branchLabel;
+
+  const { activeKeys } = usePolytopeStore('bdt');
+  const isInactive = !isDraft
+    && isBdtWorkspaceLeafNode(node)
+    && !isBdtNodeActive(branchLabel, level1Label, departmentSourceKey, activeKeys);
 
   const isMeActiveCenter = selectedPath.length > 0 && selectedPath[selectedPath.length - 1] === node.id;
   const isMeAncestor = selectedPath.includes(node.id) && !isMeActiveCenter;
@@ -292,7 +313,7 @@ export function InternalNode({
 
   const handlePointerDown = (e: any) => {
     e.stopPropagation();
-    if (isDraft || !isActionLeafNode(node)) return;
+    if (isDraft || isInactive || !isActionLeafNode(node)) return;
     startPosClient.current = { x: e.clientX, y: e.clientY };
     dragTimer.current = setTimeout(() => {
       startDrag(node, color, e.clientX, e.clientY);
@@ -322,6 +343,11 @@ export function InternalNode({
     e.stopPropagation();
     cancelDrag();
     if (isDraft) return;
+    if (isInactive) {
+      setShowInactiveTooltip(true);
+      setTimeout(() => setShowInactiveTooltip(false), 2000);
+      return;
+    }
     if (selectedPath[selectedPath.length - 1] === node.id) {
       onSelectPath(pathContext, parentPos);
       return;
@@ -342,16 +368,17 @@ export function InternalNode({
           cancelDrag();
           if (!isDraft) document.body.style.cursor = 'auto';
         }}
-        onPointerOver={() => { if (!isDraft) document.body.style.cursor = 'pointer'; }}
+        onPointerOver={() => { if (!isDraft) document.body.style.cursor = isInactive ? 'not-allowed' : 'pointer'; }}
       >
 
         <PlasmaSphere
           color={color}
           radius={radius}
-          opacity={isDraft ? 0.85 : isHiddenParent ? 0.0 : 1.0}
+          opacity={isDraft ? 0.85 : isHiddenParent ? 0.0 : isInactive ? 0.25 : 1.0}
           glowIntensity={
             isDraft ? 2.8
             : isHiddenParent ? 0
+            : isInactive ? 0.1
             : isMeActiveCenter ? 3.5
             : isLevel1 ? 1.2
             : 0.2
@@ -371,13 +398,33 @@ export function InternalNode({
               textAlign="center"
               anchorX="center"
               anchorY="middle"
-              fillOpacity={isDraft ? 1 : isMeActiveCenter || isMeAncestor ? 0.95 : 0.65}
+              fillOpacity={isDraft ? 1 : isInactive ? 0.35 : isMeActiveCenter || isMeAncestor ? 0.95 : 0.65}
               outlineWidth={0.006}
               outlineColor="#000000"
               outlineOpacity={0.8}
             >
               {isDraft ? `✦ ${node.label}` : node.label}
             </Text>
+          </Billboard>
+        )}
+
+        {showInactiveTooltip && (
+          <Billboard follow={true} lockX={false} lockY={false} lockZ={false} position={[0, radius * 3.2, 0]}>
+            <Html center zIndexRange={[100, 0]}>
+              <div style={{
+                background: 'rgba(0,0,0,0.85)',
+                color: '#e2e8f0',
+                padding: '4px 10px',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: 600,
+                whiteSpace: 'nowrap',
+                border: '1px solid rgba(255,255,255,0.15)',
+                pointerEvents: 'none',
+              }}>
+                Not connected yet
+              </div>
+            </Html>
           </Billboard>
         )}
 
@@ -512,6 +559,9 @@ export function InternalNode({
             revealDelayMs={revealDelayMs}
             entryDuration={entryDuration}
             entryEase={entryEase}
+            departmentSourceKey={departmentSourceKey}
+            level1Label={childLevel1Label}
+            branchLabel={childBranchLabel}
           />
         );
       })}

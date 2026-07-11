@@ -74,6 +74,7 @@ export default function Universe3DPage() {
   const {
     data,
     loading,
+    isRefreshing,
     error,
     refresh: refreshUniverse,
     appendReferenceCompany,
@@ -1475,18 +1476,20 @@ export default function Universe3DPage() {
     );
   }
 
+  const showInitialUniverseLoader = loading && !data;
+
   return (
     <div className="fixed inset-0 overflow-hidden">
       {/* Canvas */}
-      {loading || !data ? (
+      {showInitialUniverseLoader ? (
         <div className="absolute inset-0 pt-14 flex flex-col items-center justify-center z-50">
           <Loader2 className="w-8 h-8 animate-spin mb-4" style={{ color: '#C1AEFF' }} />
           <p className="text-sm font-medium" style={{ color: '#C1AEFF' }}>Loading Universe...</p>
           <p className="text-xs text-gray-500 mt-1">
-            Assembling {data?.industries?.length ?? '...'} industry galaxies
+            Assembling industry galaxies
           </p>
         </div>
-      ) : (
+      ) : data ? (
         <div className="twin-universe-viewport">
           <UniverseCanvas
             data={data}
@@ -1503,6 +1506,13 @@ export default function Universe3DPage() {
             voiceIntensityRef={intensityRef}
             onIndustryCoreVoiceToggle={handleIndustryCoreVoiceToggle}
           />
+        </div>
+      ) : null}
+
+      {isRefreshing && data && (
+        <div className="universe-refresh-chip">
+          <Loader2 className="w-3 h-3 animate-spin" />
+          <span>Syncing research</span>
         </div>
       )}
 

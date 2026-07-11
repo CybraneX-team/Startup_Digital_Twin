@@ -7,6 +7,7 @@ import {
   getInterpolatedPaths,
 } from './canvasFrameShape';
 import { useFounderWorkspace } from '../../context/FounderWorkspaceContext';
+import { LiquidGlass } from '../ui/LiquidGlass';
 
 interface WorkspaceCanvasFrameProps {
   tabLabel?: ReactNode;
@@ -44,6 +45,8 @@ export function WorkspaceCanvasFrame({ tabLabel, children, isFullscreen = false 
       </svg>
 
       <div className="ws-canvas-frame-inner" style={innerStyle}>
+        <LiquidGlass className="absolute inset-0" radius={24} depth={34} scale={15} glow={0.3} edgeHighlight={0.2} />
+
         {tabLabel != null ? (
           <div
             className="ws-canvas-tab-slot"

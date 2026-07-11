@@ -41,6 +41,7 @@ import IncubatorInvites from './pages/incubator/IncubatorInvites';
 import IncubatorCohorts from './pages/incubator/IncubatorCohorts';
 import IncubatorCohortDetail from './pages/incubator/IncubatorCohortDetail';
 import IncubatorSettings from './pages/incubator/IncubatorSettings';
+import OAuthAuthorizePage from './pages/OAuthAuthorizePage';
 import { VoiceProvider } from './context/VoiceContext';
 
 
@@ -151,6 +152,16 @@ function AppRoutes() {
     );
   }
 
+  // /oauth/authorize — ERPNext SSO bridge page (no TopBar, no AuthGuard —
+  // it does its own session check; see OAuthAuthorizePage's file comment)
+  if (location.pathname === '/oauth/authorize') {
+    return (
+      <Routes>
+        <Route path="/oauth/authorize" element={<OAuthAuthorizePage />} />
+      </Routes>
+    );
+  }
+
   // /join-startup — incubator invite landing page (no TopBar, no layout)
   if (location.pathname === '/join-startup') {
     return (
@@ -210,159 +221,159 @@ function AppRoutes() {
   return (
     <VoiceProvider>
       <>
-      {savedOpen && (
-        <AuthGuard>
-          <SavedWorkflows onClose={() => window.dispatchEvent(new CustomEvent('saved_workflows_toggled', { detail: false }))} />
-        </AuthGuard>
-      )}
+        {savedOpen && (
+          <AuthGuard>
+            <SavedWorkflows onClose={() => window.dispatchEvent(new CustomEvent('saved_workflows_toggled', { detail: false }))} />
+          </AuthGuard>
+        )}
 
-      {/* Persistent 3D universe — always mounted for authed users, shown/hidden via CSS.
+        {/* Persistent 3D universe — always mounted for authed users, shown/hidden via CSS.
           Uses visibility instead of display so the canvas has correct viewport dimensions
           from the start (display:none causes 0×0 init, breaking ResizeObserver). */}
-      {isFullyAuthed && (
+        {isFullyAuthed && (
+          <div
+            className="fixed inset-0 z-40"
+            style={{
+              visibility: is3DUniverse ? 'visible' : 'hidden',
+              pointerEvents: is3DUniverse ? 'auto' : 'none',
+            }}
+          >
+            <TopBar />
+            <Universe3D />
+          </div>
+        )}
+
+        {/* Persistent Universal Page (BDT) — always mounted so state persists */}
+        {isFullyAuthed && (
+          <div
+            className="fixed inset-0 z-40"
+            style={{
+              visibility: isUniversal ? 'visible' : 'hidden',
+              pointerEvents: isUniversal ? 'auto' : 'none',
+            }}
+          >
+            <TopBar />
+            <UniversalPage />
+          </div>
+        )}
+
+        {/* Normal app shell — removed from layout entirely when on /3d or /universal */}
         <div
-          className="fixed inset-0 z-40"
           style={{
-            visibility: is3DUniverse ? 'visible' : 'hidden',
-            pointerEvents: is3DUniverse ? 'auto' : 'none',
+            display: (isFullyAuthed && (is3DUniverse || isUniversal)) ? 'none' : 'block',
+            position: 'relative',
+            zIndex: 45,
           }}
         >
-          <TopBar />
-          <Universe3D />
-        </div>
-      )}
-
-      {/* Persistent Universal Page (BDT) — always mounted so state persists */}
-      {isFullyAuthed && (
-        <div
-          className="fixed inset-0 z-40"
-          style={{
-            visibility: isUniversal ? 'visible' : 'hidden',
-            pointerEvents: isUniversal ? 'auto' : 'none',
-          }}
-        >
-          <TopBar />
-          <UniversalPage />
-        </div>
-      )}
-
-      {/* Normal app shell — removed from layout entirely when on /3d or /universal */}
-      <div
-        style={{
-          display: (isFullyAuthed && (is3DUniverse || isUniversal)) ? 'none' : 'block',
-          position: 'relative',
-          zIndex: 45,
-        }}
-      >
-        <div className="min-h-screen cosmos-bg">
-          <TopBar />
-          {isTwinGraph ? (
-            <Routes>
-              <Route
-                path="/twin"
-                element={
-                  <AuthGuard requireOnboarding>
-                    <Twin />
-                  </AuthGuard>
-                }
-              />
-            </Routes>
-          ) : (
-            <main className={isUniversal ? 'overflow-hidden' : 'pt-14 pb-10 px-8 overflow-y-auto'}>
+          <div className="min-h-screen cosmos-bg">
+            <TopBar />
+            {isTwinGraph ? (
               <Routes>
-                {/* Authenticated app routes */}
-                <Route path="/overview" element={
-                  <AuthGuard requireOnboarding>
-                    <Overview />
-                  </AuthGuard>
-                } />
-                <Route path="/twin/strategy" element={
-                  <AuthGuard requireOnboarding requiredModule="strategy">
-                    <Strategy />
-                  </AuthGuard>
-                } />
-                <Route path="/twin/data" element={
-                  <AuthGuard requireOnboarding requiredModule="data" requiredAction="write">
-                    <DataIngestion />
-                  </AuthGuard>
-                } />
-                <Route path="/twin/benchmarks" element={
-                  <AuthGuard requireOnboarding requiredModule="benchmarks">
-                    <Benchmarks />
-                  </AuthGuard>
-                } />
-                <Route path="/twin/team" element={
-                  <AuthGuard requireOnboarding requiredModule="team">
-                    <RBAC />
-                  </AuthGuard>
-                } />
-                <Route path="/twin/analytics" element={
-                  <AuthGuard requireOnboarding requiredModule="analytics">
-                    <Analytics />
-                  </AuthGuard>
-                } />
-
-                {/* Ecosystem (accessed through Twin) */}
-                <Route path="/ecosystem/vc-connect" element={
-                  <AuthGuard requireOnboarding requiredModule="ecosystem">
-                    <VCConnect />
-                  </AuthGuard>
-                } />
-                <Route path="/ecosystem/network" element={
-                  <AuthGuard requireOnboarding requiredModule="ecosystem">
-                    <StartupNetwork />
-                  </AuthGuard>
-                } />
-
-                {/* Settings */}
-                <Route path="/settings" element={
-                  <AuthGuard requiredModule="settings">
-                    <SettingsPage />
-                  </AuthGuard>
-                } />
-
-                {/* VC pages */}
-                <Route path="/vc/find" element={
-                  <VCGuard>
-                    <VCFindStartups />
-                  </VCGuard>
-                } />
-                <Route path="/vc/portfolio" element={
-                  <VCGuard>
-                    <VCPortfolio />
-                  </VCGuard>
-                } />
-                <Route path="/vc/manage" element={
-                  <VCGuard>
-                    <VCManage />
-                  </VCGuard>
-                } />
-
-                {/* /3d — redirect unauthenticated users to /auth via AuthGuard */}
-                <Route path="/3d" element={<AuthGuard requireOnboarding><></></AuthGuard>} />
-
-                {/* /polytope — standalone polytope viewer */}
-                <Route path="/polytope" element={
-                  <AuthGuard requireOnboarding>
-                    <PolytopePage />
-                  </AuthGuard>
-                } />
-
-                {/* /universal is handled as a persistent overlay above, but we keep an empty route so router is happy if needed */}
-                <Route path="/universal" element={<AuthGuard requireOnboarding><></></AuthGuard>} />
-
-                {/* /workspace — standalone action node workspace */}
-                <Route path="/workspace" element={
-                  <AuthGuard>
-                    <WorkspacePage />
-                  </AuthGuard>
-                } />
-
+                <Route
+                  path="/twin"
+                  element={
+                    <AuthGuard requireOnboarding>
+                      <Twin />
+                    </AuthGuard>
+                  }
+                />
               </Routes>
-            </main>
-          )}
+            ) : (
+              <main className={isUniversal ? 'overflow-hidden' : 'pt-14 pb-10 px-8 overflow-y-auto'}>
+                <Routes>
+                  {/* Authenticated app routes */}
+                  <Route path="/overview" element={
+                    <AuthGuard requireOnboarding>
+                      <Overview />
+                    </AuthGuard>
+                  } />
+                  <Route path="/twin/strategy" element={
+                    <AuthGuard requireOnboarding requiredModule="strategy">
+                      <Strategy />
+                    </AuthGuard>
+                  } />
+                  <Route path="/twin/data" element={
+                    <AuthGuard requireOnboarding requiredModule="data" requiredAction="write">
+                      <DataIngestion />
+                    </AuthGuard>
+                  } />
+                  <Route path="/twin/benchmarks" element={
+                    <AuthGuard requireOnboarding requiredModule="benchmarks">
+                      <Benchmarks />
+                    </AuthGuard>
+                  } />
+                  <Route path="/twin/team" element={
+                    <AuthGuard requireOnboarding requiredModule="team">
+                      <RBAC />
+                    </AuthGuard>
+                  } />
+                  <Route path="/twin/analytics" element={
+                    <AuthGuard requireOnboarding requiredModule="analytics">
+                      <Analytics />
+                    </AuthGuard>
+                  } />
+
+                  {/* Ecosystem (accessed through Twin) */}
+                  <Route path="/ecosystem/vc-connect" element={
+                    <AuthGuard requireOnboarding requiredModule="ecosystem">
+                      <VCConnect />
+                    </AuthGuard>
+                  } />
+                  <Route path="/ecosystem/network" element={
+                    <AuthGuard requireOnboarding requiredModule="ecosystem">
+                      <StartupNetwork />
+                    </AuthGuard>
+                  } />
+
+                  {/* Settings */}
+                  <Route path="/settings" element={
+                    <AuthGuard requiredModule="settings">
+                      <SettingsPage />
+                    </AuthGuard>
+                  } />
+
+                  {/* VC pages */}
+                  <Route path="/vc/find" element={
+                    <VCGuard>
+                      <VCFindStartups />
+                    </VCGuard>
+                  } />
+                  <Route path="/vc/portfolio" element={
+                    <VCGuard>
+                      <VCPortfolio />
+                    </VCGuard>
+                  } />
+                  <Route path="/vc/manage" element={
+                    <VCGuard>
+                      <VCManage />
+                    </VCGuard>
+                  } />
+
+                  {/* /3d — redirect unauthenticated users to /auth via AuthGuard */}
+                  <Route path="/3d" element={<AuthGuard requireOnboarding><></></AuthGuard>} />
+
+                  {/* /polytope — standalone polytope viewer */}
+                  <Route path="/polytope" element={
+                    <AuthGuard requireOnboarding>
+                      <PolytopePage />
+                    </AuthGuard>
+                  } />
+
+                  {/* /universal is handled as a persistent overlay above, but we keep an empty route so router is happy if needed */}
+                  <Route path="/universal" element={<AuthGuard requireOnboarding><></></AuthGuard>} />
+
+                  {/* /workspace — standalone action node workspace */}
+                  <Route path="/workspace" element={
+                    <AuthGuard>
+                      <WorkspacePage />
+                    </AuthGuard>
+                  } />
+
+                </Routes>
+              </main>
+            )}
+          </div>
         </div>
-      </div>
 
       </>
     </VoiceProvider>

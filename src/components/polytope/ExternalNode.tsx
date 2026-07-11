@@ -203,6 +203,11 @@ export function ExternalNode({
             draftChildNode={draftChildNode}
             draftMember={draftMember}
             draftMemberScreenPosRef={draftMemberScreenPosRef}
+            // Real BDT departments (loaded via /api/departments) always set sourceKey; the
+            // legacy Twin-scope seed (universalPolytopeData.ts) never does — leaving this
+            // undefined there is what correctly excludes Twin from gating (see isBdtNodeActive).
+            departmentSourceKey={node.sourceKey}
+            branchLabel={undefined}
           />
         );
       })}

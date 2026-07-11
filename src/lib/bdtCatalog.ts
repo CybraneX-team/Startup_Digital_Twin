@@ -51,7 +51,7 @@ export interface BdtCatalog {
   sizeConfigs: Record<string, CatalogSizeConfig>;
 }
 
-const LS_KEY = 'bdt_catalog_v1';
+const LS_KEY = 'bdt_catalog_v2';
 
 function primeFromStorage(): BdtCatalog | null {
   try {

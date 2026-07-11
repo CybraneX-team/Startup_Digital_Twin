@@ -5,6 +5,7 @@ import { U_DOMAIN_COLOR, isActionLeafNode, isBdtWorkspaceLeafNode } from './bdtP
 import { api } from './api';
 import { normalizeDepartmentsFromApi } from './bdtDepartmentApiMapper';
 import { getSizeConfigs, loadBdtCatalog } from './bdtCatalog';
+import { fetchActiveBdtNodeKeys, buildActiveKeySet } from './db/bdtNodeActivation';
 
 /** Twin (/3d company polytope) and BDT (/universal) use separate graphs and caches. */
 export type PolytopeStoreScope = 'twin' | 'bdt';
@@ -215,6 +216,10 @@ export interface PolytopeStoreState {
   loading: boolean;
   loaded: boolean;
   error: string | null;
+  /** BDT-scope only — which (departmentSourceKey::level1Label::branchLabel) leaves have a
+   * wired-up panel. Undefined in the Twin scope, where gating doesn't apply. */
+  activeKeys?: Set<string>;
+  erpConnected?: boolean;
   loadDepartments: () => Promise<void>;
   setCompanySize: (size: UCompanySize | null | undefined) => void;
   addDepartment: (dept: Omit<UExternalNode, 'id' | 'internalNodes'>) => Promise<UExternalNode>;
@@ -346,6 +351,8 @@ export function createApiPolytopeStore({ storageKey, defaultDepartments, onboard
     loading: false,
     loaded: false,
     error: null,
+    activeKeys: new Set<string>(),
+    erpConnected: false,
 
     setCompanySize: (size) => {
       const all = _allDepts.length ? _allDepts : [...get().departments, ...get().lockedDepartments];
@@ -359,11 +366,22 @@ export function createApiPolytopeStore({ storageKey, defaultDepartments, onboard
       set({ loading: true, error: null });
       try {
         await loadBdtCatalog().catch(() => { /* size-config split degrades gracefully */ });
-        const response = await api.get<{ departments: UExternalNode[] }>('/api/departments');
+        const [response, activeNodes] = await Promise.all([
+          api.get<{ departments: UExternalNode[] }>('/api/departments'),
+          fetchActiveBdtNodeKeys().catch(() => null), // degrade gracefully — all leaves render inactive rather than blocking the graph
+        ]);
         const departments = normalizeDepartmentsFromApi(response.departments ?? []);
         _allDepts = departments;
         persistCache(storageKey, departments);
-        set({ departments, lockedDepartments: [], loading: false, loaded: true, error: null });
+        set({
+          departments,
+          lockedDepartments: [],
+          loading: false,
+          loaded: true,
+          error: null,
+          activeKeys: buildActiveKeySet(activeNodes),
+          erpConnected: activeNodes?.erpConnected ?? false,
+        });
       } catch (err) {
         console.error('[departments] load failed', err);
         const cached = loadCachedDepartments(storageKey, defaultDepartments, { onboardingFallback });

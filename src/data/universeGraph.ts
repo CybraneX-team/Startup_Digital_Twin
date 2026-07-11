@@ -162,6 +162,7 @@ export function buildUniverseData(args: {
 export function useUniverseGraph(authCompanyId?: string | null): {
   data: UniverseData | null;
   loading: boolean;
+  isRefreshing: boolean;
   error: string | null;
   refresh: () => void;
   appendReferenceCompany: (company: ReferenceCompany) => void;
@@ -171,6 +172,7 @@ export function useUniverseGraph(authCompanyId?: string | null): {
   const [liveCompanies, setLive]          = useState<DbCompany[]>([]);
   const [refCompanies, setRefCompanies]   = useState<ReferenceCompany[]>([]);
   const [loading, setLoading]             = useState(true);
+  const [isRefreshing, setIsRefreshing]   = useState(false);
   const [error, setError]                 = useState<string | null>(null);
   const [refreshKey, setRefreshKey]       = useState(0);
 
@@ -182,7 +184,12 @@ export function useUniverseGraph(authCompanyId?: string | null): {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
+    const hasCachedData = industries.length > 0;
+    if (hasCachedData) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
 
     Promise.all([
       getAllIndustries(),
@@ -198,11 +205,13 @@ export function useUniverseGraph(authCompanyId?: string | null): {
         setLive([...live, ...localCos]);
         setRefCompanies(refs);
         setLoading(false);
+        setIsRefreshing(false);
       })
       .catch(err => {
         if (!alive) return;
         setError(err?.message ?? 'Failed to load universe data');
         setLoading(false);
+        setIsRefreshing(false);
       });
 
     return () => { alive = false; };
@@ -219,5 +228,5 @@ export function useUniverseGraph(authCompanyId?: string | null): {
     });
   }, [loading, industries, subdomains, liveCompanies, refCompanies, authCompanyId]);
 
-  return { data, loading, error, refresh, appendReferenceCompany };
+  return { data, loading, isRefreshing, error, refresh, appendReferenceCompany };
 }

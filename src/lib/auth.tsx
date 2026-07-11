@@ -179,6 +179,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         AUTH_TIMEOUT_MS,
         `Sign up timed out after ${AUTH_TIMEOUT_MS}ms`,
       );
+      // TEMP DEBUG: report the raw Supabase response to the backend so it's visible in
+      // backend logs — identities.length === 0 means this email already exists (Supabase's
+      // anti-enumeration signUp() returns a fake "success" with no error/session in that case).
+      void api.post('/api/debug/log', {
+        event: 'signup_attempt',
+        email,
+        hasError: !!error,
+        errorMessage: error?.message ?? null,
+        errorStatus: (error as { status?: number } | null)?.status ?? null,
+        errorCode: (error as { code?: string } | null)?.code ?? null,
+        hasSession: !!data.session,
+        userId: data.user?.id ?? null,
+        identitiesLength: data.user?.identities?.length ?? null,
+        userCreatedAt: data.user?.created_at ?? null,
+        userConfirmedAt: data.user?.email_confirmed_at ?? null,
+      }).catch(() => { /* debug endpoint failure shouldn't block signup UX */ });
       // If session is returned, email confirmation is disabled — user is already signed in
       return { error: error?.message ?? null, needsEmailConfirm: !data.session && !error };
     } catch (err) {
