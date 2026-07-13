@@ -4,17 +4,9 @@ import { api } from '../api';
 export type MetricValueType = 'number' | 'currency' | 'percent' | 'duration' | 'count' | 'ratio';
 export type MetricDirection = 'higher_is_better' | 'lower_is_better' | 'target_band';
 export type MetricStatus = 'active' | 'draft' | 'archived';
-export type MetricSourceType = 'manual' | 'formula' | 'imported_file' | 'integration';
+export type MetricSourceType = 'manual' | 'integration';
 export type MetricTargetType = 'company' | 'department' | 'bdt_node' | 'goal';
 export type MetricLinkRelation = 'owns' | 'measures' | 'drives' | 'health_component';
-
-export interface FormulaAst {
-  op: string;
-  value?: number;
-  metric_id?: string;
-  field?: string;
-  args?: FormulaAst[];
-}
 
 export interface MetricLink {
   id: string;
@@ -67,16 +59,12 @@ export interface CanonicalMetric {
   direction: MetricDirection;
   baseline_value: number;
   target_value: number;
-  current_value: number;
-  normalized_score: number;
-  formula_ast: FormulaAst | null;
-  formula_label: string | null;
+  current_value: number | null;
+  normalized_score: number | null;
   owner_member_id: string | null;
   cadence: string;
   status: MetricStatus;
   source_confidence: number;
-  calculation_confidence: number;
-  template_id: string | null;
   created_by: string | null;
   updated_by: string | null;
   created_at: string;
@@ -106,15 +94,11 @@ export interface CreateMetricInput {
   baseline_value: number;
   target_value: number;
   current_value?: number;
-  formula_ast?: FormulaAst | null;
-  formula_label?: string | null;
   owner_member_id: string;
   cadence: string;
-  source_type: MetricSourceType;
+  source_type: 'manual';
   source_label?: string;
   source_confidence: number;
-  calculation_confidence: number;
-  template_id?: string | null;
   links: Array<{
     target_type: MetricTargetType;
     target_id: string;
@@ -147,14 +131,11 @@ export interface MetricDraftInput {
   baseline_value: number | null;
   target_value: number | null;
   current_value: number | null;
-  formula_ast?: FormulaAst | null;
-  formula_label?: string | null;
   owner_member_id?: string | null;
   cadence: string;
   source_type: MetricSourceType | null;
   source_label?: string;
   source_confidence: number | null;
-  calculation_confidence: number | null;
   links: Array<{
     target_type: MetricTargetType;
     target_id: string;

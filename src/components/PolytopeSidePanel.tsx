@@ -60,16 +60,22 @@ function getNodesAtPath(dept: UExternalNode, path: string[]): UInternalNode[] {
  * node rows are currently visible, even if the user drilled deeper than branch level into
  * team/process/project intermediary nodes.
  */
-function resolveAncestorLabels(dept: UExternalNode, path: string[]): { level1Label?: string; branchLabel?: string } {
+function resolveAncestorLabels(dept: UExternalNode, path: string[]): { level1Label?: string; branchLabel?: string; branchSourceKey?: string } {
   if (path.length === 0) return {};
   let level1Label: string | undefined;
   let branchLabel: string | undefined;
+  let branchSourceKey: string | undefined;
   let nodes = dept.internalNodes;
   for (const id of path) {
     const node = nodes.find(n => n.id === id);
     if (!node) break;
     if (!level1Label && node.nodeLevel === 'level1') level1Label = node.label;
-    if (node.nodeLevel === 'branch') branchLabel = node.label;
+    if (node.nodeLevel === 'branch') {
+      branchLabel = node.label;
+      // Prefer the content-derived stableSourceKey over the positional sourceKey —
+      // see genBdtSeed.ts's buildMetadata / departments.ts's stableSourceKey.
+      branchSourceKey = node.stableSourceKey ?? node.sourceKey;
+    }
     nodes = node.children ?? [];
   }
   // Fallback: this catalog's convention is depth-1 nodes are always level1, even if
@@ -77,7 +83,7 @@ function resolveAncestorLabels(dept: UExternalNode, path: string[]): { level1Lab
   if (!level1Label) {
     level1Label = dept.internalNodes.find(n => n.id === path[0])?.label;
   }
-  return { level1Label, branchLabel };
+  return { level1Label, branchLabel, branchSourceKey };
 }
 
 /** Recursively collect every internal node from a dept with its parent dept reference */
@@ -251,13 +257,13 @@ export function PolytopeSidePanel({
   // point used in the 3D graph (InternalNode.tsx) so the sidebar can't be used to route
   // around dimmed/blocked leaves.
   const { activeKeys: bdtActiveKeys } = usePolytopeStore('bdt');
-  const { level1Label: ancestorLevel1Label, branchLabel: ancestorBranchLabel } = effectiveDept
+  const { level1Label: ancestorLevel1Label, branchLabel: ancestorBranchLabel, branchSourceKey: ancestorBranchSourceKey } = effectiveDept
     ? resolveAncestorLabels(effectiveDept, selectedInternalPath)
     : {};
   const isNodeInactive = (node: UInternalNode) =>
     bdtWorkspaceLeaves
     && isLeafInternalNode(node)
-    && !isBdtNodeActive(ancestorBranchLabel, ancestorLevel1Label, effectiveDept?.sourceKey, bdtActiveKeys);
+    && !isBdtNodeActive(ancestorBranchSourceKey, ancestorBranchLabel, ancestorLevel1Label, effectiveDept?.sourceKey, bdtActiveKeys);
 
   // Dynamic back button logic based on drill-down level
   let backLabel: string | null = null;

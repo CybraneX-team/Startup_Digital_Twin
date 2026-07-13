@@ -60,6 +60,8 @@ interface InternalNodeProps {
   level1Label?: string;
   /** Nearest branch ancestor label for this subtree; used for active/inactive gating. */
   branchLabel?: string;
+  /** Nearest branch ancestor's stable source key for activation matching. */
+  branchSourceKey?: string;
 }
 
 
@@ -89,6 +91,7 @@ export function InternalNode({
   departmentSourceKey,
   level1Label,
   branchLabel,
+  branchSourceKey,
 }: InternalNodeProps) {
   const groupRef = useRef<THREE.Group>(null);
   const currentPos = useRef(startPos.clone());
@@ -102,11 +105,14 @@ export function InternalNode({
   const radius = isLevel1 ? radii[0] * 1.4 : (radii[depth] || 0.05);
   const childLevel1Label = isLevel1 ? node.label : level1Label;
   const childBranchLabel = isBranch ? node.label : branchLabel;
+  // Prefer the content-derived stableSourceKey (survives tree reorders) over the
+  // positional sourceKey — see genBdtSeed.ts's buildMetadata / departments.ts's stableSourceKey.
+  const childBranchSourceKey = isBranch ? (node.stableSourceKey ?? node.sourceKey) : branchSourceKey;
 
   const { activeKeys } = usePolytopeStore('bdt');
   const isInactive = !isDraft
     && isBdtWorkspaceLeafNode(node)
-    && !isBdtNodeActive(branchLabel, level1Label, departmentSourceKey, activeKeys);
+    && !isBdtNodeActive(branchSourceKey, branchLabel, level1Label, departmentSourceKey, activeKeys);
 
   const isMeActiveCenter = selectedPath.length > 0 && selectedPath[selectedPath.length - 1] === node.id;
   const isMeAncestor = selectedPath.includes(node.id) && !isMeActiveCenter;
@@ -562,6 +568,7 @@ export function InternalNode({
             departmentSourceKey={departmentSourceKey}
             level1Label={childLevel1Label}
             branchLabel={childBranchLabel}
+            branchSourceKey={childBranchSourceKey}
           />
         );
       })}

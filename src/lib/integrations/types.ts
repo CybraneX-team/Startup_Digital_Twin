@@ -38,6 +38,13 @@ export interface GoogleAnalyticsMetrics {
   sessionsHistory: Array<{ date: string; value: number }>;
 }
 
+export interface MetaAdAccountOption {
+  id: string;
+  name: string;
+  currency: string;
+  accountStatus: number; // 1 = ACTIVE
+}
+
 export interface MetaAdsMetrics {
   spend30d: number;
   impressions30d: number;
@@ -46,7 +53,10 @@ export interface MetaAdsMetrics {
   cpc: number;
   roas: number;
   conversions30d: number;
-  cpa: number;
+  cpa: number | null;
+  currency: string;
+  selectedConversionAction: string | null;
+  conversionActions: Array<{ actionType: string; value: number }>;
   activeCampaigns: number;
   topCampaigns: Array<{ name: string; spend: number; roas: number; conversions: number }>;
 }

@@ -26,7 +26,11 @@ import {
   fetchErpNextProductsNodeSummary,
   type ErpNextProductsNodeSummary,
 } from '../../lib/db/erpnextProducts';
-import { MarketingMockPanel, isMarketingMockActive } from './panels/MarketingMockPanel';
+import { MetaMetricPanel } from './panels/MetaMetricPanel';
+import { SpendReachPanel } from './panels/SpendReachPanel';
+import { CampaignsPanel } from './panels/CampaignsPanel';
+import { GlassCard, SectionTitle } from './panels/PanelShell';
+import { syncMetaMetricsOnce } from '../../lib/integrations/service';
 import {
   EmptyMetricsState,
   MetricCard,
@@ -59,24 +63,30 @@ export interface BdtActionWorkspaceProps {
   onReplayPrev?: () => void;
 }
 
-function SectionTitle({ children, icon: Icon }: { children: React.ReactNode; icon?: any }) {
-  return (
-    <div className="flex items-center gap-2 mb-3">
-      {Icon && <Icon className="w-3.5 h-3.5 text-white/40" />}
-      <span className="text-[10px] font-bold tracking-[0.2em] uppercase text-white/40">{children}</span>
-    </div>
-  );
-}
-
-function GlassCard({ children, className = '', style = {} }: { children: React.ReactNode; className?: string; style?: React.CSSProperties; }) {
-  return (
-    <div className={`anw-glass-card ${className}`} style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: '16px', padding: '20px', ...style }}>
-      {children}
-    </div>
-  );
-}
-
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// Paid Acquisition's 3 Meta-backed leaves. Matched on the content-derived stableSourceKey
+// (falls back to label) — see genBdtSeed.ts's buildMetadata / departments.ts's stableSourceKey.
+const META_METRIC_NODE_STABLE_KEYS = new Set(['mkt_paid_acquisition_ad_performance']);
+const META_METRIC_NODE_LABELS = new Set(['ad performance health']);
+const isMetaMetricNode = (node: UInternalNode) =>
+  META_METRIC_NODE_STABLE_KEYS.has(node.stableSourceKey ?? '')
+  || META_METRIC_NODE_LABELS.has(node.label.trim().toLowerCase());
+
+const META_SPEND_REACH_STABLE_KEYS = new Set(['mkt_paid_acquisition_spend_reach']);
+const META_SPEND_REACH_LABELS = new Set(['spend & reach health']);
+const isMetaSpendReachNode = (node: UInternalNode) =>
+  META_SPEND_REACH_STABLE_KEYS.has(node.stableSourceKey ?? '')
+  || META_SPEND_REACH_LABELS.has(node.label.trim().toLowerCase());
+
+const META_CAMPAIGNS_STABLE_KEYS = new Set(['mkt_paid_acquisition_campaigns']);
+const META_CAMPAIGNS_LABELS = new Set(['campaigns health']);
+const isMetaCampaignsNode = (node: UInternalNode) =>
+  META_CAMPAIGNS_STABLE_KEYS.has(node.stableSourceKey ?? '')
+  || META_CAMPAIGNS_LABELS.has(node.label.trim().toLowerCase());
+
+const isAnyMetaPanelNode = (node: UInternalNode) =>
+  isMetaMetricNode(node) || isMetaSpendReachNode(node) || isMetaCampaignsNode(node);
 
 function parseApiErrorMessage(err: unknown): string {
   if (!(err instanceof Error)) return 'WorkOS Operations data could not be loaded.';
@@ -740,6 +750,10 @@ export function BdtActionWorkspace({
     && isPersistedBdtNode
   );
 
+  useEffect(() => {
+    if (isOpen && isMarketingContext) void syncMetaMetricsOnce().catch(() => {});
+  }, [isOpen, isMarketingContext]);
+
   const panelIconByType: Record<string, typeof Activity> = {
     signal: Radio,
     decision: HelpCircle,
@@ -1100,11 +1114,25 @@ export function BdtActionWorkspace({
               />
             )}
 
-            {isMarketingContext && isMarketingMockActive(node) && (
-              <MarketingMockPanel node={node} />
+            {isMarketingContext && isMetaMetricNode(node) && companyId && (
+              <MetaMetricPanel
+                companyId={companyId}
+                nodeLabel={node.label}
+                nodeStableSourceKey={node.stableSourceKey}
+                canConfigure={canEditMetrics}
+                members={workspaceMembers}
+              />
             )}
 
-            {!isTeamNode && companyId && isPersistedBdtNode && (
+            {isMarketingContext && isMetaSpendReachNode(node) && companyId && (
+              <SpendReachPanel nodeLabel={node.label} nodeStableSourceKey={node.stableSourceKey} />
+            )}
+
+            {isMarketingContext && isMetaCampaignsNode(node) && companyId && (
+              <CampaignsPanel nodeLabel={node.label} nodeStableSourceKey={node.stableSourceKey} />
+            )}
+
+            {!isTeamNode && companyId && isPersistedBdtNode && !isAnyMetaPanelNode(node) && (
               <GlassCard>
                 <div className="flex items-center justify-between gap-3 mb-4">
                   <SectionTitle icon={BarChart3}>LIVE METRICS</SectionTitle>
@@ -1123,7 +1151,7 @@ export function BdtActionWorkspace({
                   <MetricRollupHealthPanel rollup={rollups.find(r => r.target_type === 'bdt_node' && r.target_id === node.id)} title={`${node.label} Health`} />
                   <div className="xl:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-3">
                     {nodeMetrics.map(metric => (
-                      <MetricCard key={metric.id} metric={metric} canEdit={canEditMetrics} onUpdateValue={updateMetricValue} />
+                      <MetricCard key={metric.id} metric={metric} canEdit={canEditMetrics && !metric.sources.some(source => source.source_type === 'integration')} onUpdateValue={updateMetricValue} />
                     ))}
                   </div>
                 </div>

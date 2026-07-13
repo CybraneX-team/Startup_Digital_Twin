@@ -11,7 +11,6 @@ import type {
   MetricTargetType,
   MetricValueType,
   MetricDirection,
-  MetricSourceType,
   MetricDraftField,
   MetricLinkRelation,
 } from '../../../lib/db/canonicalMetrics';
@@ -80,7 +79,7 @@ export function MetricCard({
           {metric.description && <p className="text-[11px] text-white/42 mt-1 line-clamp-2">{metric.description}</p>}
         </div>
         <div className="text-right shrink-0">
-          <div className="text-2xl font-black leading-none" style={{ color }}>{score}</div>
+          <div className="text-2xl font-black leading-none" style={{ color }}>{metric.normalized_score == null ? '—' : score}</div>
           <div className="text-[9px] text-white/30 mt-1">score</div>
         </div>
       </div>
@@ -95,16 +94,10 @@ export function MetricCard({
 
       <div className="mt-3 grid grid-cols-2 gap-2 text-[10px] text-white/38">
         <span>Source confidence {confidencePct(metric.source_confidence)}%</span>
-        <span>Calc confidence {confidencePct(metric.calculation_confidence)}%</span>
         <span>Cadence {metric.cadence}</span>
         <span>{metric.direction.replaceAll('_', ' ')}</span>
       </div>
 
-      {metric.formula_label && (
-        <div className="mt-3 rounded-xl bg-white/[0.025] border border-white/8 p-2.5 text-[11px] text-white/55">
-          Formula: {metric.formula_label}
-        </div>
-      )}
 
       {canEdit && onUpdateValue && (
         <div className="mt-3 pt-3 border-t border-white/8">
@@ -254,14 +247,11 @@ export function MetricCreateWizard({
     baseline_value: 0,
     target_value: 100,
     current_value: 0,
-    formula_ast: null,
-    formula_label: null,
     owner_member_id: defaultOwner?.id ?? '',
     cadence: 'weekly',
     source_type: 'manual',
     source_label: 'Manual entry',
     source_confidence: 0.7,
-    calculation_confidence: 1,
     links: [defaultLink],
   });
   const [saving, setSaving] = useState(false);
@@ -292,14 +282,11 @@ export function MetricCreateWizard({
         baseline_value: typeof draft.draft.baseline_value === 'number' ? draft.draft.baseline_value : prev.baseline_value,
         current_value: typeof draft.draft.current_value === 'number' ? draft.draft.current_value : prev.current_value,
         target_value: typeof draft.draft.target_value === 'number' ? draft.draft.target_value : prev.target_value,
-        formula_ast: draft.draft.formula_ast ?? prev.formula_ast,
-        formula_label: draft.draft.formula_label ?? prev.formula_label,
         owner_member_id: draft.resolved_owner?.owner_member_id ?? draft.draft.owner_member_id ?? prev.owner_member_id,
         cadence: draft.draft.cadence || prev.cadence,
-        source_type: draft.draft.source_type ?? prev.source_type,
+        source_type: 'manual',
         source_label: draft.draft.source_label || prev.source_label,
         source_confidence: typeof draft.draft.source_confidence === 'number' ? draft.draft.source_confidence : prev.source_confidence,
-        calculation_confidence: typeof draft.draft.calculation_confidence === 'number' ? draft.draft.calculation_confidence : prev.calculation_confidence,
         links: nextLink.target_type && nextLink.target_id ? [{
           target_type: nextLink.target_type,
           target_id: nextLink.target_id,
@@ -441,12 +428,7 @@ export function MetricCreateWizard({
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <Field label="Source">
-                <select value={form.source_type} onChange={e => patch('source_type', e.target.value as MetricSourceType)} className="metric-input">
-                  <option value="manual" className="bg-[#0e0e14]">Manual</option>
-                  <option value="formula" className="bg-[#0e0e14]">Formula</option>
-                  <option value="imported_file" className="bg-[#0e0e14]">Imported file</option>
-                  <option value="integration" className="bg-[#0e0e14]">Integration</option>
-                </select>
+                <input value="Manual" disabled className="metric-input opacity-70" />
                 {fieldHint('source_type')}
               </Field>
               <Field label="Source confidence">

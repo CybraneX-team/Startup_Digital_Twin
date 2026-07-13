@@ -20,6 +20,7 @@ import { canReadDept, canWriteDept as canWriteDeptHelper, canDeleteDept as canDe
 import { useWorkflowTrail } from '../lib/useWorkflowTrail';
 import { useBdtSavedTrails } from '../lib/useBdtSavedTrails';
 import type { UserPlanetRole } from '../data/companyPlanetRoots';
+import { syncMetaMetricsOnce } from '../lib/integrations/service';
 
 export default function UniversalPage() {
   const navigate = useNavigate();
@@ -27,13 +28,8 @@ export default function UniversalPage() {
   const replayTrailId = searchParams.get('replayTrail');
   const { user, profile, canRead, canWrite, role: authRole } = useAuth();
   const canCreateDepartments = canWrite('twin') && canWrite('team');
-  // Bypass users (VC/Incubator) are authed but have no company of their own —
-  // never resolve their real linked profile.company_id here.
-  const activeRole = localStorage.getItem('active_role');
-  const isBypassUser = !!user && (activeRole === 'vc' || activeRole === 'incubator');
-  const bypassSafeCompanyId = isBypassUser ? undefined : profile?.company_id;
-  const { company } = useCompany(bypassSafeCompanyId);
-  const { members: workspaceMembers } = useTeamMembers(bypassSafeCompanyId);
+  const { company } = useCompany(profile?.company_id);
+  const { members: workspaceMembers } = useTeamMembers(profile?.company_id);
   const store = usePolytopeStore('bdt');
   const { sendContextUpdate, voiceState, toggle, intensityRef } = useVoice();
 
@@ -227,6 +223,11 @@ export default function UniversalPage() {
 
   // ── Compute current node for BDT action workspace (leaf drill) ──
   const selectedDept = selectedDeptId ? store.departments.find(d => d.id === selectedDeptId) : null;
+  useEffect(() => {
+    if (selectedDept && (selectedDept.sourceKey === 'dept_marketing' || selectedDept.label === 'Marketing')) {
+      void syncMetaMetricsOnce().catch(() => {});
+    }
+  }, [selectedDept]);
   const getSelectedInternalNode = () => {
     if (!selectedDept || internalPath.length === 0) return null;
     let currentNodes = selectedDept.internalNodes;
@@ -311,7 +312,7 @@ export default function UniversalPage() {
   }, [isTrailActive, trailSession, selectedDeptId, selectedNode, internalPath, enrichCurrentStop]);
 
   // Use the actual company name from the database, fallback to heuristic if loading
-  const companyName = company?.name || (bypassSafeCompanyId
+  const companyName = company?.name || (profile?.company_id
     ? profile?.first_name ? `${profile.first_name}'s workspace` : 'My workspace'
     : 'Universal Polytope');
 
@@ -320,10 +321,10 @@ export default function UniversalPage() {
   const [planetIndustryColor, setPlanetIndustryColor] = useState('#C1AEFF');
 
   const resolvePlanetRole = useCallback((): UserPlanetRole => {
-    if (isBypassUser) return 'vc';
+    if (localStorage.getItem('active_role') === 'vc') return 'vc';
     if (authRole === 'founder' || authRole === 'co_founder' || authRole === 'admin') return 'founder';
     return 'career';
-  }, [authRole, isBypassUser]);
+  }, [authRole]);
 
   useEffect(() => {
     if (company) {
@@ -499,7 +500,7 @@ export default function UniversalPage() {
     if (!selectedDept || !selectedNode) return;
     if (!canReadDept(selectedDept)) return;
 
-    const companyId = bypassSafeCompanyId || 'bdt-universal';
+    const companyId = profile?.company_id || 'bdt-universal';
     const userId = profile?.id || user?.id;
 
     if (!isTrailActive) {
@@ -550,18 +551,18 @@ export default function UniversalPage() {
   }, [corePhase]);
 
   const handlePolytopeExitIntent = useCallback(() => {
-    if (!bypassSafeCompanyId) return;
+    if (!profile?.company_id) return;
     navigate('/3d', {
       state: {
         enterPlanetRootsFromBdt: {
-          companyId: bypassSafeCompanyId,
+          companyId: profile.company_id,
           companyName,
           role: resolvePlanetRole(),
           industryColor: planetIndustryColor,
         },
       },
     });
-  }, [bypassSafeCompanyId, companyName, resolvePlanetRole, planetIndustryColor, navigate]);
+  }, [profile?.company_id, companyName, resolvePlanetRole, planetIndustryColor, navigate]);
 
   return (
     <div className="fixed inset-0 bg-black overflow-hidden z-40">

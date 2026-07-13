@@ -151,22 +151,6 @@ export interface BdtGoal {
   progress: number | null;
 }
 
-export interface BdtMetricImpact {
-  id: string;
-  company_id: string;
-  metric_id: string;
-  task_id: string | null;
-  decision_id: string | null;
-  project_ref: string | null;
-  estimated_delta: number;
-  estimated_confidence: number;
-  actual_delta: number | null;
-  variance: number | null;
-  local_id: string | null;
-  created_at: string;
-  resolved_at: string | null;
-}
-
 export function useBdtMetrics(companyId: string | null | undefined) {
   const [metrics, setMetrics] = useState<BdtMetric[]>([]);
   const [loading, setLoading] = useState(false);
@@ -227,7 +211,7 @@ export function useBdtGoals(companyId: string | null | undefined) {
   const refetch = useCallback(() => {
     if (!companyId) return;
     setLoading(true);
-    api.get<BdtGoal[]>(`/api/bdt-metrics/${companyId}/goals`)
+    api.get<BdtGoal[]>(`/api/metrics/${companyId}/goals`)
       .then((rows) => { setGoals(rows); setError(null); })
       .catch((e) => setError(String(e)))
       .finally(() => setLoading(false));
@@ -239,13 +223,13 @@ export function useBdtGoals(companyId: string | null | undefined) {
     title: string; horizon: string; owner_id?: string;
   }) => {
     if (!companyId) return;
-    await api.post(`/api/bdt-metrics/${companyId}/goals`, input);
+    await api.post(`/api/metrics/${companyId}/goals`, input);
     refetch();
   }, [companyId, refetch]);
 
   const deleteGoal = useCallback(async (goalId: string) => {
     if (!companyId) return;
-    await api.delete(`/api/bdt-metrics/${companyId}/goals/${goalId}`);
+    await api.delete(`/api/metrics/${companyId}/goals/${goalId}`);
     refetch();
   }, [companyId, refetch]);
 
@@ -255,50 +239,13 @@ export function useBdtGoals(companyId: string | null | undefined) {
     contributionWeight = 1.0,
   ) => {
     if (!companyId) return;
-    await api.post(`/api/bdt-metrics/${companyId}/goals/${goalId}/links`, {
+    await api.post(`/api/metrics/${companyId}/goals/${goalId}/links`, {
       metric_id: metricId, contribution_weight: contributionWeight,
     });
     refetch();
   }, [companyId, refetch]);
 
   return { goals, loading, error, refetch, createGoal, deleteGoal, addMetricLink };
-}
-
-export function useBdtImpacts(companyId: string | null | undefined) {
-  const [impacts, setImpacts] = useState<BdtMetricImpact[]>([]);
-  const [loading] = useState(false);
-
-  const refetch = useCallback(() => {
-    setImpacts([]);
-  }, []);
-
-  useEffect(() => { refetch(); }, [refetch]);
-
-  const addImpact = useCallback(async (input: {
-    metric_id: string;
-    task_id?: string;
-    project_ref?: string;
-    estimated_delta: number;
-    estimated_confidence: number;
-    local_id?: string;
-  }) => {
-    void companyId;
-    void input;
-    return null;
-  }, [companyId]);
-
-  const resolveImpact = useCallback(async (
-    impactId: string,
-    actualDelta: number,
-    reason?: string,
-  ) => {
-    void companyId;
-    void impactId;
-    void actualDelta;
-    void reason;
-  }, [companyId]);
-
-  return { impacts, loading, refetch, addImpact, resolveImpact };
 }
 
 // ── BDT helper functions (mirror of useGoalsStore helpers but for BdtMetric) ──

@@ -119,9 +119,17 @@ export interface ActionDetails {
 
 export interface UInternalNode {
   id: string;
+  /** Positional catalog key from department_bdt_nodes.source_key — shifts if the tree is reordered. */
+  sourceKey?: string;
+  /** Content-derived key from department_bdt_nodes.metadata.sourceKey — stable across reorders. */
+  stableSourceKey?: string;
   label: string;
   type: 'team' | 'process' | 'project' | 'resource' | 'decision' | 'risk' | 'metric' | 'branch' | 'action' | 'signal';
   score: number;
+  manualScore?: number;
+  computedScore?: number | null;
+  scoreSource?: 'manual' | 'computed';
+  metricCoverage?: { metricCount: number; coveredNodeCount: number; eligibleNodeCount: number; calculatedAt: string } | null;
   children?: UInternalNode[];
   memberCount?: number;
   members?: TeamMember[];
@@ -184,6 +192,7 @@ export function isBdtWorkspaceLeafNode(node: Pick<UInternalNode, 'type' | 'nodeL
  * true — "fully active" — so unrelated callers keep working unchanged.
  */
 export function isBdtNodeActive(
+  branchSourceKey: string | undefined,
   branchLabel: string | undefined,
   level1Label: string | undefined,
   departmentSourceKey: string | undefined,
@@ -195,6 +204,7 @@ export function isBdtNodeActive(
   if (!departmentSourceKey) return true;
   // Active-nodes not loaded yet (e.g. still fetching) — don't block prematurely.
   if (!activeKeys) return true;
+  if (branchSourceKey && activeKeys.has(`${departmentSourceKey}::${branchSourceKey}`)) return true;
   if (!level1Label || !branchLabel) return false;
   return activeKeys.has(`${departmentSourceKey}::${level1Label}::${branchLabel}`);
 }
@@ -207,6 +217,10 @@ export interface UExternalNode {
   domain: UDomain;
   cluster: string;
   score: number;
+  manualScore?: number;
+  computedScore?: number | null;
+  scoreSource?: 'manual' | 'computed';
+  metricCoverage?: { metricCount: number; coveredNodeCount: number; eligibleNodeCount: number; calculatedAt: string } | null;
   metrics: {
     performance: number;
     efficiency: number;

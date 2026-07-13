@@ -351,7 +351,9 @@ export function createApiPolytopeStore({ storageKey, defaultDepartments, onboard
     loading: false,
     loaded: false,
     error: null,
-    activeKeys: new Set<string>(),
+    // Undefined means activation has not been verified yet. It must not be treated as
+    // an empty, authoritative result: that would incorrectly lock every BDT leaf.
+    activeKeys: undefined,
     erpConnected: false,
 
     setCompanySize: (size) => {
@@ -368,7 +370,9 @@ export function createApiPolytopeStore({ storageKey, defaultDepartments, onboard
         await loadBdtCatalog().catch(() => { /* size-config split degrades gracefully */ });
         const [response, activeNodes] = await Promise.all([
           api.get<{ departments: UExternalNode[] }>('/api/departments'),
-          fetchActiveBdtNodeKeys().catch(() => null), // degrade gracefully — all leaves render inactive rather than blocking the graph
+          // A capability-check failure must leave leaves usable. Only an explicit backend
+          // response may lock a node; retry on the next department load.
+          fetchActiveBdtNodeKeys().catch(() => undefined),
         ]);
         const departments = normalizeDepartmentsFromApi(response.departments ?? []);
         _allDepts = departments;
@@ -379,7 +383,7 @@ export function createApiPolytopeStore({ storageKey, defaultDepartments, onboard
           loading: false,
           loaded: true,
           error: null,
-          activeKeys: buildActiveKeySet(activeNodes),
+          activeKeys: activeNodes ? buildActiveKeySet(activeNodes) : undefined,
           erpConnected: activeNodes?.erpConnected ?? false,
         });
       } catch (err) {
